@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tasky - Simple Task Tracker</title>
+    <link rel="stylesheet" href="tasky.css">
+</head>
+<body>
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <!-- Onboarding -->
+    <div class="onboarding-overlay" id="onboarding">
+        <div class="onboarding-card">
+            <div class="onboarding-logo">Tasky</div>
+            <div class="onboarding-subtitle">Simple three-panel task tracking</div>
+            <div class="onboarding-steps">
+                <div class="onboarding-step">
+                    <div class="step-icon">⌨️</div>
+                    <div class="step-text">
+                        <strong>Just start typing anywhere</strong>
+                        <span>Tasks auto-add to To Do. Press <strong>Enter</strong> to save, <strong>Esc</strong> to cancel</span>
+                    </div>
+                </div>
+                <div class="onboarding-step">
+                    <div class="step-icon">↔️</div>
+                    <div class="step-text">
+                        <strong>Drag & drop or use keyboard</strong>
+                        <span>Click a task to select it, then use <strong>← →</strong> keys to move between columns</span>
+                    </div>
+                </div>
+                <div class="onboarding-step">
+                    <div class="step-icon">🎯</div>
+                    <div class="step-text">
+                        <strong>Set priority & due dates</strong>
+                        <span>Click the priority badge to cycle it. Select a task then press <strong>1/2/3</strong> to set High/Medium/Low. <strong>Delete</strong> key removes it</span>
+                    </div>
+                </div>
+                <div class="onboarding-step">
+                    <div class="step-icon">🔢</div>
+                    <div class="step-text">
+                        <strong>Quick-select any task by number</strong>
+                        <span>Press <strong>Alt+1–9</strong> to select that task number instantly. Or press <strong>Alt+G</strong> then type the number and <strong>Enter</strong> to jump to any task</span>
+                    </div>
+                </div>
+                <div class="onboarding-step">
+                    <div class="step-icon">🔍</div>
+                    <div class="step-text">
+                        <strong>Filter by priority</strong>
+                        <span>Click the colored dots (🔴🟡🟢) in each column header to show only that priority</span>
+                    </div>
+                </div>
+                <div class="onboarding-step">
+                    <div class="step-icon">↩️</div>
+                    <div class="step-text">
+                        <strong>Undo mistakes</strong>
+                        <span>Deleted or moved a task by accident? An undo button appears for 3 seconds</span>
+                    </div>
+                </div>
+                <div class="onboarding-step">
+                    <div class="step-icon">🎙️</div>
+                    <div class="step-text">
+                        <strong>Voice input</strong>
+                        <span>Hold <strong>Space</strong> to dictate a task (desktop). Tap the 🎙️ button on mobile. Requires mic permission — works in Chrome, Edge &amp; Brave</span>
+                    </div>
+                </div>
+                <div class="onboarding-step">
+                    <div class="step-icon">☁️</div>
+                    <div class="step-text">
+                        <strong>Optional cloud sync</strong>
+                        <span>Sign in with Google from the menu to sync your tasks across devices. Works offline too — data saves locally and syncs when you're back online</span>
+                    </div>
+                </div>
+            </div>
+            <button class="onboarding-btn" onclick="dismissOnboarding()">Got It — Let's Go!</button>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <div class="top-menu">
+        <button class="brand-btn" onclick="toggleMenu()">
+            <span>Tasky</span>
+            <span style="font-size:12px;">▼</span>
+        </button>
+        <div class="dropdown-menu" id="dropdown">
+            <button class="dropdown-item" onclick="toggleTheme()">
+                <span id="theme-icon">☀️</span>
+                <span id="theme-text">Light Mode</span>
+            </button>
+            <button class="dropdown-item" onclick="exportToCSV()">
+                <span>📊</span>
+                <span>Export CSV</span>
+            </button>
+            <button class="dropdown-item" onclick="resetAllData()" style="color:#ef4444;">
+                <span>🗑️</span>
+                <span>Reset All Data</span>
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item" onclick="signInWithGoogle()" id="auth-btn">
+                <span>☁️</span>
+                <span id="auth-text">Sign in with Google</span>
+            </button>
+            <button class="dropdown-item" onclick="signOut()" id="signout-btn" style="display:none;">
+                <span>🚪</span>
+                <span>Sign Out</span>
+            </button>
+            <div class="dropdown-item" id="user-info" style="display:none; cursor:default; opacity:0.6; font-size:12px; padding:6px 16px;" onclick="return false;">
+                <span id="user-avatar" style="width:18px;height:18px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:14px;"></span>
+                <span id="user-email"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="board">
+            <!-- To Do Column -->
+            <div class="column-wrapper">
+                <div class="column-ring"></div>
+                <div class="column-ring-inner"></div>
+                <div class="column">
+                    <div class="column-header">
+                        <div class="column-header-left">
+                            <h2 class="column-title">📝 To Do</h2>
+                            <div class="filter-dots">
+                                <span class="filter-dot high" onclick="toggleFilter('todo', 'high', this)" title="Filter High"></span>
+                                <span class="filter-dot medium" onclick="toggleFilter('todo', 'medium', this)" title="Filter Medium"></span>
+                                <span class="filter-dot low" onclick="toggleFilter('todo', 'low', this)" title="Filter Low"></span>
+                            </div>
+                        </div>
+                        <span class="task-count" id="todo-count">0</span>
+                    </div>
+                    <div class="task-list" id="todo-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                </div>
+            </div>
+
+            <!-- Working On Column -->
+            <div class="column-wrapper">
+                <div class="column-ring"></div>
+                <div class="column-ring-inner"></div>
+                <div class="column">
+                    <div class="column-header">
+                        <div class="column-header-left">
+                            <h2 class="column-title">⚡ Working On</h2>
+                            <div class="filter-dots">
+                                <span class="filter-dot high" onclick="toggleFilter('working', 'high', this)" title="Filter High"></span>
+                                <span class="filter-dot medium" onclick="toggleFilter('working', 'medium', this)" title="Filter Medium"></span>
+                                <span class="filter-dot low" onclick="toggleFilter('working', 'low', this)" title="Filter Low"></span>
+                            </div>
+                        </div>
+                        <span class="task-count" id="working-count">0</span>
+                    </div>
+                    <div class="task-list" id="working-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                </div>
+            </div>
+
+            <!-- Done Column -->
+            <div class="column-wrapper">
+                <div class="column-ring"></div>
+                <div class="column-ring-inner"></div>
+                <div class="column">
+                    <div class="column-header">
+                        <div class="column-header-left">
+                            <h2 class="column-title">✅ Done</h2>
+                        </div>
+                        <div class="column-header-right">
+                            <span class="daily-summary" id="daily-summary"></span>
+                            <span class="task-count" id="done-count">0</span>
+                        </div>
+                    </div>
+                    <div class="task-list" id="done-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+                    <button class="clear-done-btn" onclick="clearDoneTasks()">Clear All Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating input -->
+    <div class="floating-input-container" id="floating-container">
+        <input
+            type="text"
+            class="floating-input"
+            id="floating-input"
+            placeholder="Type to add task..."
+            maxlength="80"
+        >
+        <div class="floating-input-hint">
+            <span><kbd>Enter</kbd> to add</span>
+            <span><kbd>Esc</kbd> to cancel</span>
+            <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority (select task first)</span>
+            <span><kbd>←</kbd><kbd>→</kbd> move (select task first)</span>
+            <span><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd> select task</span>
+            <span><kbd>Alt</kbd>+<kbd>G</kbd> goto task</span>
+        </div>
+    </div>
+
+    <!-- Task selector pill -->
+    <div class="task-selector" id="task-selector">
+        <span class="task-selector-icon">🔍</span>
+        Go to task #<span id="task-selector-buffer"></span>
+        <span class="task-selector-cursor">|</span>
+    </div>
+
+    <!-- Sync status indicator -->
+    <div class="sync-status" id="sync-status"></div>
+
+    <div class="shortcuts-hint">
+        <span>Click task then: <kbd>←</kbd><kbd>→</kbd> move</span>
+        <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority</span>
+        <span><kbd>Del</kbd> delete</span>
+        <span><kbd>Esc</kbd> deselect</span>
+        <span><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd> select</span>
+        <span><kbd>Alt</kbd>+<kbd>G</kbd> goto</span>
+        <span>Hold <kbd>Space</kbd> voice input</span>
+    </div>
+
+
+    <!-- Voice listening overlay -->
+    <div class="voice-overlay" id="voice-overlay">
+        <div class="voice-orb">
+            <div class="voice-ring"></div>
+            <div class="voice-ring"></div>
+            <div class="voice-ring"></div>
+            <div class="voice-mic">🎙️</div>
+        </div>
+        <div class="voice-label">Listening…</div>
+        <div class="voice-transcript" id="voice-transcript"></div>
+        <div class="voice-hint" id="voice-hint">Release <kbd style="background:rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.3)">Space</kbd> to confirm</div>
+    </div>
+
+    <!-- Mobile FAB — only visible on small screens via CSS -->
+    <button class="mobile-add-btn" id="mobile-add-btn" onclick="mobileFabTap()">
+        <span class="fab-icon">＋</span>
+        <span>Add Task</span>
+    </button>
+
+    <!-- Mobile mic button -->
+    <button class="mobile-mic-btn" id="mobile-mic-btn">🎙️</button>
+
+    <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore-compat.js"></script>
+    <script src="tasky.js"></script>
+</body>
+</html>
