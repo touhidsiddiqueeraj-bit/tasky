@@ -6,12 +6,19 @@ live at https://touhidsiddiqueeraj-bit.github.io/tasky/
 
 <img width="1901" height="952" alt="image" src="https://github.com/user-attachments/assets/84c3815a-8058-4074-8154-3dfbd444add9" />
 
+
+
+
 File Structure
 tasky/
 ├── index.html   — Markup only (HTML structure)
 ├── tasky.css    — All styles, animations, themes, responsive layout
 ├── tasky.js     — All logic: state, rendering, keyboard, voice, drag & drop, Firebase cloud sync
 └── README.md
+
+
+
+
 
 Features
 
