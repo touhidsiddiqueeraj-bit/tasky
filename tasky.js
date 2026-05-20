@@ -14,6 +14,7 @@
         let voiceAccumulated  = '';
         let voiceSession       = 0;        // incremented each startVoice; stale onend calls are ignored
         let currentUser = null;       // Firebase user object
+        let app = null;              // Firebase app instance
         let db = null;               // Firestore instance
         let syncTimeout = null;      // debounce for cloud sync
 
@@ -27,7 +28,7 @@
         }
 
         // ─── Firebase / Cloud Sync ─────────────────────────────────────────────────
-        firebase.initializeApp({
+        app = firebase.initializeApp({
             apiKey: "AIzaSyBN8ZJil4vWWJ6XPPGgp20htp8IBxDLL_o",
             authDomain: "tasky-95785.firebaseapp.com",
             projectId: "tasky-95785",
@@ -35,7 +36,7 @@
             messagingSenderId: "285483279389",
             appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
         });
-        db = firebase.firestore();
+        db = firebase.firestore(app);
         db.enablePersistence().catch(() => {});
 
         renderAllColumns();
@@ -51,7 +52,7 @@
         }
 
         function setupFirebase() {
-            firebase.auth().onAuthStateChanged(user => {
+            firebase.auth(app).onAuthStateChanged(user => {
                 const wasLoggedIn = !!currentUser;
                 currentUser = user;
                 if (user && !wasLoggedIn) syncFromCloud();
@@ -61,12 +62,12 @@
 
         function signInWithGoogle() {
             const provider = new firebase.auth.GoogleAuthProvider();
-            firebase.auth().signInWithPopup(provider).catch(() => {});
+            firebase.auth(app).signInWithPopup(provider).catch(() => {});
             document.getElementById('dropdown').classList.remove('show');
         }
 
         function signOut() {
-            firebase.auth().signOut().catch(() => {});
+            firebase.auth(app).signOut().catch(() => {});
             document.getElementById('dropdown').classList.remove('show');
         }
 
