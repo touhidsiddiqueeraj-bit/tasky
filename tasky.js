@@ -26,18 +26,6 @@
             document.getElementById('onboarding').style.display = 'none';
         }
 
-        renderAllColumns();
-        updateDailySummary();
-        setupKeyboard();          // single unified keyboard handler
-        setupVoice();             // speech recognition
-        setupFirebase();          // Firebase cloud sync
-
-        // ─── Onboarding ───────────────────────────────────────────────────────────
-        function dismissOnboarding() {
-            document.getElementById('onboarding').style.display = 'none';
-            localStorage.setItem('hasOnboarded', 'true');
-        }
-
         // ─── Firebase / Cloud Sync ─────────────────────────────────────────────────
         firebase.initializeApp({
             apiKey: "AIzaSyBN8ZJil4vWWJ6XPPGgp20htp8IBxDLL_o",
@@ -49,6 +37,18 @@
         });
         db = firebase.firestore();
         db.enablePersistence().catch(() => {});
+
+        renderAllColumns();
+        updateDailySummary();
+        setupKeyboard();          // single unified keyboard handler
+        setupVoice();             // speech recognition
+        setupFirebase();          // Firebase cloud sync
+
+        // ─── Onboarding ───────────────────────────────────────────────────────────
+        function dismissOnboarding() {
+            document.getElementById('onboarding').style.display = 'none';
+            localStorage.setItem('hasOnboarded', 'true');
+        }
 
         function setupFirebase() {
             firebase.auth().onAuthStateChanged(user => {
