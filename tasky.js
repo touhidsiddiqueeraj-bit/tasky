@@ -61,9 +61,24 @@
         // ─── Firebase Auth ─────────────────────────────────────────────────────────
         function setupFirebase() {
             firebase.auth(app).onAuthStateChanged(user => {
-                const wasLoggedIn = !!currentUser;
+                const prevUid = currentUser ? currentUser.uid : null;
                 currentUser = user;
-                if (user && !wasLoggedIn) syncFromCloud();
+
+                if (user) {
+                    // Logged in, or switched to a different account — always load this account's cloud data
+                    if (user.uid !== prevUid) {
+                        syncFromCloud();
+                    }
+                } else {
+                    // Logged out — revert to the pre-login local snapshot
+                    const localSnapshot = localStorage.getItem('tasks_local');
+                    tasks = localSnapshot ? JSON.parse(localSnapshot) : { todo: [], working: [], done: [] };
+                    taskCounter = parseInt(localStorage.getItem('taskCounter_local') || '0');
+                    renderAllColumns();
+                    updateDailySummary();
+                    deselectTask();
+                }
+
                 updateAuthUI();
             });
         }
@@ -709,6 +724,11 @@
         function saveAll() {
             localStorage.setItem('tasks', JSON.stringify(tasks));
             localStorage.setItem('taskCounter', taskCounter.toString());
+            // Keep a pre-login snapshot so we can restore local state on logout
+            if (!currentUser) {
+                localStorage.setItem('tasks_local', JSON.stringify(tasks));
+                localStorage.setItem('taskCounter_local', taskCounter.toString());
+            }
             pushToCloud();
         }
 
