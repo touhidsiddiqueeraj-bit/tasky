@@ -2,7 +2,6 @@
         let tasks = JSON.parse(localStorage.getItem('tasks')) || { todo: [], working: [], done: [] };
         let taskCounter = parseInt(localStorage.getItem('taskCounter')) || 0;
         let isLightMode = localStorage.getItem('theme') === 'light';
-        let hasOnboarded = localStorage.getItem('hasOnboarded') === 'true';
         let selectedTask = null;   // { column, taskId }
         let activeFilters = { todo: null, working: null, done: null };
         let taskSelectorActive = false;
@@ -23,9 +22,8 @@
             document.body.classList.add('light-mode');
             updateThemeButton();
         }
-        if (hasOnboarded) {
-            document.getElementById('onboarding').style.display = 'none';
-        }
+        // NOTE: Onboarding visibility is handled entirely in the HTML <script> block.
+        // tasky.js no longer touches #onboarding (that id does not exist in the HTML).
 
         // ─── Firebase / Cloud Sync ─────────────────────────────────────────────────
         app = firebase.initializeApp({
@@ -45,12 +43,7 @@
         setupVoice();             // speech recognition
         setupFirebase();          // Firebase cloud sync
 
-        // ─── Onboarding ───────────────────────────────────────────────────────────
-        function dismissOnboarding() {
-            document.getElementById('onboarding').style.display = 'none';
-            localStorage.setItem('hasOnboarded', 'true');
-        }
-
+        // ─── Firebase Auth ─────────────────────────────────────────────────────────
         function setupFirebase() {
             firebase.auth(app).onAuthStateChanged(user => {
                 const wasLoggedIn = !!currentUser;
@@ -62,37 +55,39 @@
 
         function signInWithGoogle() {
             const provider = new firebase.auth.GoogleAuthProvider();
-            firebase.auth(app).signInWithPopup(provider).catch(() => {});
-            document.getElementById('dropdown').classList.remove('show');
+            firebase.auth(app).signInWithPopup(provider).catch(err => {
+                console.error('Sign-in error:', err);
+            });
+            const dd = document.getElementById('dropdown');
+            if (dd) dd.classList.remove('show');
         }
 
         function signOut() {
             firebase.auth(app).signOut().catch(() => {});
-            document.getElementById('dropdown').classList.remove('show');
+            const dd = document.getElementById('dropdown');
+            if (dd) dd.classList.remove('show');
         }
 
         function updateAuthUI() {
-            const authBtn = document.getElementById('auth-btn');
+            const authBtn    = document.getElementById('auth-btn');
             const signoutBtn = document.getElementById('signout-btn');
-            const userInfo = document.getElementById('user-info');
-            const avatar = document.getElementById('user-avatar');
-            const email = document.getElementById('user-email');
-            const authText = document.getElementById('auth-text');
-            const syncEl = document.getElementById('sync-status');
+            const userInfo   = document.getElementById('user-info');
+            const avatar     = document.getElementById('user-avatar');
+            const email      = document.getElementById('user-email');
+            const syncEl     = document.getElementById('sync-status');
 
             if (currentUser) {
-                if (authBtn) authBtn.style.display = 'none';
+                if (authBtn)    authBtn.style.display    = 'none';
                 if (signoutBtn) signoutBtn.style.display = 'flex';
-                if (userInfo) userInfo.style.display = 'flex';
-                if (avatar) avatar.textContent = currentUser.email ? currentUser.email[0].toUpperCase() : '?';
-                if (email) email.textContent = currentUser.email || '';
-                if (authText) authText.textContent = 'Sign in with Google';
+                if (userInfo)   userInfo.style.display   = 'flex';
+                if (avatar)     avatar.textContent = currentUser.email ? currentUser.email[0].toUpperCase() : '?';
+                if (email)      email.textContent  = currentUser.email || '';
                 setSyncStatus('synced');
             } else {
-                if (authBtn) authBtn.style.display = 'flex';
+                if (authBtn)    authBtn.style.display    = 'flex';
                 if (signoutBtn) signoutBtn.style.display = 'none';
-                if (userInfo) userInfo.style.display = 'none';
-                if (syncEl) syncEl.classList.remove('visible');
+                if (userInfo)   userInfo.style.display   = 'none';
+                if (syncEl)     syncEl.classList.remove('visible');
             }
         }
 
@@ -132,15 +127,9 @@
             if (!docRef) return;
             setSyncStatus('syncing');
             docRef.get().then(snap => {
-                if (!snap.exists) {
-                    pushToCloud();
-                    return;
-                }
+                if (!snap.exists) { pushToCloud(); return; }
                 const cloudData = snap.data();
-                if (!cloudData || !cloudData.tasks) {
-                    pushToCloud();
-                    return;
-                }
+                if (!cloudData || !cloudData.tasks) { pushToCloud(); return; }
                 const merged = mergeTasks(tasks, cloudData.tasks, taskCounter, cloudData.taskCounter || 0);
                 tasks = merged.tasks;
                 taskCounter = merged.taskCounter;
@@ -169,15 +158,24 @@
             return { tasks: merged, taskCounter: Math.max(localCounter, cloudCounter) };
         }
 
+        // ─── Public task API (used by Task Groups expansion in HTML) ───────────────
+        function addTask(text, column, priority) {
+            taskCounter++;
+            const task = {
+                id: Date.now() + Math.random(),
+                number: taskCounter,
+                text: text,
+                priority: priority || 'medium',
+                dueDate: null,
+                createdAt: new Date().toISOString()
+            };
+            tasks[column] = tasks[column] || [];
+            tasks[column].push(task);
+            saveAll();
+            renderColumn(column);
+        }
+
         // ─── Unified keyboard handler ─────────────────────────────────────────────
-        //
-        // FIX: previously two separate keydown listeners competed with each other.
-        // Now there is ONE listener that decides, in order:
-        //   1. If the floating input is focused → only handle Enter / Escape there.
-        //   2. If a task is selected → run shortcut keys (← → 1 2 3 Del Esc).
-        //      Consume those keys so they never reach the "open input" path.
-        //   3. Otherwise → printable characters open the floating input.
-        //
         function setupKeyboard() {
             const container = document.getElementById('floating-container');
             const input     = document.getElementById('floating-input');
@@ -204,10 +202,7 @@
                 e.stopPropagation();
             });
 
-            // Close input when clicking outside.
-            // Exclude the FAB — its onclick opens the input; if we don't
-            // exclude it the document click fires on the same tap and
-            // immediately closes what the FAB just opened.
+            // Close input when clicking outside
             document.addEventListener('click', (e) => {
                 if (taskSelectorActive && !e.target.closest('#task-selector')) {
                     exitTaskSelector();
@@ -225,16 +220,14 @@
 
             // ── Global keys ───────────────────────────────────────────────────────
             document.addEventListener('keydown', (e) => {
-                // Ignore while browser-native controls have focus (other than our input)
                 const tag = e.target.tagName;
                 if (tag === 'TEXTAREA' || tag === 'SELECT') return;
                 if (tag === 'INPUT' && e.target !== input) return;
-                // Ignore modifier combos (Ctrl+Z, Cmd+C, etc.)
                 if (e.ctrlKey || e.metaKey) return;
 
                 const key = e.key;
 
-                // ── Alt combinations ────────────────────────────────────────────────
+                // ── Alt combinations ──────────────────────────────────────────────
                 if (e.altKey) {
                     if (taskSelectorActive) exitTaskSelector();
 
@@ -257,38 +250,18 @@
                         return;
                     }
 
-                    return; // block all other Alt combos
+                    return;
                 }
 
                 // ── If a task is selected: shortcut mode ──────────────────────────
                 if (selectedTask) {
                     const { column, taskId } = selectedTask;
 
-                    if (key === 'ArrowLeft') {
-                        e.preventDefault();
-                        moveTaskBackward(column, taskId);
-                        return;
-                    }
-                    if (key === 'ArrowRight') {
-                        e.preventDefault();
-                        moveTaskForward(column, taskId);
-                        return;
-                    }
-                    if (key === '1') {
-                        e.preventDefault();
-                        setPriority(column, taskId, 'high');
-                        return;
-                    }
-                    if (key === '2') {
-                        e.preventDefault();
-                        setPriority(column, taskId, 'medium');
-                        return;
-                    }
-                    if (key === '3') {
-                        e.preventDefault();
-                        setPriority(column, taskId, 'low');
-                        return;
-                    }
+                    if (key === 'ArrowLeft')  { e.preventDefault(); moveTaskBackward(column, taskId); return; }
+                    if (key === 'ArrowRight') { e.preventDefault(); moveTaskForward(column, taskId);  return; }
+                    if (key === '1') { e.preventDefault(); setPriority(column, taskId, 'high');   return; }
+                    if (key === '2') { e.preventDefault(); setPriority(column, taskId, 'medium'); return; }
+                    if (key === '3') { e.preventDefault(); setPriority(column, taskId, 'low');    return; }
                     if (key === 'Delete' || key === 'Backspace') {
                         e.preventDefault();
                         const col = column, id = taskId;
@@ -296,22 +269,16 @@
                         deleteTaskWithUndo(col, id);
                         return;
                     }
-                    if (key === 'Escape') {
-                        e.preventDefault();
-                        deselectTask();
-                        return;
-                    }
+                    if (key === 'Escape') { e.preventDefault(); deselectTask(); return; }
                     // Any other key while selected → fall through to open input
                 }
 
-                // ── No task selected: open floating input with typed character ─────
-                // FIX: Backspace while no task is selected and input is closed has
-                // no sensible action, so skip it.
+                // ── No task selected ──────────────────────────────────────────────
                 if (key === 'Escape' || key === 'Delete') return;
                 if (key === 'ArrowLeft' || key === 'ArrowRight' ||
                     key === 'ArrowUp'   || key === 'ArrowDown') return;
 
-                // ── Goto mode digits (after Alt+G) ──────────────────────────────
+                // ── Goto mode (Alt+G) ─────────────────────────────────────────────
                 if (taskSelectorActive) {
                     e.preventDefault();
                     if (key >= '0' && key <= '9') {
@@ -337,59 +304,40 @@
                     return;
                 }
 
-                // Space held → start voice (only when input is closed)
+                // Space held → start voice
                 if (key === ' ') {
                     e.preventDefault();
                     if (!spaceHeld) {
                         spaceHeld = true;
                         startVoice();
                     }
-                    // Always return here — block auto-repeat from falling
-                    // through to the printable-character handler below.
                     return;
                 }
 
-                // While voice is active swallow ALL other keys so nothing
-                // accidentally opens the text input mid-dictation.
+                // Block other keys while voice is active
                 if (voiceActive) {
                     e.preventDefault();
                     return;
                 }
 
-                if (key.length === 1) {          // printable character
-                    // Just show + focus the input. The browser will insert the
-                    // character naturally via its own default keydown handling.
-                    // DO NOT manually append `key` here — doing so before focus()
-                    // causes the character to be written twice (once by us, once
-                    // by the browser's default input behaviour after focus lands).
+                if (key.length === 1) {
                     openFloatingInput();
                 }
             });
 
-            // Space/Shift keyup → stop voice
-            // Use window (not document) so it fires even if a child element
-            // called stopPropagation on keydown or if focus shifted mid-hold.
             window.addEventListener('keyup', (e) => {
                 if (e.key === ' ' && spaceHeld) {
                     spaceHeld = false;
                     stopVoice();
                 }
-            }, true); // capture phase — runs before any stopPropagation
+            }, true);
 
-            // Safety net: if the window loses focus while space is held
-            // (e.g. alt-tab, OS notification), the keyup never fires.
-            // Stop voice whenever the page becomes hidden or window blurs.
             window.addEventListener('blur', () => {
-                if (spaceHeld) {
-                    spaceHeld = false;
-                    stopVoice();
-                }
+                if (spaceHeld) { spaceHeld = false; stopVoice(); }
             });
+
             document.addEventListener('visibilitychange', () => {
-                if (document.hidden && spaceHeld) {
-                    spaceHeld = false;
-                    stopVoice();
-                }
+                if (document.hidden && spaceHeld) { spaceHeld = false; stopVoice(); }
             });
         }
 
@@ -416,17 +364,10 @@
             input.blur();
         }
 
+        // Also expose as hideFloatingInput for the Task Groups suggestion code
+        function hideFloatingInput() { closeFloatingInput(); }
 
         // ─── Voice input ──────────────────────────────────────────────────────────
-        //
-        // Chrome fires onend after ~1s silence even with continuous:true, and
-        // reusing the same instance across stop/start is unreliable — it can
-        // throw "already started" or silently fail. The robust pattern is:
-        //   • Create a fresh SpeechRecognition instance for every session.
-        //   • In onend, if Space is still held, spawn a new instance and start it.
-        //   • Ignore non-fatal errors (no-speech, aborted) while Space is held;
-        //     only onerror:'not-allowed' should surface to the user.
-        //
         function setupVoice() {
             voiceSR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
             setupMobileMic();
@@ -459,13 +400,11 @@
                     showToast('Mic permission denied — enable it in browser settings', () => {});
                     forceStopVoice();
                 }
-                // other errors (no-speech etc.) — onend fires next, handles restart
             };
 
             rec.onend = () => {
                 if (voiceSession !== session) return;
-                if (!voiceActive) return;   // stopVoice() already closed everything
-                // Space still held — browser auto-stopped; restart immediately
+                if (!voiceActive) return;
                 voiceRecognition = makeRecognition();
                 try { voiceRecognition.start(); } catch (_) {}
             };
@@ -482,7 +421,7 @@
             const transcript = document.getElementById('voice-transcript');
             const hint       = document.getElementById('voice-hint');
             if (transcript) transcript.textContent = '';
-            if (hint) hint.textContent = isMobile ? 'Release button to confirm' : '';
+            if (hint && isMobile) hint.textContent = 'Release button to confirm';
             if (hint && !isMobile) hint.innerHTML = 'Release <kbd style="background:rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.3)">Space</kbd> to confirm';
             if (overlay) overlay.classList.add('active');
             voiceRecognition = makeRecognition();
@@ -491,20 +430,14 @@
 
         function stopVoice() {
             if (!voiceActive) return;
-            // Mark inactive and increment session FIRST — this makes every
-            // pending onend callback a no-op, so nothing can restart after this.
             voiceActive   = false;
             voiceSession += 1;
-            // Close the overlay immediately — don't wait for onend.
             const overlay = document.getElementById('voice-overlay');
             if (overlay) overlay.classList.remove('active');
-            // Grab whatever transcript is showing right now and commit it.
             const el   = document.getElementById('voice-transcript');
             const text = (voiceAccumulated + (el ? ' ' + el.textContent : '')).trim();
-            // Tell the current instance to stop (fire-and-forget).
             try { voiceRecognition.stop(); } catch (_) {}
             voiceRecognition = null;
-            // Commit
             if (text) {
                 const input = document.getElementById('floating-input');
                 input.value = text;
@@ -522,22 +455,20 @@
         }
 
         // ─── Mobile mic: hold-to-talk ─────────────────────────────────────────────
-        // Uses pointer events (covers both touch and mouse) so the button starts
-        // voice on press and stops on release — mirroring Space on desktop.
         function setupMobileMic() {
             const btn = document.getElementById('mobile-mic-btn');
             if (!btn) return;
 
-            btn.style.touchAction = 'none'; // prevent browser scroll-delay swallowing pointerdown
+            btn.style.touchAction = 'none';
 
             function onPress(e) {
-                e.preventDefault();           // prevent ghost click / text selection
+                e.preventDefault();
                 if (!voiceSR) {
                     showToast('Voice not supported in this browser', () => {});
                     return;
                 }
-                btn.setPointerCapture(e.pointerId); // keep events even if finger drifts off
-                startVoice(true);             // true = mobile (shows different hint)
+                btn.setPointerCapture(e.pointerId);
+                startVoice(true);
             }
 
             function onRelease(e) {
@@ -547,7 +478,7 @@
 
             btn.addEventListener('pointerdown',   onPress);
             btn.addEventListener('pointerup',     onRelease);
-            btn.addEventListener('pointercancel', onRelease); // call dropped, finger lifted outside, etc.
+            btn.addEventListener('pointercancel', onRelease);
         }
 
         // ─── Task selection ───────────────────────────────────────────────────────
@@ -566,8 +497,6 @@
             }
         }
 
-        // FIX: After moving/priority-change the selection must survive re-render.
-        // restoreSelection() re-applies the 'selected' class to the newly rendered card.
         function restoreSelection() {
             if (!selectedTask) return;
             const card = document.getElementById(`task-${selectedTask.taskId}`);
@@ -578,7 +507,7 @@
             }
         }
 
-        // ─── Task selector helpers (Alt+G / Alt+N) ────────────────────────────
+        // ─── Task selector helpers (Alt+G) ────────────────────────────────────────
         function findTaskByNumber(num) {
             for (const col of ['todo', 'working', 'done']) {
                 const task = tasks[col].find(t => t.number === num);
@@ -615,14 +544,12 @@
         // ─── Movement helpers ─────────────────────────────────────────────────────
         function moveTaskForward(column, taskId) {
             if (column === 'todo')    moveTaskWithUndo('todo',    'working', taskId);
-            else if (column === 'working') moveTaskWithUndo('working', 'done',    taskId);
-            // 'done' has no forward column
+            else if (column === 'working') moveTaskWithUndo('working', 'done', taskId);
         }
 
         function moveTaskBackward(column, taskId) {
             if (column === 'done')    moveTaskWithUndo('done',    'working', taskId);
-            else if (column === 'working') moveTaskWithUndo('working', 'todo',    taskId);
-            // 'todo' has no backward column
+            else if (column === 'working') moveTaskWithUndo('working', 'todo', taskId);
         }
 
         // ─── CRUD ─────────────────────────────────────────────────────────────────
@@ -680,7 +607,6 @@
 
             moveTask(fromColumn, toColumn, taskId);
 
-            // FIX: update selectedTask.column so subsequent arrow keys work correctly
             if (selectedTask && selectedTask.taskId === taskId) {
                 selectedTask.column = toColumn;
                 restoreSelection();
@@ -697,7 +623,6 @@
                     renderColumn(fromColumn);
                     renderColumn(toColumn);
                     if (fromColumn === 'done' || toColumn === 'done') updateDailySummary();
-                    // Restore selection after undo
                     if (selectedTask && selectedTask.taskId === taskId) {
                         selectedTask.column = fromColumn;
                         restoreSelection();
@@ -712,7 +637,6 @@
             task.priority = priority;
             saveAll();
             renderColumn(column);
-            // FIX: re-apply selection highlight after renderColumn rebuilds the DOM
             restoreSelection();
         }
 
@@ -787,7 +711,7 @@
             undoBtn.textContent = 'Undo';
             undoBtn.onclick = () => {
                 toast.remove();
-                undoCallback();
+                if (undoCallback) undoCallback();
             };
 
             toast.appendChild(msgSpan);
@@ -813,8 +737,8 @@
         }
 
         function renderColumn(column) {
-            const list  = document.getElementById(`${column}-list`);
-            const count = document.getElementById(`${column}-count`);
+            const list   = document.getElementById(`${column}-list`);
+            const count  = document.getElementById(`${column}-count`);
             const filter = activeFilters[column];
 
             let columnTasks = tasks[column];
@@ -859,7 +783,6 @@
                 : '';
             const priorityLabel = task.priority.charAt(0).toUpperCase() + task.priority.slice(1);
 
-            // Build DOM programmatically to avoid inline-event injection of serialized callbacks
             card.innerHTML = `
                 <div class="drag-handle">⋮⋮</div>
                 <div class="task-header">
@@ -887,7 +810,6 @@
                 </div>
             `;
 
-            // ── Attach events safely (no eval/toString) ───────────────────────────
             card.querySelector('.priority-badge').addEventListener('click', (e) => {
                 e.stopPropagation();
                 cyclePriority(column, task.id);
@@ -908,7 +830,6 @@
                 deleteTaskWithUndo(column, task.id);
             });
 
-            // Move buttons
             if (column === 'todo') {
                 card.querySelector('.move-btn').addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -932,7 +853,6 @@
                 });
             }
 
-            // Click to select/deselect
             card.addEventListener('click', (e) => {
                 if (e.target.closest('button') || e.target.closest('.priority-badge')) return;
                 if (taskSelectorActive) exitTaskSelector();
@@ -943,7 +863,6 @@
                 }
             });
 
-            // Drag
             card.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, fromColumn: column }));
                 card.style.opacity = '0.4';
@@ -962,7 +881,6 @@
         function openDatePicker(taskId) {
             const picker = document.getElementById(`date-picker-${taskId}`);
             if (!picker) return;
-            // Briefly make it visible so showPicker() works cross-browser
             Object.assign(picker.style, { position:'relative', opacity:'1', width:'auto', height:'auto', pointerEvents:'all' });
             try { picker.showPicker(); } catch (_) { picker.click(); }
             setTimeout(() => {
@@ -1004,8 +922,10 @@
         }
 
         function updateThemeButton() {
-            document.getElementById('theme-icon').textContent = isLightMode ? '🌙' : '☀️';
-            document.getElementById('theme-text').textContent = isLightMode ? 'Dark Mode' : 'Light Mode';
+            const icon = document.getElementById('theme-icon');
+            const text = document.getElementById('theme-text');
+            if (icon) icon.textContent = isLightMode ? '🌙' : '☀️';
+            if (text) text.textContent = isLightMode ? 'Dark Mode' : 'Light Mode';
         }
 
         // ─── CSV export ───────────────────────────────────────────────────────────
@@ -1014,12 +934,12 @@
             Object.keys(tasks).forEach(status => {
                 tasks[status].forEach(task => {
                     rows.push({
-                        Number:   task.number,
-                        Task:     task.text,
-                        Status:   status === 'todo' ? 'To Do' : status === 'working' ? 'Working On' : 'Done',
-                        Priority: task.priority,
+                        Number:    task.number,
+                        Task:      task.text,
+                        Status:    status === 'todo' ? 'To Do' : status === 'working' ? 'Working On' : 'Done',
+                        Priority:  task.priority,
                         'Due Date': task.dueDate || 'None',
-                        Created:  new Date(task.createdAt).toLocaleDateString()
+                        Created:   new Date(task.createdAt).toLocaleDateString()
                     });
                 });
             });
@@ -1047,7 +967,6 @@
             if (!confirm('Delete all tasks and reset Tasky? This cannot be undone.')) return;
             tasks = { todo: [], working: [], done: [] };
             taskCounter = 0;
-            localStorage.removeItem('hasOnboarded');
             if (currentUser) {
                 const docRef = getUserDocRef();
                 if (docRef) docRef.delete().catch(() => {});
