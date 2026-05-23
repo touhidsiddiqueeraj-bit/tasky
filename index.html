@@ -382,6 +382,23 @@
   border:1px solid rgba(139,92,246,0.3);color:#a78bfa;flex-shrink:0;
 }
 </style>
+<style>
+/* ── Dropdown: prevent clipping when logged in (extra items make it tall) ── */
+.dropdown-menu {
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+  /* Anchor to top-left of the brand button; grow downward but flip if near bottom */
+  top: 100%;
+  bottom: auto;
+}
+/* If the dropdown would overflow the bottom, flip it upward */
+@media (max-height: 520px) {
+  .dropdown-menu {
+    top: auto;
+    bottom: 100%;
+  }
+}
+</style>
 </head>
 <body>
 <div class="bg-orbs">
@@ -793,7 +810,16 @@ const STORAGE_KEY = 'tasky_onboarding_seen_v3';
 function isMobile() { return window.matchMedia('(max-width:700px)').matches; }
 
 function initOnboarding() {
-  if (localStorage.getItem(STORAGE_KEY)) return;
+  // Check both possible keys so old sessions don't re-show onboarding
+  if (localStorage.getItem(STORAGE_KEY) || localStorage.getItem('hasOnboarded') === 'true') {
+    // Normalise: write the current key so future checks are consistent
+    localStorage.setItem(STORAGE_KEY, '1');
+    ['onboarding-desktop','onboarding-mobile'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    return;
+  }
   if (isMobile()) {
     document.getElementById('onboarding-desktop').style.display = 'none';
     document.getElementById('onboarding-mobile').style.display  = 'flex';
@@ -1262,13 +1288,15 @@ function showTaskyToast(msg) {
 /* ============================================================
    BOOT
    ============================================================ */
-document.addEventListener('DOMContentLoaded', () => {
+// Boot — call once regardless of when the script runs
+function _boot() {
   initOnboarding();
   patchFloatingInput();
-});
-if (document.readyState !== 'loading') {
-  initOnboarding();
-  patchFloatingInput();
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _boot);
+} else {
+  _boot();
 }
 </script>
 </body>
