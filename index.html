@@ -1,248 +1,1330 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tasky - Simple Task Tracker</title>
-    <link rel="stylesheet" href="tasky.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tasky - Simple Task Tracker</title>
+<link rel="stylesheet" href="tasky.css">
+<style>
+/* ============================================================
+   ONBOARDING — SHARED BASE
+   ============================================================ */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6,5,10,0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  animation: ob-fade-in 0.4s ease;
+}
+@keyframes ob-fade-in { from{opacity:0} to{opacity:1} }
+.onboarding-overlay.hidden {
+  animation: ob-fade-out 0.35s ease forwards;
+  pointer-events: none;
+}
+@keyframes ob-fade-out { to{opacity:0} }
+
+.ob-desktop { display: flex; }
+.ob-mobile  { display: none; }
+@media (max-width:700px) {
+  .ob-desktop { display:none !important; }
+  .ob-mobile  { display:flex !important; }
+}
+
+/* ---------- Desktop card ---------- */
+.ob-desktop-card {
+  width: min(860px,94vw);
+  background: linear-gradient(145deg,#16131f 0%,#0e0c17 100%);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 24px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(139,92,246,0.15);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  max-height: 92vh;
+}
+.ob-d-hero {
+  background: linear-gradient(135deg,#8B5CF6 0%,#6d28d9 40%,#1d1030 100%);
+  padding: 36px 48px 32px;
+  position: relative;
+  overflow: hidden;
+}
+.ob-d-hero::before {
+  content:'';position:absolute;inset:0;
+  background: radial-gradient(ellipse at 80% 50%,rgba(139,92,246,0.4) 0%,transparent 70%);
+}
+.ob-d-logo {
+  font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
+  color:rgba(255,255,255,0.55);margin-bottom:8px;position:relative;
+}
+.ob-d-headline {
+  font-size:clamp(24px,3vw,34px);font-weight:800;color:#fff;
+  line-height:1.15;position:relative;margin-bottom:8px;
+}
+.ob-d-tagline { font-size:14px;color:rgba(255,255,255,0.65);position:relative; }
+.ob-d-body {
+  padding:28px 48px 20px;overflow-y:auto;
+  display:grid;grid-template-columns:1fr 1fr;gap:14px;
+}
+.ob-d-step {
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px;padding:16px 18px;display:flex;gap:14px;align-items:flex-start;
+  transition:background .2s,border-color .2s;
+}
+.ob-d-step:hover { background:rgba(139,92,246,0.08);border-color:rgba(139,92,246,0.25); }
+.ob-d-step-icon { font-size:22px;line-height:1;flex-shrink:0;margin-top:2px; }
+.ob-d-step-text strong {
+  display:block;font-size:13.5px;font-weight:700;color:#e2d9ff;margin-bottom:5px;
+}
+.ob-d-step-text span { font-size:12.5px;color:rgba(255,255,255,0.5);line-height:1.55; }
+.ob-d-step-text kbd {
+  display:inline-block;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);
+  border-radius:5px;padding:1px 6px;font-size:11px;font-family:monospace;color:#c4b5fd;margin:0 1px;
+}
+/* Group feature highlight tile — full width */
+.ob-d-step.ob-d-step-wide {
+  grid-column: 1 / -1;
+  background: rgba(139,92,246,0.07);
+  border-color: rgba(139,92,246,0.22);
+}
+.ob-d-step.ob-d-step-wide:hover { background:rgba(139,92,246,0.12); }
+.ob-d-footer {
+  padding:18px 48px 28px;display:flex;align-items:center;
+  justify-content:space-between;border-top:1px solid rgba(255,255,255,0.06);gap:16px;
+}
+.ob-d-hint { font-size:12px;color:rgba(255,255,255,0.3); }
+.ob-d-btn {
+  background:linear-gradient(135deg,#8B5CF6,#6d28d9);color:#fff;border:none;
+  border-radius:12px;padding:14px 36px;font-size:14px;font-weight:700;cursor:pointer;
+  letter-spacing:.04em;box-shadow:0 4px 20px rgba(139,92,246,0.45);
+  transition:transform .15s,box-shadow .15s,filter .15s;
+}
+.ob-d-btn:hover { transform:translateY(-2px);box-shadow:0 8px 28px rgba(139,92,246,0.55);filter:brightness(1.1); }
+.ob-d-btn:active { transform:translateY(0); }
+
+/* ---------- Mobile onboarding ---------- */
+.ob-mobile { flex-direction:column;align-items:stretch;justify-content:flex-end;padding:0; }
+.ob-m-sheet {
+  background:linear-gradient(170deg,#13101e 0%,#0c0a14 100%);
+  border-radius:28px 28px 0 0;border-top:1px solid rgba(255,255,255,0.1);
+  max-height:92vh;display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 -20px 60px rgba(0,0,0,0.7);
+}
+.ob-m-pill {
+  width:40px;height:4px;background:rgba(255,255,255,0.18);
+  border-radius:2px;margin:14px auto 0;flex-shrink:0;
+}
+.ob-m-viewport { overflow:hidden;flex:1;position:relative; }
+.ob-m-track { display:flex;height:100%;transition:transform .38s cubic-bezier(.4,0,.2,1); }
+.ob-m-slide {
+  min-width:100%;padding:28px 28px 12px;display:flex;flex-direction:column;
+  align-items:center;text-align:center;gap:14px;box-sizing:border-box;
+}
+.ob-m-illus {
+  width:88px;height:88px;border-radius:28px;display:flex;align-items:center;
+  justify-content:center;font-size:38px;flex-shrink:0;box-shadow:0 8px 32px rgba(0,0,0,0.4);
+}
+.ob-m-illus.purple { background:linear-gradient(135deg,#7c3aed,#4c1d95); }
+.ob-m-illus.amber  { background:linear-gradient(135deg,#d97706,#92400e); }
+.ob-m-illus.green  { background:linear-gradient(135deg,#059669,#064e3b); }
+.ob-m-illus.blue   { background:linear-gradient(135deg,#0284c7,#0c4a6e); }
+.ob-m-illus.rose   { background:linear-gradient(135deg,#e11d48,#881337); }
+.ob-m-illus.violet { background:linear-gradient(135deg,#7c3aed,#2e1065); }
+.ob-m-slide h2 { font-size:21px;font-weight:800;color:#ede9fe;margin:0;line-height:1.25; }
+.ob-m-slide p  { font-size:14.5px;color:rgba(255,255,255,0.55);line-height:1.6;margin:0;max-width:320px; }
+.ob-m-slide .ob-m-tip {
+  background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);
+  border-radius:12px;padding:12px 16px;font-size:13px;color:#c4b5fd;
+  line-height:1.55;width:100%;box-sizing:border-box;text-align:left;
+}
+.ob-m-tip-label {
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#a78bfa;margin-bottom:4px;
+}
+.ob-m-dots { display:flex;gap:7px;justify-content:center;padding:14px 0 4px;flex-shrink:0; }
+.ob-m-dot {
+  width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.2);
+  transition:background .3s,width .3s;cursor:pointer;
+}
+.ob-m-dot.active { background:#8B5CF6;width:22px;border-radius:4px; }
+.ob-m-nav { display:flex;gap:12px;padding:16px 24px 28px;flex-shrink:0; }
+.ob-m-skip {
+  flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.5);border-radius:14px;padding:15px;font-size:14px;
+  font-weight:600;cursor:pointer;transition:background .2s;
+}
+.ob-m-skip:hover { background:rgba(255,255,255,0.1); }
+.ob-m-next {
+  flex:2;background:linear-gradient(135deg,#8B5CF6,#6d28d9);color:#fff;border:none;
+  border-radius:14px;padding:15px;font-size:14px;font-weight:700;cursor:pointer;
+  box-shadow:0 4px 18px rgba(139,92,246,0.4);transition:filter .15s,transform .15s;letter-spacing:.02em;
+}
+.ob-m-next:active { transform:scale(0.97); }
+
+/* ============================================================
+   TASK GROUPS MODAL
+   ============================================================ */
+.tg-overlay {
+  position:fixed;inset:0;z-index:8000;
+  background:rgba(6,5,10,0.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  display:flex;align-items:center;justify-content:center;
+  animation:ob-fade-in .3s ease;
+}
+.tg-overlay.hidden { animation:ob-fade-out .25s ease forwards;pointer-events:none; }
+
+.tg-modal {
+  width:min(780px,95vw);max-height:90vh;
+  background:linear-gradient(150deg,#15121f 0%,#0d0b16 100%);
+  border:1px solid rgba(255,255,255,0.09);border-radius:22px;
+  box-shadow:0 28px 70px rgba(0,0,0,0.7),0 0 0 1px rgba(139,92,246,0.12);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+
+/* Modal header */
+.tg-header {
+  padding:24px 28px 0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.tg-header-title {
+  display:flex;align-items:center;gap:10px;
+  font-size:18px;font-weight:800;color:#e2d9ff;
+}
+.tg-header-title span.tg-badge {
+  background:rgba(139,92,246,0.2);border:1px solid rgba(139,92,246,0.35);
+  border-radius:8px;padding:3px 9px;font-size:11px;font-weight:700;
+  color:#a78bfa;letter-spacing:.06em;text-transform:uppercase;
+}
+.tg-close-btn {
+  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.5);border-radius:10px;width:34px;height:34px;
+  font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:background .2s,color .2s;
+}
+.tg-close-btn:hover { background:rgba(239,68,68,0.15);color:#f87171;border-color:rgba(239,68,68,0.3); }
+
+/* Tab bar */
+.tg-tabs {
+  display:flex;gap:4px;padding:16px 28px 0;flex-shrink:0;
+  border-bottom:1px solid rgba(255,255,255,0.07);
+}
+.tg-tab {
+  padding:9px 18px;border-radius:10px 10px 0 0;font-size:13px;font-weight:600;
+  cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,0.4);
+  transition:color .2s,background .2s;
+  border-bottom:2px solid transparent;
+  margin-bottom:-1px;
+}
+.tg-tab:hover { color:rgba(255,255,255,0.7); }
+.tg-tab.active { color:#a78bfa;border-bottom-color:#8B5CF6; }
+
+/* Tab panes */
+.tg-body { flex:1;overflow:hidden;display:flex;flex-direction:column; }
+.tg-pane { display:none;flex:1;overflow-y:auto;padding:24px 28px 28px; }
+.tg-pane.active { display:flex;flex-direction:column;gap:16px; }
+
+/* ---- Groups list pane ---- */
+.tg-empty-state {
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;color:rgba(255,255,255,0.25);padding:40px 0;
+}
+.tg-empty-icon { font-size:48px; }
+.tg-empty-text { font-size:14px;text-align:center;line-height:1.6; }
+
+.tg-group-card {
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;padding:16px 18px;display:flex;align-items:flex-start;
+  gap:14px;transition:border-color .2s,background .2s;
+}
+.tg-group-card:hover { background:rgba(139,92,246,0.06);border-color:rgba(139,92,246,0.2); }
+.tg-group-card-main { flex:1;min-width:0; }
+.tg-group-name {
+  font-size:15px;font-weight:700;color:#e2d9ff;margin-bottom:5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tg-group-meta { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.tg-group-col-badge {
+  font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;
+}
+.tg-group-col-badge.todo    { background:rgba(139,92,246,0.2);color:#a78bfa; }
+.tg-group-col-badge.working { background:rgba(245,158,11,0.2);color:#fbbf24; }
+.tg-group-task-count {
+  font-size:11px;color:rgba(255,255,255,0.35);
+}
+.tg-group-tasks-preview {
+  margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;
+}
+.tg-task-chip {
+  font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
+  border-radius:6px;padding:2px 8px;color:rgba(255,255,255,0.5);
+  white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;
+}
+.tg-task-chip.priority-high   { border-color:rgba(239,68,68,0.3);color:#fca5a5; }
+.tg-task-chip.priority-medium { border-color:rgba(245,158,11,0.3);color:#fcd34d; }
+.tg-task-chip.priority-low    { border-color:rgba(16,185,129,0.3);color:#6ee7b7; }
+
+.tg-group-actions { display:flex;gap:6px;flex-shrink:0;align-items:flex-start; }
+.tg-icon-btn {
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+  border-radius:9px;padding:7px 10px;font-size:14px;cursor:pointer;
+  transition:background .2s,border-color .2s;color:rgba(255,255,255,0.6);
+  display:flex;align-items:center;gap:5px;font-size:12px;
+}
+.tg-icon-btn:hover { background:rgba(139,92,246,0.15);border-color:rgba(139,92,246,0.3);color:#a78bfa; }
+.tg-icon-btn.danger:hover { background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);color:#f87171; }
+
+/* Delete-all button */
+.tg-danger-row {
+  margin-top:auto;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);
+  display:flex;justify-content:flex-end;
+}
+.tg-danger-btn {
+  background:transparent;border:1px solid rgba(239,68,68,0.25);color:rgba(239,68,68,0.6);
+  border-radius:10px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;
+  transition:background .2s,color .2s,border-color .2s;
+}
+.tg-danger-btn:hover { background:rgba(239,68,68,0.1);color:#f87171;border-color:rgba(239,68,68,0.5); }
+
+/* ---- Create / Edit pane ---- */
+.tg-field-label {
+  font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:rgba(255,255,255,0.4);margin-bottom:8px;
+}
+.tg-input {
+  width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.12);border-radius:12px;
+  padding:12px 16px;font-size:14px;color:#e2d9ff;outline:none;
+  transition:border-color .2s,background .2s;
+}
+.tg-input::placeholder { color:rgba(255,255,255,0.25); }
+.tg-input:focus { border-color:rgba(139,92,246,0.5);background:rgba(139,92,246,0.06); }
+
+/* Column toggle */
+.tg-col-toggle {
+  display:flex;gap:0;border:1px solid rgba(255,255,255,0.12);border-radius:12px;overflow:hidden;width:fit-content;
+}
+.tg-col-toggle button {
+  padding:10px 22px;font-size:13px;font-weight:600;cursor:pointer;border:none;
+  background:transparent;color:rgba(255,255,255,0.4);transition:background .2s,color .2s;
+}
+.tg-col-toggle button.selected-todo    { background:rgba(139,92,246,0.25);color:#a78bfa; }
+.tg-col-toggle button.selected-working { background:rgba(245,158,11,0.2);color:#fbbf24; }
+
+/* Sub-tasks builder */
+.tg-subtasks-list { display:flex;flex-direction:column;gap:8px; }
+.tg-subtask-row {
+  display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+  border-radius:11px;padding:8px 10px;
+}
+.tg-subtask-row input.tg-input {
+  flex:1;padding:8px 12px;font-size:13px;border:none;background:transparent;
+}
+.tg-subtask-row input.tg-input:focus { border:none;background:transparent; }
+.tg-priority-select {
+  background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);
+  border-radius:8px;padding:6px 10px;font-size:12px;color:rgba(255,255,255,0.6);
+  cursor:pointer;outline:none;
+}
+.tg-priority-select option { background:#1a1528; }
+.tg-remove-task-btn {
+  background:transparent;border:none;color:rgba(255,255,255,0.25);
+  font-size:16px;cursor:pointer;padding:2px 4px;border-radius:6px;
+  transition:color .2s,background .2s;line-height:1;flex-shrink:0;
+}
+.tg-remove-task-btn:hover { color:#f87171;background:rgba(239,68,68,0.1); }
+.tg-add-subtask-btn {
+  background:rgba(255,255,255,0.04);border:1px dashed rgba(255,255,255,0.15);
+  border-radius:11px;padding:10px;font-size:13px;color:rgba(255,255,255,0.35);
+  cursor:pointer;text-align:center;transition:background .2s,border-color .2s,color .2s;
+}
+.tg-add-subtask-btn:hover {
+  background:rgba(139,92,246,0.08);border-color:rgba(139,92,246,0.3);color:#a78bfa;
+}
+
+/* Save button */
+.tg-save-btn {
+  background:linear-gradient(135deg,#8B5CF6,#6d28d9);color:#fff;border:none;
+  border-radius:13px;padding:14px 32px;font-size:14px;font-weight:700;cursor:pointer;
+  box-shadow:0 4px 20px rgba(139,92,246,0.35);transition:filter .15s,transform .15s;
+  letter-spacing:.03em;align-self:flex-start;margin-top:4px;
+}
+.tg-save-btn:hover { filter:brightness(1.1);transform:translateY(-1px); }
+.tg-save-btn:active { transform:translateY(0); }
+
+/* ============================================================
+   GROUP SUGGESTION DROPDOWN
+   ============================================================ */
+.tg-suggestion-box {
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(480px,90vw);
+  background:linear-gradient(145deg,#18142a,#12101c);
+  border:1px solid rgba(139,92,246,0.3);
+  border-radius:16px;
+  box-shadow:0 -4px 30px rgba(139,92,246,0.2),0 8px 40px rgba(0,0,0,0.6);
+  z-index:7000;
+  overflow:hidden;
+  display:none;
+  flex-direction:column;
+  /* positioned above floating input — set via JS */
+}
+.tg-suggestion-box.visible { display:flex; }
+.tg-suggestion-header {
+  padding:9px 14px 7px;
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  color:rgba(139,92,246,0.7);border-bottom:1px solid rgba(255,255,255,0.06);
+  display:flex;align-items:center;gap:6px;
+}
+.tg-suggestion-item {
+  padding:11px 14px;display:flex;align-items:center;gap:10px;
+  cursor:pointer;transition:background .15s;
+}
+.tg-suggestion-item:hover,
+.tg-suggestion-item.focused { background:rgba(139,92,246,0.14); }
+.tg-suggestion-glyph {
+  width:30px;height:30px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,#7c3aed,#4c1d95);
+  display:flex;align-items:center;justify-content:center;font-size:15px;
+}
+.tg-suggestion-name { flex:1;font-size:13.5px;font-weight:600;color:#e2d9ff; }
+.tg-suggestion-meta { font-size:11px;color:rgba(255,255,255,0.35); }
+.tg-suggestion-badge {
+  font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 7px;border-radius:5px;background:rgba(139,92,246,0.2);
+  border:1px solid rgba(139,92,246,0.3);color:#a78bfa;flex-shrink:0;
+}
+</style>
 </head>
 <body>
-    <div class="bg-orbs">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
-    </div>
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
 
-    <!-- Onboarding -->
-    <div class="onboarding-overlay" id="onboarding">
-        <div class="onboarding-card">
-            <div class="onboarding-logo">Tasky</div>
-            <div class="onboarding-subtitle">Simple three-panel task tracking</div>
-            <div class="onboarding-steps">
-                <div class="onboarding-step">
-                    <div class="step-icon">⌨️</div>
-                    <div class="step-text">
-                        <strong>Just start typing anywhere</strong>
-                        <span>Tasks auto-add to To Do. Press <strong>Enter</strong> to save, <strong>Esc</strong> to cancel</span>
-                    </div>
-                </div>
-                <div class="onboarding-step">
-                    <div class="step-icon">↔️</div>
-                    <div class="step-text">
-                        <strong>Drag & drop or use keyboard</strong>
-                        <span>Click a task to select it, then use <strong>← →</strong> keys to move between columns</span>
-                    </div>
-                </div>
-                <div class="onboarding-step">
-                    <div class="step-icon">🎯</div>
-                    <div class="step-text">
-                        <strong>Set priority & due dates</strong>
-                        <span>Click the priority badge to cycle it. Select a task then press <strong>1/2/3</strong> to set High/Medium/Low. <strong>Delete</strong> key removes it</span>
-                    </div>
-                </div>
-                <div class="onboarding-step">
-                    <div class="step-icon">🔢</div>
-                    <div class="step-text">
-                        <strong>Quick-select any task by number</strong>
-                        <span>Press <strong>Alt+1–9</strong> to select that task number instantly. Or press <strong>Alt+G</strong> then type the number and <strong>Enter</strong> to jump to any task</span>
-                    </div>
-                </div>
-                <div class="onboarding-step">
-                    <div class="step-icon">🔍</div>
-                    <div class="step-text">
-                        <strong>Filter by priority</strong>
-                        <span>Click the colored dots (🔴🟡🟢) in each column header to show only that priority</span>
-                    </div>
-                </div>
-                <div class="onboarding-step">
-                    <div class="step-icon">↩️</div>
-                    <div class="step-text">
-                        <strong>Undo mistakes</strong>
-                        <span>Deleted or moved a task by accident? An undo button appears for 3 seconds</span>
-                    </div>
-                </div>
-                <div class="onboarding-step">
-                    <div class="step-icon">🎙️</div>
-                    <div class="step-text">
-                        <strong>Voice input</strong>
-                        <span>Hold <strong>Space</strong> to dictate a task (desktop). Tap the 🎙️ button on mobile. Requires mic permission — works in Chrome, Edge &amp; Brave</span>
-                    </div>
-                </div>
-                <div class="onboarding-step">
-                    <div class="step-icon">☁️</div>
-                    <div class="step-text">
-                        <strong>Optional cloud sync</strong>
-                        <span>Sign in with Google from the menu to sync your tasks across devices. Works offline too — data saves locally and syncs when you're back online</span>
-                    </div>
-                </div>
-            </div>
-            <button class="onboarding-btn" onclick="dismissOnboarding()">Got It — Let's Go!</button>
+<!-- ═══════════════════════════════════════════════
+     DESKTOP ONBOARDING
+     ═══════════════════════════════════════════════ -->
+<div class="onboarding-overlay ob-desktop" id="onboarding-desktop">
+  <div class="ob-desktop-card">
+    <div class="ob-d-hero">
+      <div class="ob-d-logo">Tasky</div>
+      <div class="ob-d-headline">Your keyboard-first<br>task tracker</div>
+      <div class="ob-d-tagline">Three columns. Zero friction. Here's all you need to know.</div>
+    </div>
+    <div class="ob-d-body">
+
+      <div class="ob-d-step ob-d-step-wide">
+        <div class="ob-d-step-icon">⊞</div>
+        <div class="ob-d-step-text">
+          <strong>Task Groups — add a whole workflow in one keystroke</strong>
+          <span>Create reusable groups of tasks (e.g. "Sprint Setup", "Morning Routine") from <strong>Tasky ▼ → Task Groups</strong>. Each group has a column toggle (To Do / Working On) and a list of sub-tasks with priorities. When you start typing in the task input, matching group names appear as suggestions — press <kbd>↑</kbd><kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to expand the whole group onto the board instantly. Duplicate tasks are skipped automatically.</span>
         </div>
-    </div>
+      </div>
 
-    <!-- Toast container -->
-    <div class="toast-container" id="toast-container"></div>
-
-    <div class="top-menu">
-        <button class="brand-btn" onclick="toggleMenu()">
-            <span>Tasky</span>
-            <span style="font-size:12px;">▼</span>
-        </button>
-        <div class="dropdown-menu" id="dropdown">
-            <button class="dropdown-item" onclick="toggleTheme()">
-                <span id="theme-icon">☀️</span>
-                <span id="theme-text">Light Mode</span>
-            </button>
-            <button class="dropdown-item" onclick="exportToCSV()">
-                <span>📊</span>
-                <span>Export CSV</span>
-            </button>
-            <button class="dropdown-item" onclick="resetAllData()" style="color:#ef4444;">
-                <span>🗑️</span>
-                <span>Reset All Data</span>
-            </button>
-            <div class="dropdown-divider"></div>
-            <button class="dropdown-item" onclick="signInWithGoogle()" id="auth-btn">
-                <span>☁️</span>
-                <span id="auth-text">Sign in with Google</span>
-            </button>
-            <button class="dropdown-item" onclick="signOut()" id="signout-btn" style="display:none;">
-                <span>🚪</span>
-                <span>Sign Out</span>
-            </button>
-            <div class="dropdown-item" id="user-info" style="display:none; cursor:default; opacity:0.6; font-size:12px; padding:6px 16px;" onclick="return false;">
-                <span id="user-avatar" style="width:18px;height:18px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:14px;"></span>
-                <span id="user-email"></span>
-            </div>
+      <div class="ob-d-step">
+        <div class="ob-d-step-icon">⌨️</div>
+        <div class="ob-d-step-text">
+          <strong>Just start typing</strong>
+          <span>Press any letter or number key to open the task input. Hit <kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel. Tasks land in <em>To Do</em> automatically.</span>
         </div>
-    </div>
+      </div>
 
-    <div class="container">
-        <div class="board">
-            <!-- To Do Column -->
-            <div class="column-wrapper">
-                <div class="column-ring"></div>
-                <div class="column-ring-inner"></div>
-                <div class="column">
-                    <div class="column-header">
-                        <div class="column-header-left">
-                            <h2 class="column-title">📝 To Do</h2>
-                            <div class="filter-dots">
-                                <span class="filter-dot high" onclick="toggleFilter('todo', 'high', this)" title="Filter High"></span>
-                                <span class="filter-dot medium" onclick="toggleFilter('todo', 'medium', this)" title="Filter Medium"></span>
-                                <span class="filter-dot low" onclick="toggleFilter('todo', 'low', this)" title="Filter Low"></span>
-                            </div>
-                        </div>
-                        <span class="task-count" id="todo-count">0</span>
-                    </div>
-                    <div class="task-list" id="todo-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
-                </div>
-            </div>
-
-            <!-- Working On Column -->
-            <div class="column-wrapper">
-                <div class="column-ring"></div>
-                <div class="column-ring-inner"></div>
-                <div class="column">
-                    <div class="column-header">
-                        <div class="column-header-left">
-                            <h2 class="column-title">⚡ Working On</h2>
-                            <div class="filter-dots">
-                                <span class="filter-dot high" onclick="toggleFilter('working', 'high', this)" title="Filter High"></span>
-                                <span class="filter-dot medium" onclick="toggleFilter('working', 'medium', this)" title="Filter Medium"></span>
-                                <span class="filter-dot low" onclick="toggleFilter('working', 'low', this)" title="Filter Low"></span>
-                            </div>
-                        </div>
-                        <span class="task-count" id="working-count">0</span>
-                    </div>
-                    <div class="task-list" id="working-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
-                </div>
-            </div>
-
-            <!-- Done Column -->
-            <div class="column-wrapper">
-                <div class="column-ring"></div>
-                <div class="column-ring-inner"></div>
-                <div class="column">
-                    <div class="column-header">
-                        <div class="column-header-left">
-                            <h2 class="column-title">✅ Done</h2>
-                        </div>
-                        <div class="column-header-right">
-                            <span class="daily-summary" id="daily-summary"></span>
-                            <span class="task-count" id="done-count">0</span>
-                        </div>
-                    </div>
-                    <div class="task-list" id="done-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
-                    <button class="clear-done-btn" onclick="clearDoneTasks()">Clear All Done</button>
-                </div>
-            </div>
+      <div class="ob-d-step">
+        <div class="ob-d-step-icon">↔️</div>
+        <div class="ob-d-step-text">
+          <strong>Move tasks between columns</strong>
+          <span>Click a task to select it, then press <kbd>←</kbd> or <kbd>→</kbd> to move it. Or drag and drop anywhere.</span>
         </div>
-    </div>
+      </div>
 
-    <!-- Floating input -->
-    <div class="floating-input-container" id="floating-container">
-        <input
-            type="text"
-            class="floating-input"
-            id="floating-input"
-            placeholder="Type to add task..."
-            maxlength="80"
-        >
-        <div class="floating-input-hint">
-            <span><kbd>Enter</kbd> to add</span>
-            <span><kbd>Esc</kbd> to cancel</span>
-            <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority (select task first)</span>
-            <span><kbd>←</kbd><kbd>→</kbd> move (select task first)</span>
-            <span><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd> select task</span>
-            <span><kbd>Alt</kbd>+<kbd>G</kbd> goto task</span>
+      <div class="ob-d-step">
+        <div class="ob-d-step-icon">🎯</div>
+        <div class="ob-d-step-text">
+          <strong>Priority &amp; due dates</strong>
+          <span>Select a task then press <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> for High / Medium / Low. Click the priority badge to cycle it. Add a due date from the task edit popover.</span>
         </div>
-    </div>
+      </div>
 
-    <!-- Task selector pill -->
-    <div class="task-selector" id="task-selector">
-        <span class="task-selector-icon">🔍</span>
-        Go to task #<span id="task-selector-buffer"></span>
-        <span class="task-selector-cursor">|</span>
-    </div>
-
-    <!-- Sync status indicator -->
-    <div class="sync-status" id="sync-status"></div>
-
-    <div class="shortcuts-hint">
-        <span>Click task then: <kbd>←</kbd><kbd>→</kbd> move</span>
-        <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority</span>
-        <span><kbd>Del</kbd> delete</span>
-        <span><kbd>Esc</kbd> deselect</span>
-        <span><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd> select</span>
-        <span><kbd>Alt</kbd>+<kbd>G</kbd> goto</span>
-        <span>Hold <kbd>Space</kbd> voice input</span>
-    </div>
-
-
-    <!-- Voice listening overlay -->
-    <div class="voice-overlay" id="voice-overlay">
-        <div class="voice-orb">
-            <div class="voice-ring"></div>
-            <div class="voice-ring"></div>
-            <div class="voice-ring"></div>
-            <div class="voice-mic">🎙️</div>
+      <div class="ob-d-step">
+        <div class="ob-d-step-icon">🔢</div>
+        <div class="ob-d-step-text">
+          <strong>Jump to any task instantly</strong>
+          <span>Press <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd> to select by number, or <kbd>Alt</kbd>+<kbd>G</kbd> then type any number and <kbd>Enter</kbd>.</span>
         </div>
-        <div class="voice-label">Listening…</div>
-        <div class="voice-transcript" id="voice-transcript"></div>
-        <div class="voice-hint" id="voice-hint">Release <kbd style="background:rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.3)">Space</kbd> to confirm</div>
+      </div>
+
+      <div class="ob-d-step">
+        <div class="ob-d-step-icon">🎙️</div>
+        <div class="ob-d-step-text">
+          <strong>Voice input</strong>
+          <span>Hold <kbd>Space</kbd> to dictate a task aloud. Release to save. Works in Chrome, Edge &amp; Brave.</span>
+        </div>
+      </div>
+
+      <div class="ob-d-step">
+        <div class="ob-d-step-icon">↩️</div>
+        <div class="ob-d-step-text">
+          <strong>Undo in 3 seconds</strong>
+          <span>Deleted or moved a task by accident? An undo toast appears immediately. <kbd>Del</kbd> key deletes the selected task.</span>
+        </div>
+      </div>
+
+      <div class="ob-d-step">
+        <div class="ob-d-step-icon">☁️</div>
+        <div class="ob-d-step-text">
+          <strong>Cloud sync (optional)</strong>
+          <span>Sign in with Google via <strong>Tasky ▼</strong> to sync across devices. Works offline — changes queue and sync when back online. Task Groups are preserved on data reset.</span>
+        </div>
+      </div>
+
+    </div>
+    <div class="ob-d-footer">
+      <span class="ob-d-hint">Reopen this guide any time: Tasky ▼ → How to Use</span>
+      <button class="ob-d-btn" onclick="dismissOnboarding()">Got It — Let's Go! →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MOBILE ONBOARDING
+     ═══════════════════════════════════════════════ -->
+<div class="onboarding-overlay ob-mobile" id="onboarding-mobile">
+  <div class="ob-m-sheet">
+    <div class="ob-m-pill"></div>
+    <div class="ob-m-viewport" id="ob-m-viewport">
+      <div class="ob-m-track" id="ob-m-track">
+
+        <!-- Slide 1: Welcome -->
+        <div class="ob-m-slide">
+          <div class="ob-m-illus purple">✅</div>
+          <h2>Welcome to Tasky</h2>
+          <p>A three-column task board that stays out of your way. No accounts needed to start — your data lives right on your phone.</p>
+          <div class="ob-m-tip">
+            <div class="ob-m-tip-label">What you get</div>
+            To Do · Working On · Done — drag or tap to move tasks between columns.
+          </div>
+        </div>
+
+        <!-- Slide 2: Adding tasks -->
+        <div class="ob-m-slide">
+          <div class="ob-m-illus amber">＋</div>
+          <h2>Add tasks in one tap</h2>
+          <p>Tap the big <strong style="color:#fbbf24">＋ Add Task</strong> button at the bottom. Type your task and hit Save — done.</p>
+          <div class="ob-m-tip">
+            <div class="ob-m-tip-label">Pro tip</div>
+            Tap the 🎙️ mic button to dictate a task hands-free. Works in Chrome &amp; Edge.
+          </div>
+        </div>
+
+        <!-- Slide 3: Task Groups -->
+        <div class="ob-m-slide">
+          <div class="ob-m-illus violet">⊞</div>
+          <h2>Task Groups</h2>
+          <p>Create reusable task templates from <strong style="color:#c4b5fd">Tasky ▼ → Task Groups</strong>. Name a group, add tasks, choose To Do or Working On.</p>
+          <div class="ob-m-tip">
+            <div class="ob-m-tip-label">Instant expand</div>
+            Start typing a group name when adding a task — tap the suggestion to add all its tasks to the board at once!
+          </div>
+        </div>
+
+        <!-- Slide 4: Priority & moving -->
+        <div class="ob-m-slide">
+          <div class="ob-m-illus green">🎯</div>
+          <h2>Tap to edit &amp; prioritise</h2>
+          <p>Tap any task to select it, then change its <strong style="color:#34d399">priority</strong>, add a <strong style="color:#34d399">due date</strong>, or move it to another column.</p>
+          <div class="ob-m-tip">
+            <div class="ob-m-tip-label">Priority colours</div>
+            🔴 High · 🟡 Medium · 🟢 Low — tap the badge to cycle through them.
+          </div>
+        </div>
+
+        <!-- Slide 5: Drag, filter, undo -->
+        <div class="ob-m-slide">
+          <div class="ob-m-illus blue">↔️</div>
+          <h2>Drag, filter &amp; undo</h2>
+          <p>Long-press a task to drag it between columns. Use the coloured dots in column headers to filter by priority. Hit <strong style="color:#60a5fa">Undo</strong> within 3 seconds if you delete by mistake.</p>
+          <div class="ob-m-tip">
+            <div class="ob-m-tip-label">Cloud sync</div>
+            Sign in with Google from Tasky ▼ to sync across all your devices. Task Groups survive data resets.
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="ob-m-dots" id="ob-m-dots">
+      <div class="ob-m-dot active" onclick="goToSlide(0)"></div>
+      <div class="ob-m-dot" onclick="goToSlide(1)"></div>
+      <div class="ob-m-dot" onclick="goToSlide(2)"></div>
+      <div class="ob-m-dot" onclick="goToSlide(3)"></div>
+      <div class="ob-m-dot" onclick="goToSlide(4)"></div>
+    </div>
+    <div class="ob-m-nav">
+      <button class="ob-m-skip" onclick="dismissOnboarding()">Skip</button>
+      <button class="ob-m-next" id="ob-m-next-btn" onclick="mobileOnboardingNext()">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TASK GROUPS MODAL
+     ═══════════════════════════════════════════════ -->
+<div class="tg-overlay hidden" id="tg-modal-overlay" onclick="tgOverlayClick(event)">
+  <div class="tg-modal" id="tg-modal">
+
+    <div class="tg-header">
+      <div class="tg-header-title">
+        <span>⊞</span> Task Groups
+        <span class="tg-badge">Templates</span>
+      </div>
+      <button class="tg-close-btn" onclick="closeTgModal()" title="Close">✕</button>
     </div>
 
-    <!-- Mobile FAB — only visible on small screens via CSS -->
-    <button class="mobile-add-btn" id="mobile-add-btn" onclick="mobileFabTap()">
-        <span class="fab-icon">＋</span>
-        <span>Add Task</span>
+    <div class="tg-tabs">
+      <button class="tg-tab active" id="tg-tab-list"   onclick="switchTgTab('list')">My Groups</button>
+      <button class="tg-tab"        id="tg-tab-create" onclick="switchTgTab('create')">＋ New Group</button>
+    </div>
+
+    <div class="tg-body">
+
+      <!-- LIST PANE -->
+      <div class="tg-pane active" id="tg-pane-list">
+        <div id="tg-groups-list-inner">
+          <!-- Populated by JS -->
+        </div>
+        <div class="tg-danger-row">
+          <button class="tg-danger-btn" onclick="tgDeleteAllGroups()">🗑 Delete All Groups</button>
+        </div>
+      </div>
+
+      <!-- CREATE / EDIT PANE -->
+      <div class="tg-pane" id="tg-pane-create">
+
+        <div>
+          <div class="tg-field-label">Group Name</div>
+          <input class="tg-input" id="tg-group-name-input" type="text"
+            placeholder='e.g. "Sprint Setup", "Morning Routine"' maxlength="60">
+        </div>
+
+        <div>
+          <div class="tg-field-label">Tasks land in</div>
+          <div class="tg-col-toggle" id="tg-col-toggle">
+            <button id="tg-btn-todo"    class="selected-todo"    onclick="tgSetColumn('todo')">📝 To Do</button>
+            <button id="tg-btn-working"                          onclick="tgSetColumn('working')">⚡ Working On</button>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;min-height:0;">
+          <div class="tg-field-label">Tasks in this group</div>
+          <div class="tg-subtasks-list" id="tg-subtasks-list"></div>
+          <button class="tg-add-subtask-btn" onclick="tgAddSubtaskRow()">＋ Add task to group</button>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button class="tg-save-btn" onclick="tgSaveGroup()" id="tg-save-btn">Save Group</button>
+          <button onclick="tgCancelEdit()" style="background:transparent;border:none;color:rgba(255,255,255,0.35);cursor:pointer;font-size:13px;padding:4px 8px;">Cancel</button>
+          <span id="tg-save-error" style="font-size:12px;color:#f87171;display:none;"></span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     GROUP SUGGESTION DROPDOWN
+     ═══════════════════════════════════════════════ -->
+<div class="tg-suggestion-box" id="tg-suggestion-box">
+  <div class="tg-suggestion-header">⊞ Task Groups — press ↑↓ to navigate, Enter to expand</div>
+  <div id="tg-suggestion-list"></div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ═══════════════════════════════════════════════
+     TOP MENU  (dropdown updated)
+     ═══════════════════════════════════════════════ -->
+<div class="top-menu">
+  <button class="brand-btn" onclick="toggleMenu()">
+    <span>Tasky</span>
+    <span style="font-size:12px;">▼</span>
+  </button>
+  <div class="dropdown-menu" id="dropdown">
+    <button class="dropdown-item" onclick="openTgModal()">
+      <span>⊞</span>
+      <span>Task Groups</span>
     </button>
+    <div class="dropdown-divider"></div>
+    <button class="dropdown-item" onclick="toggleTheme()">
+      <span id="theme-icon">☀️</span>
+      <span id="theme-text">Light Mode</span>
+    </button>
+    <button class="dropdown-item" onclick="exportToCSV()">
+      <span>📊</span>
+      <span>Export CSV</span>
+    </button>
+    <button class="dropdown-item" onclick="showOnboarding()">
+      <span>❓</span>
+      <span>How to Use</span>
+    </button>
+    <button class="dropdown-item" onclick="resetAllData()" style="color:#ef4444;">
+      <span>🗑️</span>
+      <span>Reset All Data</span>
+    </button>
+    <div class="dropdown-divider"></div>
+    <button class="dropdown-item" onclick="signInWithGoogle()" id="auth-btn">
+      <span>☁️</span>
+      <span id="auth-text">Sign in with Google</span>
+    </button>
+    <button class="dropdown-item" onclick="signOut()" id="signout-btn" style="display:none;">
+      <span>🚪</span>
+      <span>Sign Out</span>
+    </button>
+    <div class="dropdown-item" id="user-info"
+      style="display:none;cursor:default;opacity:0.6;font-size:12px;padding:6px 16px;"
+      onclick="return false;">
+      <span id="user-avatar"
+        style="width:18px;height:18px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:14px;"></span>
+      <span id="user-email"></span>
+    </div>
+  </div>
+</div>
 
-    <!-- Mobile mic button -->
-    <button class="mobile-mic-btn" id="mobile-mic-btn">🎙️</button>
+<!-- ═══════════════════════════════════════════════
+     BOARD
+     ═══════════════════════════════════════════════ -->
+<div class="container">
+  <div class="board">
+    <div class="column-wrapper">
+      <div class="column-ring"></div><div class="column-ring-inner"></div>
+      <div class="column">
+        <div class="column-header">
+          <div class="column-header-left">
+            <h2 class="column-title">📝 To Do</h2>
+            <div class="filter-dots">
+              <span class="filter-dot high"   onclick="toggleFilter('todo','high',this)"   title="Filter High"></span>
+              <span class="filter-dot medium" onclick="toggleFilter('todo','medium',this)" title="Filter Medium"></span>
+              <span class="filter-dot low"    onclick="toggleFilter('todo','low',this)"    title="Filter Low"></span>
+            </div>
+          </div>
+          <span class="task-count" id="todo-count">0</span>
+        </div>
+        <div class="task-list" id="todo-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+      </div>
+    </div>
 
-    <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-compat.js"></script>
-    <script src="tasky.js"></script>
+    <div class="column-wrapper">
+      <div class="column-ring"></div><div class="column-ring-inner"></div>
+      <div class="column">
+        <div class="column-header">
+          <div class="column-header-left">
+            <h2 class="column-title">⚡ Working On</h2>
+            <div class="filter-dots">
+              <span class="filter-dot high"   onclick="toggleFilter('working','high',this)"   title="Filter High"></span>
+              <span class="filter-dot medium" onclick="toggleFilter('working','medium',this)" title="Filter Medium"></span>
+              <span class="filter-dot low"    onclick="toggleFilter('working','low',this)"    title="Filter Low"></span>
+            </div>
+          </div>
+          <span class="task-count" id="working-count">0</span>
+        </div>
+        <div class="task-list" id="working-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+      </div>
+    </div>
+
+    <div class="column-wrapper">
+      <div class="column-ring"></div><div class="column-ring-inner"></div>
+      <div class="column">
+        <div class="column-header">
+          <div class="column-header-left"><h2 class="column-title">✅ Done</h2></div>
+          <div class="column-header-right">
+            <span class="daily-summary" id="daily-summary"></span>
+            <span class="task-count" id="done-count">0</span>
+          </div>
+        </div>
+        <div class="task-list" id="done-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+        <button class="clear-done-btn" onclick="clearDoneTasks()">Clear All Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Floating input -->
+<div class="floating-input-container" id="floating-container">
+  <input type="text" class="floating-input" id="floating-input"
+    placeholder="Type to add task or group name…" maxlength="80">
+  <div class="floating-input-hint">
+    <span><kbd>Enter</kbd> to add</span>
+    <span><kbd>Esc</kbd> to cancel</span>
+    <span id="floating-group-hint" style="display:none;color:#a78bfa;">⊞ group match — <kbd>↑</kbd><kbd>↓</kbd> navigate, <kbd>Enter</kbd> expand</span>
+    <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority (select task first)</span>
+    <span><kbd>←</kbd><kbd>→</kbd> move (select task first)</span>
+    <span><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd> select task</span>
+    <span><kbd>Alt</kbd>+<kbd>G</kbd> goto task</span>
+  </div>
+</div>
+
+<!-- Task selector pill -->
+<div class="task-selector" id="task-selector">
+  <span class="task-selector-icon">🔍</span>
+  Go to task #<span id="task-selector-buffer"></span>
+  <span class="task-selector-cursor">|</span>
+</div>
+
+<div class="sync-status" id="sync-status"></div>
+
+<div class="shortcuts-hint">
+  <span>Click task then: <kbd>←</kbd><kbd>→</kbd> move</span>
+  <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority</span>
+  <span><kbd>Del</kbd> delete</span>
+  <span><kbd>Esc</kbd> deselect</span>
+  <span><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd> select</span>
+  <span><kbd>Alt</kbd>+<kbd>G</kbd> goto</span>
+  <span>Hold <kbd>Space</kbd> voice input</span>
+</div>
+
+<!-- Voice overlay -->
+<div class="voice-overlay" id="voice-overlay">
+  <div class="voice-orb">
+    <div class="voice-ring"></div><div class="voice-ring"></div><div class="voice-ring"></div>
+    <div class="voice-mic">🎙️</div>
+  </div>
+  <div class="voice-label">Listening…</div>
+  <div class="voice-transcript" id="voice-transcript"></div>
+  <div class="voice-hint" id="voice-hint">Release <kbd style="background:rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.3)">Space</kbd> to confirm</div>
+</div>
+
+<button class="mobile-add-btn" id="mobile-add-btn" onclick="mobileFabTap()">
+  <span class="fab-icon">＋</span><span>Add Task</span>
+</button>
+<button class="mobile-mic-btn" id="mobile-mic-btn">🎙️</button>
+
+<script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-compat.js"></script>
+<script src="tasky.js"></script>
+
+<script>
+/* ============================================================
+   ONBOARDING
+   ============================================================ */
+const STORAGE_KEY = 'tasky_onboarding_seen_v3';
+
+function isMobile() { return window.matchMedia('(max-width:700px)').matches; }
+
+function initOnboarding() {
+  if (localStorage.getItem(STORAGE_KEY)) return;
+  if (isMobile()) {
+    document.getElementById('onboarding-desktop').style.display = 'none';
+    document.getElementById('onboarding-mobile').style.display  = 'flex';
+  } else {
+    document.getElementById('onboarding-desktop').style.display = 'flex';
+    document.getElementById('onboarding-mobile').style.display  = 'none';
+  }
+}
+
+function dismissOnboarding() {
+  localStorage.setItem(STORAGE_KEY,'1');
+  ['onboarding-desktop','onboarding-mobile'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.add('hidden');
+    setTimeout(() => el.style.display = 'none', 370);
+  });
+}
+
+function showOnboarding() {
+  localStorage.removeItem(STORAGE_KEY);
+  ['onboarding-desktop','onboarding-mobile'].forEach(id =>
+    document.getElementById(id).classList.remove('hidden'));
+  initOnboarding();
+  goToSlide(0);
+  const dd = document.getElementById('dropdown');
+  if (dd && dd.classList.contains('open') && typeof toggleMenu === 'function') toggleMenu();
+}
+
+/* Mobile slides */
+let currentSlide = 0;
+const TOTAL_SLIDES = 5;
+
+function goToSlide(n) {
+  currentSlide = Math.max(0, Math.min(n, TOTAL_SLIDES-1));
+  const track = document.getElementById('ob-m-track');
+  if (track) track.style.transform = `translateX(-${currentSlide*100}%)`;
+  document.querySelectorAll('.ob-m-dot').forEach((d,i) => d.classList.toggle('active', i===currentSlide));
+  const btn = document.getElementById('ob-m-next-btn');
+  if (btn) btn.textContent = currentSlide === TOTAL_SLIDES-1 ? "Let's Go! 🚀" : 'Next →';
+}
+
+function mobileOnboardingNext() {
+  currentSlide < TOTAL_SLIDES-1 ? goToSlide(currentSlide+1) : dismissOnboarding();
+}
+
+(function(){
+  let sx=0;
+  document.addEventListener('DOMContentLoaded',()=>{
+    const vp=document.getElementById('ob-m-viewport');
+    if(!vp)return;
+    vp.addEventListener('touchstart',e=>{sx=e.touches[0].clientX},{passive:true});
+    vp.addEventListener('touchend',e=>{
+      const dx=e.changedTouches[0].clientX-sx;
+      if(Math.abs(dx)>50) goToSlide(currentSlide+(dx<0?1:-1));
+    },{passive:true});
+  });
+})();
+
+/* ============================================================
+   TASK GROUPS  —  Storage
+   ============================================================ */
+const TG_KEY = 'tasky_groups_v1';
+
+function tgLoad() {
+  try { return JSON.parse(localStorage.getItem(TG_KEY)) || []; }
+  catch(e) { return []; }
+}
+
+function tgSave(groups) {
+  localStorage.setItem(TG_KEY, JSON.stringify(groups));
+}
+
+/* ============================================================
+   TASK GROUPS  —  Modal UI
+   ============================================================ */
+let tgEditingId = null;   // null = create mode, string = edit mode
+let tgColumn    = 'todo'; // current column toggle state
+
+function openTgModal() {
+  const overlay = document.getElementById('tg-modal-overlay');
+  overlay.classList.remove('hidden');
+  overlay.style.display = 'flex';
+  switchTgTab('list');
+  renderTgGroupsList();
+  // close dropdown
+  const dd = document.getElementById('dropdown');
+  if (dd && dd.classList.contains('open') && typeof toggleMenu === 'function') toggleMenu();
+}
+
+function closeTgModal() {
+  const overlay = document.getElementById('tg-modal-overlay');
+  overlay.classList.add('hidden');
+  setTimeout(() => overlay.style.display = 'none', 270);
+  tgResetCreateForm();
+}
+
+function tgOverlayClick(e) {
+  if (e.target === document.getElementById('tg-modal-overlay')) closeTgModal();
+}
+
+function switchTgTab(tab) {
+  document.querySelectorAll('.tg-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tg-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('tg-tab-'+tab).classList.add('active');
+  document.getElementById('tg-pane-'+tab).classList.add('active');
+  if (tab === 'list') renderTgGroupsList();
+  if (tab === 'create' && tgEditingId === null) tgResetCreateForm();
+}
+
+/* ---- Render groups list ---- */
+function renderTgGroupsList() {
+  const groups  = tgLoad();
+  const inner   = document.getElementById('tg-groups-list-inner');
+  if (!groups.length) {
+    inner.innerHTML = `
+      <div class="tg-empty-state">
+        <div class="tg-empty-icon">⊞</div>
+        <div class="tg-empty-text">No groups yet.<br>Create one to expand a whole set of tasks with a single keystroke.</div>
+      </div>`;
+    return;
+  }
+  inner.innerHTML = groups.map((g,i) => {
+    const colLabel = g.column === 'working' ? 'Working On' : 'To Do';
+    const colClass = g.column === 'working' ? 'working' : 'todo';
+    const chips = (g.tasks||[]).slice(0,6).map(t => {
+      const pc = t.priority ? `priority-${t.priority}` : '';
+      return `<span class="tg-task-chip ${pc}" title="${escHtml(t.text)}">${escHtml(t.text)}</span>`;
+    }).join('');
+    const more = g.tasks.length > 6
+      ? `<span class="tg-task-chip" style="opacity:.5">+${g.tasks.length-6} more</span>` : '';
+    return `
+      <div class="tg-group-card">
+        <div class="tg-group-card-main">
+          <div class="tg-group-name">${escHtml(g.name)}</div>
+          <div class="tg-group-meta">
+            <span class="tg-group-col-badge ${colClass}">${colLabel}</span>
+            <span class="tg-group-task-count">${g.tasks.length} task${g.tasks.length!==1?'s':''}</span>
+          </div>
+          <div class="tg-group-tasks-preview">${chips}${more}</div>
+        </div>
+        <div class="tg-group-actions">
+          <button class="tg-icon-btn" onclick="tgStartEdit('${g.id}')" title="Edit">✏️ Edit</button>
+          <button class="tg-icon-btn danger" onclick="tgDeleteGroup('${g.id}')" title="Delete">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ---- Create form ---- */
+function tgResetCreateForm() {
+  tgEditingId = null;
+  tgColumn = 'todo';
+  document.getElementById('tg-group-name-input').value = '';
+  document.getElementById('tg-subtasks-list').innerHTML = '';
+  tgSetColumn('todo');
+  tgAddSubtaskRow(); // start with one empty row
+  document.getElementById('tg-save-btn').textContent = 'Save Group';
+  hideTgError();
+}
+
+function tgSetColumn(col) {
+  tgColumn = col;
+  document.getElementById('tg-btn-todo').className    = col==='todo'    ? 'selected-todo'    : '';
+  document.getElementById('tg-btn-working').className = col==='working' ? 'selected-working' : '';
+}
+
+function tgAddSubtaskRow(text='', priority='medium') {
+  const list = document.getElementById('tg-subtasks-list');
+  const row  = document.createElement('div');
+  row.className = 'tg-subtask-row';
+  row.innerHTML = `
+    <input class="tg-input" type="text" placeholder="Task description…" maxlength="80" value="${escHtml(text)}"
+      onkeydown="tgSubtaskKeydown(event,this)">
+    <select class="tg-priority-select">
+      <option value="high"   ${priority==='high'  ?'selected':''}>🔴 High</option>
+      <option value="medium" ${priority==='medium'?'selected':''}>🟡 Medium</option>
+      <option value="low"    ${priority==='low'   ?'selected':''}>🟢 Low</option>
+    </select>
+    <button class="tg-remove-task-btn" onclick="tgRemoveSubtaskRow(this)" title="Remove">✕</button>`;
+  list.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+function tgSubtaskKeydown(e, input) {
+  if (e.key === 'Enter') { e.preventDefault(); tgAddSubtaskRow(); }
+}
+
+function tgRemoveSubtaskRow(btn) {
+  btn.closest('.tg-subtask-row').remove();
+}
+
+function tgGetSubtasks() {
+  const rows = document.querySelectorAll('#tg-subtasks-list .tg-subtask-row');
+  const tasks = [];
+  rows.forEach(row => {
+    const text = row.querySelector('input').value.trim();
+    const priority = row.querySelector('select').value;
+    if (text) tasks.push({ text, priority });
+  });
+  return tasks;
+}
+
+/* ---- Save ---- */
+function tgSaveGroup() {
+  const name   = document.getElementById('tg-group-name-input').value.trim();
+  const tasks  = tgGetSubtasks();
+
+  if (!name)  { showTgError('Please enter a group name.'); return; }
+  if (!tasks.length) { showTgError('Add at least one task.'); return; }
+
+  const groups = tgLoad();
+
+  // Duplicate name check (except when editing self)
+  const duplicate = groups.find(g => g.name.toLowerCase() === name.toLowerCase() && g.id !== tgEditingId);
+  if (duplicate) { showTgError('A group with that name already exists.'); return; }
+
+  if (tgEditingId) {
+    const idx = groups.findIndex(g => g.id === tgEditingId);
+    if (idx !== -1) {
+      groups[idx] = { ...groups[idx], name, column: tgColumn, tasks };
+    }
+  } else {
+    groups.push({ id: tgNewId(), name, column: tgColumn, tasks });
+  }
+
+  tgSave(groups);
+  tgEditingId = null;
+  switchTgTab('list');
+  showTaskyToast(`Group "${name}" saved ✓`);
+}
+
+function tgNewId() {
+  return 'tg_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+}
+
+/* ---- Edit ---- */
+function tgStartEdit(id) {
+  const groups = tgLoad();
+  const group  = groups.find(g => g.id === id);
+  if (!group) return;
+
+  tgEditingId = id;
+  switchTgTab('create');
+
+  document.getElementById('tg-group-name-input').value = group.name;
+  tgSetColumn(group.column || 'todo');
+
+  const list = document.getElementById('tg-subtasks-list');
+  list.innerHTML = '';
+  (group.tasks || []).forEach(t => tgAddSubtaskRow(t.text, t.priority));
+  document.getElementById('tg-save-btn').textContent = 'Update Group';
+  hideTgError();
+}
+
+/* ---- Delete ---- */
+function tgDeleteGroup(id) {
+  const groups  = tgLoad();
+  const group   = groups.find(g => g.id === id);
+  if (!group) return;
+  if (!confirm(`Delete group "${group.name}"? This cannot be undone.`)) return;
+  tgSave(groups.filter(g => g.id !== id));
+  renderTgGroupsList();
+  showTaskyToast(`Group "${group.name}" deleted`);
+}
+
+function tgDeleteAllGroups() {
+  const groups = tgLoad();
+  if (!groups.length) return;
+  if (!confirm(`Delete all ${groups.length} group${groups.length!==1?'s':''}? This cannot be undone.`)) return;
+  tgSave([]);
+  renderTgGroupsList();
+  showTaskyToast('All groups deleted');
+}
+
+function tgCancelEdit() {
+  tgEditingId = null;
+  switchTgTab('list');
+}
+
+/* ---- Helpers ---- */
+function showTgError(msg) {
+  const el = document.getElementById('tg-save-error');
+  el.textContent = msg;
+  el.style.display = 'inline';
+}
+function hideTgError() {
+  const el = document.getElementById('tg-save-error');
+  if (el) el.style.display = 'none';
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* Keyboard: close modal on Escape */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const overlay = document.getElementById('tg-modal-overlay');
+    if (overlay && !overlay.classList.contains('hidden')) {
+      closeTgModal();
+      e.stopPropagation();
+    }
+  }
+});
+
+/* ============================================================
+   TASK GROUPS  —  Suggestion dropdown
+   ============================================================ */
+let tgSuggestions   = [];   // current matched groups
+let tgSuggFocusIdx  = -1;   // which item is keyboard-focused
+
+function tgGetSuggestions(query) {
+  if (!query || query.length < 1) return [];
+  const q = query.toLowerCase();
+  return tgLoad().filter(g => g.name.toLowerCase().includes(q));
+}
+
+function tgUpdateSuggestionBox(query) {
+  tgSuggestions  = tgGetSuggestions(query);
+  tgSuggFocusIdx = tgSuggestions.length > 0 ? 0 : -1;
+
+  const box       = document.getElementById('tg-suggestion-box');
+  const list      = document.getElementById('tg-suggestion-list');
+  const groupHint = document.getElementById('floating-group-hint');
+
+  if (!tgSuggestions.length) {
+    box.classList.remove('visible');
+    if (groupHint) groupHint.style.display = 'none';
+    return;
+  }
+
+  list.innerHTML = tgSuggestions.map((g,i) => `
+    <div class="tg-suggestion-item ${i===0?'focused':''}" data-idx="${i}"
+      onmousedown="tgExpandGroup('${g.id}',event)"
+      onmouseover="tgSuggFocus(${i})">
+      <div class="tg-suggestion-glyph">⊞</div>
+      <div class="tg-suggestion-name">${escHtml(g.name)}</div>
+      <div class="tg-suggestion-meta">${g.tasks.length} task${g.tasks.length!==1?'s':''} → ${g.column==='working'?'Working On':'To Do'}</div>
+      <div class="tg-suggestion-badge">Group</div>
+    </div>`).join('');
+
+  // Position above the floating input
+  positionSuggestionBox();
+
+  box.classList.add('visible');
+  if (groupHint) groupHint.style.display = 'inline';
+}
+
+function positionSuggestionBox() {
+  const container = document.getElementById('floating-container');
+  const box       = document.getElementById('tg-suggestion-box');
+  if (!container || !box) return;
+  const rect = container.getBoundingClientRect();
+  const boxH = box.offsetHeight || 200;
+  box.style.bottom = (window.innerHeight - rect.top + 10) + 'px';
+  box.style.top    = 'auto';
+}
+
+function tgHideSuggestions() {
+  document.getElementById('tg-suggestion-box').classList.remove('visible');
+  const hint = document.getElementById('floating-group-hint');
+  if (hint) hint.style.display = 'none';
+  tgSuggestions  = [];
+  tgSuggFocusIdx = -1;
+}
+
+function tgSuggFocus(idx) {
+  tgSuggFocusIdx = idx;
+  document.querySelectorAll('.tg-suggestion-item').forEach((el,i) =>
+    el.classList.toggle('focused', i===idx));
+}
+
+/* Navigate with arrow keys — hooked into the floating input */
+function tgHandleInputKeydown(e) {
+  const box = document.getElementById('tg-suggestion-box');
+  if (!box.classList.contains('visible')) return false;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    tgSuggFocus(Math.min(tgSuggFocusIdx+1, tgSuggestions.length-1));
+    return true;
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    tgSuggFocus(Math.max(tgSuggFocusIdx-1, 0));
+    return true;
+  }
+  if (e.key === 'Enter' && tgSuggFocusIdx >= 0) {
+    e.preventDefault();
+    e.stopPropagation();
+    const g = tgSuggestions[tgSuggFocusIdx];
+    if (g) tgExpandGroup(g.id);
+    return true;
+  }
+  if (e.key === 'Escape') {
+    tgHideSuggestions();
+    return false;
+  }
+  return false;
+}
+
+/* Expand a group onto the board */
+function tgExpandGroup(id, mouseEvent) {
+  if (mouseEvent) mouseEvent.preventDefault(); // prevent blur before expand
+  const groups = tgLoad();
+  const group  = groups.find(g => g.id === id);
+  if (!group) return;
+
+  // Collect existing task texts on board to skip duplicates
+  const existing = new Set();
+  if (typeof STATE !== 'undefined' && STATE.tasks) {
+    STATE.tasks.forEach(t => existing.add(t.text.toLowerCase()));
+  } else {
+    // Fallback: read from DOM
+    document.querySelectorAll('.task-item').forEach(el => {
+      const txt = el.querySelector('.task-text');
+      if (txt) existing.add(txt.textContent.toLowerCase());
+    });
+  }
+
+  const column = group.column || 'todo';
+  let added = 0, skipped = 0;
+
+  group.tasks.forEach(t => {
+    if (existing.has(t.text.toLowerCase())) { skipped++; return; }
+    // Use tasky.js public API if available, else fall back to dispatching a synthetic event
+    if (typeof addTask === 'function') {
+      addTask(t.text, column, t.priority || 'medium');
+    } else {
+      // Fallback: programmatic task creation via tasky's internal addTaskToColumn
+      const fn = window.addTaskToColumn || window.addTask;
+      if (typeof fn === 'function') fn(t.text, column, t.priority || 'medium');
+    }
+    added++;
+  });
+
+  // Hide input
+  tgHideSuggestions();
+  const container = document.getElementById('floating-container');
+  const input     = document.getElementById('floating-input');
+  if (input)     { input.value = ''; input.blur(); }
+  if (container) container.classList.remove('active');
+  if (typeof hideFloatingInput === 'function') hideFloatingInput();
+
+  // Toast feedback
+  const colLabel = column === 'working' ? 'Working On' : 'To Do';
+  const msg = skipped
+    ? `⊞ "${group.name}" expanded — ${added} added, ${skipped} skipped (duplicates)`
+    : `⊞ "${group.name}" expanded — ${added} task${added!==1?'s':''} added to ${colLabel}`;
+  showTaskyToast(msg);
+}
+
+/* ---- Patch the floating input to trigger suggestions ---- */
+function patchFloatingInput() {
+  const input = document.getElementById('floating-input');
+  if (!input) return;
+
+  // input event → suggestions
+  input.addEventListener('input', () => {
+    tgUpdateSuggestionBox(input.value.trim());
+  });
+
+  // keydown → navigation
+  input.addEventListener('keydown', e => {
+    const consumed = tgHandleInputKeydown(e);
+    // If not consumed, let tasky.js handle it normally
+  }, true); // capture phase so we get it before tasky.js
+
+  // blur → hide suggestions (with delay so mousedown on item fires first)
+  input.addEventListener('blur', () => {
+    setTimeout(tgHideSuggestions, 180);
+  });
+
+  // Reposition on resize
+  window.addEventListener('resize', () => {
+    if (document.getElementById('tg-suggestion-box').classList.contains('visible')) {
+      positionSuggestionBox();
+    }
+  });
+}
+
+/* ---- Toast helper (wraps tasky's own or provides a fallback) ---- */
+function showTaskyToast(msg) {
+  if (typeof showToast === 'function') {
+    showToast(msg);
+    return;
+  }
+  // Fallback minimal toast
+  const c = document.getElementById('toast-container');
+  if (!c) return;
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+  initOnboarding();
+  patchFloatingInput();
+});
+if (document.readyState !== 'loading') {
+  initOnboarding();
+  patchFloatingInput();
+}
+</script>
 </body>
 </html>
