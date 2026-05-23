@@ -1182,7 +1182,8 @@
         .dropdown-menu {
             position: absolute;
             bottom: 100%;
-            right: 0;
+            left: 0;
+            right: auto;
             margin-bottom: 8px;
             background: rgba(20, 20, 40, 0.95);
             backdrop-filter: blur(30px);
@@ -1390,6 +1391,8 @@
             .dropdown-menu {
                 top: 100%;
                 bottom: auto;
+                right: 0;
+                left: auto;
                 margin-top: 8px;
                 margin-bottom: 0;
             }

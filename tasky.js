@@ -102,15 +102,12 @@
                 currentUser = user;
 
                 if (user) {
-                    // Logged in, or switched to a different account — always load this account's cloud data
                     if (user.uid !== prevUid) {
-                        syncFromCloud();
+                        syncFromCloud(!!prevUid);
                     }
                 } else {
-                    // Logged out — revert to the pre-login local snapshot
-                    const localSnapshot = localStorage.getItem('tasks_local');
-                    tasks = localSnapshot ? JSON.parse(localSnapshot) : { todo: [], working: [], done: [] };
-                    taskCounter = parseInt(localStorage.getItem('taskCounter_local') || '0');
+                    tasks = { todo: [], working: [], done: [] };
+                    taskCounter = 0;
                     renderAllColumns();
                     updateDailySummary();
                     deselectTask();
@@ -188,18 +185,47 @@
             }, 500);
         }
 
-        function syncFromCloud() {
+        function syncFromCloud(replace) {
             if (!currentUser) return;
             const docRef = getUserDocRef();
             if (!docRef) return;
             setSyncStatus('syncing');
             docRef.get().then(snap => {
-                if (!snap.exists) { pushToCloud(); return; }
+                if (!snap.exists) {
+                    if (replace) {
+                        tasks = { todo: [], working: [], done: [] };
+                        taskCounter = 0;
+                    } else {
+                        pushToCloud();
+                    }
+                    saveAll();
+                    renderAllColumns();
+                    updateDailySummary();
+                    setSyncStatus('synced');
+                    return;
+                }
                 const cloudData = snap.data();
-                if (!cloudData || !cloudData.tasks) { pushToCloud(); return; }
-                const merged = mergeTasks(tasks, cloudData.tasks, taskCounter, cloudData.taskCounter || 0);
-                tasks = merged.tasks;
-                taskCounter = merged.taskCounter;
+                if (!cloudData || !cloudData.tasks) {
+                    if (replace) {
+                        tasks = { todo: [], working: [], done: [] };
+                        taskCounter = 0;
+                    } else {
+                        pushToCloud();
+                    }
+                    saveAll();
+                    renderAllColumns();
+                    updateDailySummary();
+                    setSyncStatus('synced');
+                    return;
+                }
+                if (replace) {
+                    tasks = JSON.parse(JSON.stringify(cloudData.tasks));
+                    taskCounter = cloudData.taskCounter || 0;
+                } else {
+                    const merged = mergeTasks(tasks, cloudData.tasks, taskCounter, cloudData.taskCounter || 0);
+                    tasks = merged.tasks;
+                    taskCounter = merged.taskCounter;
+                }
                 saveAll();
                 renderAllColumns();
                 updateDailySummary();
