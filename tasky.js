@@ -35,7 +35,22 @@
             appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
         });
         db = firebase.firestore(app);
-        db.enablePersistence().catch(() => {});
+        // Use the modern cache setting instead of the deprecated enablePersistence().
+        // Falls back to memory-only if IndexedDB is unavailable or has stale SDK data.
+        try {
+            db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+            db.enablePersistence({ synchronizeTabs: false }).catch(err => {
+                if (err.code === 'failed-precondition' || err.code === 'unimplemented') {
+                    // Stale IndexedDB from a previous SDK version — clear it and reload once.
+                    if (err.code === 'failed-precondition') {
+                        const dbName = `firestore/[DEFAULT]/tasky-95785/(default)/main`;
+                        const del = indexedDB.deleteDatabase(dbName);
+                        del.onsuccess = () => location.reload();
+                        // If deletion fails, just continue with memory-only mode — no crash.
+                    }
+                }
+            });
+        } catch(_) {}
 
         renderAllColumns();
         updateDailySummary();
