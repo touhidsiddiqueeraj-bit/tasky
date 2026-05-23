@@ -85,7 +85,6 @@
   display:inline-block;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);
   border-radius:5px;padding:1px 6px;font-size:11px;font-family:monospace;color:#c4b5fd;margin:0 1px;
 }
-/* Group feature highlight tile — full width */
 .ob-d-step.ob-d-step-wide {
   grid-column: 1 / -1;
   background: rgba(139,92,246,0.07);
@@ -183,7 +182,6 @@
   display:flex;flex-direction:column;overflow:hidden;
 }
 
-/* Modal header */
 .tg-header {
   padding:24px 28px 0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
 }
@@ -204,7 +202,6 @@
 }
 .tg-close-btn:hover { background:rgba(239,68,68,0.15);color:#f87171;border-color:rgba(239,68,68,0.3); }
 
-/* Tab bar */
 .tg-tabs {
   display:flex;gap:4px;padding:16px 28px 0;flex-shrink:0;
   border-bottom:1px solid rgba(255,255,255,0.07);
@@ -219,12 +216,10 @@
 .tg-tab:hover { color:rgba(255,255,255,0.7); }
 .tg-tab.active { color:#a78bfa;border-bottom-color:#8B5CF6; }
 
-/* Tab panes */
 .tg-body { flex:1;overflow:hidden;display:flex;flex-direction:column; }
 .tg-pane { display:none;flex:1;overflow-y:auto;padding:24px 28px 28px; }
 .tg-pane.active { display:flex;flex-direction:column;gap:16px; }
 
-/* ---- Groups list pane ---- */
 .tg-empty-state {
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:12px;color:rgba(255,255,255,0.25);padding:40px 0;
@@ -249,12 +244,8 @@
 }
 .tg-group-col-badge.todo    { background:rgba(139,92,246,0.2);color:#a78bfa; }
 .tg-group-col-badge.working { background:rgba(245,158,11,0.2);color:#fbbf24; }
-.tg-group-task-count {
-  font-size:11px;color:rgba(255,255,255,0.35);
-}
-.tg-group-tasks-preview {
-  margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;
-}
+.tg-group-task-count { font-size:11px;color:rgba(255,255,255,0.35); }
+.tg-group-tasks-preview { margin-top:8px;display:flex;flex-wrap:wrap;gap:5px; }
 .tg-task-chip {
   font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
   border-radius:6px;padding:2px 8px;color:rgba(255,255,255,0.5);
@@ -274,7 +265,6 @@
 .tg-icon-btn:hover { background:rgba(139,92,246,0.15);border-color:rgba(139,92,246,0.3);color:#a78bfa; }
 .tg-icon-btn.danger:hover { background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);color:#f87171; }
 
-/* Delete-all button */
 .tg-danger-row {
   margin-top:auto;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);
   display:flex;justify-content:flex-end;
@@ -286,7 +276,6 @@
 }
 .tg-danger-btn:hover { background:rgba(239,68,68,0.1);color:#f87171;border-color:rgba(239,68,68,0.5); }
 
-/* ---- Create / Edit pane ---- */
 .tg-field-label {
   font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
   color:rgba(255,255,255,0.4);margin-bottom:8px;
@@ -300,7 +289,6 @@
 .tg-input::placeholder { color:rgba(255,255,255,0.25); }
 .tg-input:focus { border-color:rgba(139,92,246,0.5);background:rgba(139,92,246,0.06); }
 
-/* Column toggle */
 .tg-col-toggle {
   display:flex;gap:0;border:1px solid rgba(255,255,255,0.12);border-radius:12px;overflow:hidden;width:fit-content;
 }
@@ -311,7 +299,6 @@
 .tg-col-toggle button.selected-todo    { background:rgba(139,92,246,0.25);color:#a78bfa; }
 .tg-col-toggle button.selected-working { background:rgba(245,158,11,0.2);color:#fbbf24; }
 
-/* Sub-tasks builder */
 .tg-subtasks-list { display:flex;flex-direction:column;gap:8px; }
 .tg-subtask-row {
   display:flex;align-items:center;gap:8px;
@@ -343,7 +330,6 @@
   background:rgba(139,92,246,0.08);border-color:rgba(139,92,246,0.3);color:#a78bfa;
 }
 
-/* Save button */
 .tg-save-btn {
   background:linear-gradient(135deg,#8B5CF6,#6d28d9);color:#fff;border:none;
   border-radius:13px;padding:14px 32px;font-size:14px;font-weight:700;cursor:pointer;
@@ -369,7 +355,6 @@
   overflow:hidden;
   display:none;
   flex-direction:column;
-  /* positioned above floating input — set via JS */
 }
 .tg-suggestion-box.visible { display:flex; }
 .tg-suggestion-header {
@@ -498,7 +483,6 @@
     <div class="ob-m-viewport" id="ob-m-viewport">
       <div class="ob-m-track" id="ob-m-track">
 
-        <!-- Slide 1: Welcome -->
         <div class="ob-m-slide">
           <div class="ob-m-illus purple">✅</div>
           <h2>Welcome to Tasky</h2>
@@ -509,7 +493,6 @@
           </div>
         </div>
 
-        <!-- Slide 2: Adding tasks -->
         <div class="ob-m-slide">
           <div class="ob-m-illus amber">＋</div>
           <h2>Add tasks in one tap</h2>
@@ -520,7 +503,6 @@
           </div>
         </div>
 
-        <!-- Slide 3: Task Groups -->
         <div class="ob-m-slide">
           <div class="ob-m-illus violet">⊞</div>
           <h2>Task Groups</h2>
@@ -531,7 +513,6 @@
           </div>
         </div>
 
-        <!-- Slide 4: Priority & moving -->
         <div class="ob-m-slide">
           <div class="ob-m-illus green">🎯</div>
           <h2>Tap to edit &amp; prioritise</h2>
@@ -542,7 +523,6 @@
           </div>
         </div>
 
-        <!-- Slide 5: Drag, filter, undo -->
         <div class="ob-m-slide">
           <div class="ob-m-illus blue">↔️</div>
           <h2>Drag, filter &amp; undo</h2>
@@ -590,17 +570,13 @@
 
     <div class="tg-body">
 
-      <!-- LIST PANE -->
       <div class="tg-pane active" id="tg-pane-list">
-        <div id="tg-groups-list-inner">
-          <!-- Populated by JS -->
-        </div>
+        <div id="tg-groups-list-inner"></div>
         <div class="tg-danger-row">
           <button class="tg-danger-btn" onclick="tgDeleteAllGroups()">🗑 Delete All Groups</button>
         </div>
       </div>
 
-      <!-- CREATE / EDIT PANE -->
       <div class="tg-pane" id="tg-pane-create">
 
         <div>
@@ -646,7 +622,7 @@
 <div class="toast-container" id="toast-container"></div>
 
 <!-- ═══════════════════════════════════════════════
-     TOP MENU  (dropdown updated)
+     TOP MENU
      ═══════════════════════════════════════════════ -->
 <div class="top-menu">
   <button class="brand-btn" onclick="toggleMenu()">
@@ -802,7 +778,10 @@
 </button>
 <button class="mobile-mic-btn" id="mobile-mic-btn">🎙️</button>
 
-<script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-compat.js"></script>
+<!-- ▼▼▼  FIXED: v10 compat CDN (v11 removed the compat layer) ▼▼▼ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="tasky.js"></script>
 
 <script>
@@ -840,7 +819,7 @@ function showOnboarding() {
   initOnboarding();
   goToSlide(0);
   const dd = document.getElementById('dropdown');
-  if (dd && dd.classList.contains('open') && typeof toggleMenu === 'function') toggleMenu();
+  if (dd && dd.classList.contains('show') && typeof toggleMenu === 'function') toggleMenu();
 }
 
 /* Mobile slides */
@@ -874,7 +853,7 @@ function mobileOnboardingNext() {
 })();
 
 /* ============================================================
-   TASK GROUPS  —  Storage
+   TASK GROUPS — Storage
    ============================================================ */
 const TG_KEY = 'tasky_groups_v1';
 
@@ -888,10 +867,10 @@ function tgSave(groups) {
 }
 
 /* ============================================================
-   TASK GROUPS  —  Modal UI
+   TASK GROUPS — Modal UI
    ============================================================ */
-let tgEditingId = null;   // null = create mode, string = edit mode
-let tgColumn    = 'todo'; // current column toggle state
+let tgEditingId = null;
+let tgColumn    = 'todo';
 
 function openTgModal() {
   const overlay = document.getElementById('tg-modal-overlay');
@@ -899,9 +878,8 @@ function openTgModal() {
   overlay.style.display = 'flex';
   switchTgTab('list');
   renderTgGroupsList();
-  // close dropdown
   const dd = document.getElementById('dropdown');
-  if (dd && dd.classList.contains('open') && typeof toggleMenu === 'function') toggleMenu();
+  if (dd && dd.classList.contains('show') && typeof toggleMenu === 'function') toggleMenu();
 }
 
 function closeTgModal() {
@@ -924,10 +902,9 @@ function switchTgTab(tab) {
   if (tab === 'create' && tgEditingId === null) tgResetCreateForm();
 }
 
-/* ---- Render groups list ---- */
 function renderTgGroupsList() {
-  const groups  = tgLoad();
-  const inner   = document.getElementById('tg-groups-list-inner');
+  const groups = tgLoad();
+  const inner  = document.getElementById('tg-groups-list-inner');
   if (!groups.length) {
     inner.innerHTML = `
       <div class="tg-empty-state">
@@ -963,14 +940,13 @@ function renderTgGroupsList() {
   }).join('');
 }
 
-/* ---- Create form ---- */
 function tgResetCreateForm() {
   tgEditingId = null;
   tgColumn = 'todo';
   document.getElementById('tg-group-name-input').value = '';
   document.getElementById('tg-subtasks-list').innerHTML = '';
   tgSetColumn('todo');
-  tgAddSubtaskRow(); // start with one empty row
+  tgAddSubtaskRow();
   document.getElementById('tg-save-btn').textContent = 'Save Group';
   hideTgError();
 }
@@ -1017,25 +993,20 @@ function tgGetSubtasks() {
   return tasks;
 }
 
-/* ---- Save ---- */
 function tgSaveGroup() {
-  const name   = document.getElementById('tg-group-name-input').value.trim();
-  const tasks  = tgGetSubtasks();
+  const name  = document.getElementById('tg-group-name-input').value.trim();
+  const tasks = tgGetSubtasks();
 
-  if (!name)  { showTgError('Please enter a group name.'); return; }
-  if (!tasks.length) { showTgError('Add at least one task.'); return; }
+  if (!name)         { showTgError('Please enter a group name.'); return; }
+  if (!tasks.length) { showTgError('Add at least one task.');     return; }
 
   const groups = tgLoad();
-
-  // Duplicate name check (except when editing self)
   const duplicate = groups.find(g => g.name.toLowerCase() === name.toLowerCase() && g.id !== tgEditingId);
   if (duplicate) { showTgError('A group with that name already exists.'); return; }
 
   if (tgEditingId) {
     const idx = groups.findIndex(g => g.id === tgEditingId);
-    if (idx !== -1) {
-      groups[idx] = { ...groups[idx], name, column: tgColumn, tasks };
-    }
+    if (idx !== -1) groups[idx] = { ...groups[idx], name, column: tgColumn, tasks };
   } else {
     groups.push({ id: tgNewId(), name, column: tgColumn, tasks });
   }
@@ -1050,7 +1021,6 @@ function tgNewId() {
   return 'tg_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
 }
 
-/* ---- Edit ---- */
 function tgStartEdit(id) {
   const groups = tgLoad();
   const group  = groups.find(g => g.id === id);
@@ -1069,10 +1039,9 @@ function tgStartEdit(id) {
   hideTgError();
 }
 
-/* ---- Delete ---- */
 function tgDeleteGroup(id) {
-  const groups  = tgLoad();
-  const group   = groups.find(g => g.id === id);
+  const groups = tgLoad();
+  const group  = groups.find(g => g.id === id);
   if (!group) return;
   if (!confirm(`Delete group "${group.name}"? This cannot be undone.`)) return;
   tgSave(groups.filter(g => g.id !== id));
@@ -1094,7 +1063,6 @@ function tgCancelEdit() {
   switchTgTab('list');
 }
 
-/* ---- Helpers ---- */
 function showTgError(msg) {
   const el = document.getElementById('tg-save-error');
   el.textContent = msg;
@@ -1111,7 +1079,6 @@ function escHtml(str) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-/* Keyboard: close modal on Escape */
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     const overlay = document.getElementById('tg-modal-overlay');
@@ -1123,10 +1090,10 @@ document.addEventListener('keydown', e => {
 });
 
 /* ============================================================
-   TASK GROUPS  —  Suggestion dropdown
+   TASK GROUPS — Suggestion dropdown
    ============================================================ */
-let tgSuggestions   = [];   // current matched groups
-let tgSuggFocusIdx  = -1;   // which item is keyboard-focused
+let tgSuggestions  = [];
+let tgSuggFocusIdx = -1;
 
 function tgGetSuggestions(query) {
   if (!query || query.length < 1) return [];
@@ -1158,9 +1125,7 @@ function tgUpdateSuggestionBox(query) {
       <div class="tg-suggestion-badge">Group</div>
     </div>`).join('');
 
-  // Position above the floating input
   positionSuggestionBox();
-
   box.classList.add('visible');
   if (groupHint) groupHint.style.display = 'inline';
 }
@@ -1170,7 +1135,6 @@ function positionSuggestionBox() {
   const box       = document.getElementById('tg-suggestion-box');
   if (!container || !box) return;
   const rect = container.getBoundingClientRect();
-  const boxH = box.offsetHeight || 200;
   box.style.bottom = (window.innerHeight - rect.top + 10) + 'px';
   box.style.top    = 'auto';
 }
@@ -1189,7 +1153,6 @@ function tgSuggFocus(idx) {
     el.classList.toggle('focused', i===idx));
 }
 
-/* Navigate with arrow keys — hooked into the floating input */
 function tgHandleInputKeydown(e) {
   const box = document.getElementById('tg-suggestion-box');
   if (!box.classList.contains('visible')) return false;
@@ -1218,19 +1181,16 @@ function tgHandleInputKeydown(e) {
   return false;
 }
 
-/* Expand a group onto the board */
 function tgExpandGroup(id, mouseEvent) {
-  if (mouseEvent) mouseEvent.preventDefault(); // prevent blur before expand
+  if (mouseEvent) mouseEvent.preventDefault();
   const groups = tgLoad();
   const group  = groups.find(g => g.id === id);
   if (!group) return;
 
-  // Collect existing task texts on board to skip duplicates
   const existing = new Set();
   if (typeof STATE !== 'undefined' && STATE.tasks) {
     STATE.tasks.forEach(t => existing.add(t.text.toLowerCase()));
   } else {
-    // Fallback: read from DOM
     document.querySelectorAll('.task-item').forEach(el => {
       const txt = el.querySelector('.task-text');
       if (txt) existing.add(txt.textContent.toLowerCase());
@@ -1242,18 +1202,12 @@ function tgExpandGroup(id, mouseEvent) {
 
   group.tasks.forEach(t => {
     if (existing.has(t.text.toLowerCase())) { skipped++; return; }
-    // Use tasky.js public API if available, else fall back to dispatching a synthetic event
     if (typeof addTask === 'function') {
       addTask(t.text, column, t.priority || 'medium');
-    } else {
-      // Fallback: programmatic task creation via tasky's internal addTaskToColumn
-      const fn = window.addTaskToColumn || window.addTask;
-      if (typeof fn === 'function') fn(t.text, column, t.priority || 'medium');
     }
     added++;
   });
 
-  // Hide input
   tgHideSuggestions();
   const container = document.getElementById('floating-container');
   const input     = document.getElementById('floating-input');
@@ -1261,7 +1215,6 @@ function tgExpandGroup(id, mouseEvent) {
   if (container) container.classList.remove('active');
   if (typeof hideFloatingInput === 'function') hideFloatingInput();
 
-  // Toast feedback
   const colLabel = column === 'working' ? 'Working On' : 'To Do';
   const msg = skipped
     ? `⊞ "${group.name}" expanded — ${added} added, ${skipped} skipped (duplicates)`
@@ -1269,28 +1222,22 @@ function tgExpandGroup(id, mouseEvent) {
   showTaskyToast(msg);
 }
 
-/* ---- Patch the floating input to trigger suggestions ---- */
 function patchFloatingInput() {
   const input = document.getElementById('floating-input');
   if (!input) return;
 
-  // input event → suggestions
   input.addEventListener('input', () => {
     tgUpdateSuggestionBox(input.value.trim());
   });
 
-  // keydown → navigation
   input.addEventListener('keydown', e => {
-    const consumed = tgHandleInputKeydown(e);
-    // If not consumed, let tasky.js handle it normally
-  }, true); // capture phase so we get it before tasky.js
+    tgHandleInputKeydown(e);
+  }, true);
 
-  // blur → hide suggestions (with delay so mousedown on item fires first)
   input.addEventListener('blur', () => {
     setTimeout(tgHideSuggestions, 180);
   });
 
-  // Reposition on resize
   window.addEventListener('resize', () => {
     if (document.getElementById('tg-suggestion-box').classList.contains('visible')) {
       positionSuggestionBox();
@@ -1298,13 +1245,11 @@ function patchFloatingInput() {
   });
 }
 
-/* ---- Toast helper (wraps tasky's own or provides a fallback) ---- */
 function showTaskyToast(msg) {
   if (typeof showToast === 'function') {
-    showToast(msg);
+    showToast(msg, () => {});
     return;
   }
-  // Fallback minimal toast
   const c = document.getElementById('toast-container');
   if (!c) return;
   const t = document.createElement('div');
