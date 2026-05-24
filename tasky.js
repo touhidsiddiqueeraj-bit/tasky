@@ -941,13 +941,9 @@ window.STATE = {
 };
 
 // ─── Boot ─────────────────────────────────────────────────────────────────
-(function bootCollab() {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setupCollabAuth);
-    } else {
-        setupCollabAuth();
-    }
-})();
+// Use window 'load' (not DOMContentLoaded) so tasky.js has fully run and
+// Firebase 'app' + 'db' globals are guaranteed to exist before we touch them.
+window.addEventListener('load', setupCollabAuth);
 
 // ─── Floating input assignment hint visibility ─────────────────────────────
 function updateAssignHintVisibility() {
