@@ -1827,6 +1827,183 @@
     line-height: 1.6;
 }
 
+/* ── Assign quick button in team column header ── */
+.assign-quick-btn {
+    background: linear-gradient(135deg, rgba(139,92,246,0.3), rgba(109,40,217,0.3));
+    border: 1px solid rgba(139,92,246,0.45);
+    color: #c4b5fd;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .2s, border-color .2s, transform .1s;
+    white-space: nowrap;
+}
+.assign-quick-btn:hover {
+    background: linear-gradient(135deg, rgba(139,92,246,0.5), rgba(109,40,217,0.5));
+    border-color: rgba(139,92,246,0.7);
+    transform: translateY(-1px);
+}
+
+/* ── Assign button on member card ── */
+.member-assign-btn {
+    background: rgba(139,92,246,0.12);
+    border: 1px solid rgba(139,92,246,0.3);
+    color: #a78bfa;
+    border-radius: 7px;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .2s;
+    white-space: nowrap;
+}
+.member-assign-btn:hover {
+    background: rgba(139,92,246,0.25);
+    border-color: rgba(139,92,246,0.5);
+}
+
+/* ── Assign modal fields ── */
+.assign-textarea {
+    resize: vertical;
+    min-height: 72px;
+    font-family: inherit;
+}
+.assign-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='rgba(255,255,255,0.4)' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+    cursor: pointer;
+}
+
+/* ── Team summary divider ── */
+.team-summary-divider {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: rgba(255,255,255,0.3);
+    margin: 16px 0 8px;
+    padding: 8px 0 6px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+}
+
+/* ── Totals card ── */
+.summary-totals-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 14px 8px;
+    margin-bottom: 10px;
+}
+.summary-total-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+.summary-total-num {
+    font-size: 22px;
+    font-weight: 800;
+    color: #e2d9ff;
+    line-height: 1;
+}
+.summary-total-num.todo-color    { color: #a78bfa; }
+.summary-total-num.working-color { color: #fbbf24; }
+.summary-total-num.done-color    { color: #6ee7b7; }
+.summary-total-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: rgba(255,255,255,0.35);
+}
+.summary-total-sep {
+    width: 1px;
+    height: 32px;
+    background: rgba(255,255,255,0.08);
+}
+
+/* ── Per-member summary table ── */
+.team-summary-table {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 4px;
+}
+.tst-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 8px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background .15s;
+}
+.tst-row:hover:not(.tst-header) { background: rgba(139,92,246,0.07); }
+.tst-header {
+    cursor: default;
+    padding: 4px 8px;
+    margin-bottom: 2px;
+}
+.tst-cell { display: flex; align-items: center; }
+.tst-member-col {
+    flex: 1;
+    min-width: 0;
+    gap: 6px;
+    overflow: hidden;
+}
+.tst-handle {
+    font-size: 12px;
+    font-weight: 600;
+    color: #e2d9ff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tst-header .tst-member-col { font-size: 10px; color: rgba(255,255,255,0.3); font-weight:700; text-transform:uppercase; letter-spacing:.07em; }
+.tst-num-col {
+    width: 38px;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.5);
+}
+.tst-header .tst-num-col { font-size: 13px; }
+.tst-bar-col {
+    width: 70px;
+    gap: 5px;
+    flex-shrink: 0;
+}
+.tst-bar-track {
+    flex: 1;
+    height: 5px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.tst-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #6ee7b7);
+    border-radius: 3px;
+    transition: width .4s ease;
+}
+.tst-pct {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.4);
+    width: 26px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
 /* ── Light mode overrides ── */
 body.light-mode .member-card {
     background: rgba(0,0,0,0.03);
@@ -1849,3 +2026,15 @@ body.light-mode .collab-badge {
 body.light-mode .task-assign-badge .assign-to { color: #6d28d9; }
 body.light-mode .member-detail-col-label { color: rgba(0,0,0,0.35); border-bottom-color: rgba(0,0,0,0.06); }
 body.light-mode .member-task-item { background: rgba(0,0,0,0.02); }
+body.light-mode .assign-quick-btn { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.3); color: #6d28d9; }
+body.light-mode .member-assign-btn { background: rgba(139,92,246,0.08); color: #6d28d9; }
+body.light-mode .summary-totals-card { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.07); }
+body.light-mode .team-summary-divider { color: rgba(0,0,0,0.35); border-top-color: rgba(0,0,0,0.07); }
+body.light-mode .tst-handle { color: #2d3748; }
+body.light-mode .tst-header .tst-member-col { color: rgba(0,0,0,0.35); }
+body.light-mode .tst-row:hover:not(.tst-header) { background: rgba(139,92,246,0.04); }
+body.light-mode .tst-bar-track { background: rgba(0,0,0,0.07); }
+body.light-mode .tst-pct { color: rgba(0,0,0,0.4); }
+body.light-mode .summary-total-label { color: rgba(0,0,0,0.4); }
+body.light-mode .summary-total-sep { background: rgba(0,0,0,0.08); }
+body.light-mode .summary-total-num { color: #2d3748; }
