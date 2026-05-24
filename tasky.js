@@ -2,6 +2,8 @@
         let tasks = JSON.parse(localStorage.getItem('tasks')) || { todo: [], working: [], done: [] };
         let taskCounter = parseInt(localStorage.getItem('taskCounter')) || 0;
         let isLightMode = localStorage.getItem('theme') === 'light';
+        let customBg = localStorage.getItem('customBg') || null;
+        let cardOpacity = parseInt(localStorage.getItem('cardOpacity')) || 100;
         let selectedTask = null;   // { column, taskId }
         let activeFilters = { todo: null, working: null, done: null };
         let taskSelectorActive = false;
@@ -25,6 +27,9 @@
         // NOTE: Onboarding visibility is handled entirely in the HTML <script> block.
         // tasky.js no longer touches #onboarding (that id does not exist in the HTML).
 
+        if (customBg) applyCustomBg();
+        initOpacity();
+
         // ─── Firebase / Cloud Sync ─────────────────────────────────────────────────
         app = firebase.initializeApp({
             apiKey: "AIzaSyBN8ZJil4vWWJ6XPPGgp20htp8IBxDLL_o",
@@ -41,12 +46,32 @@
             db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
             db.enablePersistence({ synchronizeTabs: false }).catch(err => {
                 if (err.code === 'failed-precondition' || err.code === 'unimplemented') {
-                    // Stale IndexedDB from a previous SDK version — clear it and reload once.
                     if (err.code === 'failed-precondition') {
-                        const dbName = `firestore/[DEFAULT]/tasky-95785/(default)/main`;
-                        const del = indexedDB.deleteDatabase(dbName);
-                        del.onsuccess = () => location.reload();
-                        // If deletion fails, just continue with memory-only mode — no crash.
+                        // 'failed-precondition' fires for two reasons:
+                        //   1. Another tab already has persistence open — reloading won't help, skip.
+                        //   2. Stale IndexedDB from old SDK — delete it and reload ONCE.
+                        //
+                        // We detect case 2 by checking if the IDB actually exists.
+                        // Guard: use localStorage+timestamp so the flag survives the reload
+                        // (sessionStorage is wiped on every reload, causing infinite loops).
+                        const GUARD_KEY = '_fs_reloaded_at';
+                        const last = parseInt(localStorage.getItem(GUARD_KEY) || '0', 10);
+                        const now  = Date.now();
+                        if (now - last > 15000) {   // not reloaded in last 15 s → try cleanup
+                            // Check if the stale DB actually exists before reloading
+                            const dbName = `firestore/[DEFAULT]/tasky-95785/(default)/main`;
+                            const check  = indexedDB.open(dbName);
+                            check.onsuccess = (e) => {
+                                e.target.result.close();
+                                // DB exists — delete it and reload once
+                                localStorage.setItem(GUARD_KEY, String(now));
+                                const del = indexedDB.deleteDatabase(dbName);
+                                del.onsuccess = () => location.reload();
+                                del.onerror   = () => {}; // if delete fails, just continue
+                            };
+                            check.onerror = () => {}; // DB doesn't exist — multi-tab case, ignore
+                        }
+                        // Guard active or multi-tab: fall through to memory-only mode silently.
                     }
                 }
             });
@@ -58,6 +83,37 @@
         setupVoice();             // speech recognition
         setupFirebase();          // Firebase cloud sync
 
+        // ─── Custom background upload ─────────────────────────────────────────────
+        var bgInput = document.getElementById('bg-upload-input');
+        if (bgInput) {
+            bgInput.addEventListener('change', function(e) {
+                var file = e.target.files[0];
+                if (!file) return;
+                var reader = new FileReader();
+                reader.onload = function(ev) {
+                    customBg = ev.target.result;
+                    try {
+                        localStorage.setItem('customBg', customBg);
+                        applyCustomBg();
+                        showToast('Background set', () => {});
+                    } catch(_) {
+                        showToast('Image too large to save', () => {});
+                        customBg = null;
+                    }
+                };
+                reader.readAsDataURL(file);
+                this.value = '';
+            });
+        }
+
+        // ─── Card opacity slider ────────────────────────────────────────────────────
+        var opacitySlider = document.getElementById('card-opacity-slider');
+        if (opacitySlider) {
+            opacitySlider.addEventListener('input', function() {
+                setCardOpacity(parseInt(this.value));
+            });
+        }
+
         // ─── Firebase Auth ─────────────────────────────────────────────────────────
         function setupFirebase() {
             firebase.auth(app).onAuthStateChanged(user => {
@@ -65,15 +121,12 @@
                 currentUser = user;
 
                 if (user) {
-                    // Logged in, or switched to a different account — always load this account's cloud data
                     if (user.uid !== prevUid) {
-                        syncFromCloud();
+                        syncFromCloud(!!prevUid);
                     }
                 } else {
-                    // Logged out — revert to the pre-login local snapshot
-                    const localSnapshot = localStorage.getItem('tasks_local');
-                    tasks = localSnapshot ? JSON.parse(localSnapshot) : { todo: [], working: [], done: [] };
-                    taskCounter = parseInt(localStorage.getItem('taskCounter_local') || '0');
+                    tasks = { todo: [], working: [], done: [] };
+                    taskCounter = 0;
                     renderAllColumns();
                     updateDailySummary();
                     deselectTask();
@@ -151,18 +204,47 @@
             }, 500);
         }
 
-        function syncFromCloud() {
+        function syncFromCloud(replace) {
             if (!currentUser) return;
             const docRef = getUserDocRef();
             if (!docRef) return;
             setSyncStatus('syncing');
             docRef.get().then(snap => {
-                if (!snap.exists) { pushToCloud(); return; }
+                if (!snap.exists) {
+                    if (replace) {
+                        tasks = { todo: [], working: [], done: [] };
+                        taskCounter = 0;
+                    } else {
+                        pushToCloud();
+                    }
+                    saveAll();
+                    renderAllColumns();
+                    updateDailySummary();
+                    setSyncStatus('synced');
+                    return;
+                }
                 const cloudData = snap.data();
-                if (!cloudData || !cloudData.tasks) { pushToCloud(); return; }
-                const merged = mergeTasks(tasks, cloudData.tasks, taskCounter, cloudData.taskCounter || 0);
-                tasks = merged.tasks;
-                taskCounter = merged.taskCounter;
+                if (!cloudData || !cloudData.tasks) {
+                    if (replace) {
+                        tasks = { todo: [], working: [], done: [] };
+                        taskCounter = 0;
+                    } else {
+                        pushToCloud();
+                    }
+                    saveAll();
+                    renderAllColumns();
+                    updateDailySummary();
+                    setSyncStatus('synced');
+                    return;
+                }
+                if (replace) {
+                    tasks = JSON.parse(JSON.stringify(cloudData.tasks));
+                    taskCounter = cloudData.taskCounter || 0;
+                } else {
+                    const merged = mergeTasks(tasks, cloudData.tasks, taskCounter, cloudData.taskCounter || 0);
+                    tasks = merged.tasks;
+                    taskCounter = merged.taskCounter;
+                }
                 saveAll();
                 renderAllColumns();
                 updateDailySummary();
@@ -724,11 +806,9 @@
         function saveAll() {
             localStorage.setItem('tasks', JSON.stringify(tasks));
             localStorage.setItem('taskCounter', taskCounter.toString());
-            // Keep a pre-login snapshot so we can restore local state on logout
-            if (!currentUser) {
-                localStorage.setItem('tasks_local', JSON.stringify(tasks));
-                localStorage.setItem('taskCounter_local', taskCounter.toString());
-            }
+            // Keep a local snapshot so we can restore state on logout
+            localStorage.setItem('tasks_local', JSON.stringify(tasks));
+            localStorage.setItem('taskCounter_local', taskCounter.toString());
             pushToCloud();
         }
 
@@ -855,7 +935,7 @@
                 openDatePicker(task.id);
             });
 
-            card.querySelector(`#date-picker-${task.id}`).addEventListener('change', (e) => {
+            card.querySelector('input[type="date"]').addEventListener('change', (e) => {
                 setDueDate(column, task.id, e.target.value);
             });
 
@@ -903,7 +983,7 @@
                 card.style.opacity = '0.4';
                 deselectTask();
             });
-            card.addEventListener('dragend', () => { card.style.opacity = '1'; });
+            card.addEventListener('dragend', () => { card.style.opacity = ''; });
 
             return card;
         }
@@ -961,6 +1041,72 @@
             const text = document.getElementById('theme-text');
             if (icon) icon.textContent = isLightMode ? '🌙' : '☀️';
             if (text) text.textContent = isLightMode ? 'Dark Mode' : 'Light Mode';
+        }
+
+        // ─── Custom background ─────────────────────────────────────────────────────
+        function applyCustomBg() {
+            var img = document.getElementById('custom-bg-img');
+            var container = document.getElementById('custom-bg');
+            if (!img || !container) return;
+            img.src = customBg;
+            container.style.display = 'block';
+            var rm = document.getElementById('bg-remove-inline-btn');
+            if (rm) rm.style.display = 'inline-flex';
+            var st = document.getElementById('bg-status-label');
+            if (st) st.style.display = 'block';
+        }
+
+        function triggerBgUpload() {
+            document.getElementById('bg-upload-input').click();
+            var dd = document.getElementById('dropdown');
+            if (dd) dd.classList.remove('show');
+        }
+
+        function removeCustomBg() {
+            customBg = null;
+            localStorage.removeItem('customBg');
+            document.getElementById('custom-bg').style.display = 'none';
+            var rm = document.getElementById('bg-remove-inline-btn');
+            if (rm) rm.style.display = 'none';
+            var st = document.getElementById('bg-status-label');
+            if (st) st.style.display = 'none';
+            var dd = document.getElementById('dropdown');
+            if (dd) dd.classList.remove('show');
+        }
+
+        // ─── Background modal ───────────────────────────────────────────────────────
+        function openBgModal() {
+            var overlay = document.getElementById('bg-modal-overlay');
+            if (overlay) {
+                overlay.classList.remove('hidden');
+                var slider = document.getElementById('card-opacity-slider');
+                if (slider) slider.value = cardOpacity;
+                var val = document.getElementById('card-opacity-value');
+                if (val) val.textContent = cardOpacity + '%';
+            }
+            var dd = document.getElementById('dropdown');
+            if (dd) dd.classList.remove('show');
+        }
+
+        function closeBgModal() {
+            var overlay = document.getElementById('bg-modal-overlay');
+            if (overlay) overlay.classList.add('hidden');
+        }
+
+        function bgOverlayClick(e) {
+            if (e.target === document.getElementById('bg-modal-overlay')) closeBgModal();
+        }
+
+        function setCardOpacity(val) {
+            cardOpacity = Math.max(40, Math.min(100, val));
+            document.body.style.setProperty('--card-opacity', cardOpacity / 100);
+            localStorage.setItem('cardOpacity', cardOpacity);
+            var valEl = document.getElementById('card-opacity-value');
+            if (valEl) valEl.textContent = cardOpacity + '%';
+        }
+
+        function initOpacity() {
+            setCardOpacity(cardOpacity);
         }
 
         // ─── CSV export ───────────────────────────────────────────────────────────
