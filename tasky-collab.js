@@ -952,13 +952,6 @@ function updateAssignHintVisibility() {
     hint.style.display = (currentGroup && isSupervisor) ? 'inline' : 'none';
 }
 
-// Patch openFloatingInput to also show assignment hint
-const _origOpenFloatingInput = openFloatingInput;
-function openFloatingInput() {
-    _origOpenFloatingInput();
-    updateAssignHintVisibility();
-}
-
 // Also update placeholder
 function updateInputPlaceholder() {
     const input = document.getElementById('floating-input');
@@ -970,11 +963,11 @@ function updateInputPlaceholder() {
     }
 }
 
-// Hook into renderGroupUI to update placeholder — we tag it with a post-hook
-// rather than redeclaring (avoids strict-mode duplicate function errors)
-const _afterRenderGroupUI = renderGroupUI;
-window.renderGroupUI = function() {
-    _afterRenderGroupUI.call(this, ...arguments);
+// ─── Hook placeholder + hint updates into renderGroupUI ───────────────────
+// Store original under a private name that won't collide
+const _collabRenderGroupUI_orig = renderGroupUI;
+renderGroupUI = function() {
+    _collabRenderGroupUI_orig();
     updateInputPlaceholder();
     updateAssignHintVisibility();
 };
