@@ -8,6 +8,24 @@
         let activeFilters = { todo: null, working: null, done: null };
         let taskSelectorActive = false;
         let taskSelectorBuffer = '';
+
+        // ─── Migration: sanitize decimal task IDs (Date.now()+Math.random() produced
+        //     floats like 1779562537655.4753 which are invalid CSS selectors and crash
+        //     querySelector, causing an infinite reload loop on returning users) ───────
+        (function migrateDecimalIds() {
+            let dirty = false;
+            ['todo', 'working', 'done'].forEach(col => {
+                (tasks[col] || []).forEach(task => {
+                    if (!Number.isInteger(task.id)) {
+                        task.id = Math.round(task.id);
+                        dirty = true;
+                    }
+                });
+            });
+            if (dirty) {
+                localStorage.setItem('tasks', JSON.stringify(tasks));
+            }
+        })();
         let voiceRecognition = null;
         let voiceActive      = false;
         let spaceHeld        = false;
@@ -274,7 +292,7 @@
         function addTask(text, column, priority) {
             taskCounter++;
             const task = {
-                id: Date.now() + Math.random(),
+                id: Date.now() + Math.floor(Math.random() * 1000),
                 number: taskCounter,
                 text: text,
                 priority: priority || 'medium',
