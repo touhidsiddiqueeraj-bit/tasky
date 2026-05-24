@@ -218,26 +218,56 @@ addTaskToTodo = function(text) {
     _origAddTaskToTodo(text);
 }
 
-function addCollabTask(parsed) {
-    const nextNum = getNextNumber();
-    taskCounter = Math.max(taskCounter, nextNum);
+async function addCollabTask(parsed) {
+    const member = currentGroup.members.find(m => m.handle === parsed.assignedTo);
+    if (!member) return;
+
     const task = {
-        id: Date.now() * 1000 + nextNum,
-        number: nextNum,
+        id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+        number: 1,   // will be set correctly inside their own board; just needs to be unique
         text: parsed.text,
         priority: parsed.priority || 'medium',
         dueDate: parsed.dueDate || null,
         createdAt: new Date().toISOString(),
-        assignedTo: parsed.assignedTo || null,
+        assignedTo: parsed.assignedTo,
         assignedBy: currentHandle || null,
-        groupCode: currentGroup ? currentGroup.code : null
+        groupCode: currentGroup.code
     };
-    tasks.todo.push(task);
-    saveAll();
-    renderColumn('todo');
-    showTaskyToast(`✅ Assigned "${task.text}" → @${task.assignedTo}`);
-    // Push notification doc to Firestore for the assignee
-    pushAssignmentNotification(task);
+
+    try {
+        // Read the member's current task doc from Firestore
+        const memberDocRef = db.collection('groups').doc(currentGroup.code)
+            .collection('tasks').doc(member.uid);
+        const snap = await memberDocRef.get();
+
+        let memberTasks = { todo: [], working: [], done: [] };
+        if (snap.exists && snap.data().tasks) {
+            memberTasks = snap.data().tasks;
+        }
+
+        // Give the task a number that doesn't collide with theirs
+        const usedNums = new Set(
+            ['todo','working','done'].flatMap(c => (memberTasks[c] || []).map(t => t.number))
+        );
+        let n = 1;
+        while (usedNums.has(n)) n++;
+        task.number = n;
+
+        memberTasks.todo = [...(memberTasks.todo || []), task];
+
+        await memberDocRef.set({
+            tasks: memberTasks,
+            handle: member.handle,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        showTaskyToast(`✅ Assigned "${task.text}" → @${task.assignedTo}`);
+        pushAssignmentNotification(task);
+        // Refresh team panel so supervisor sees updated counts immediately
+        renderTeamPanel();
+    } catch(e) {
+        showTaskyToast(`⚠️ Failed to assign task: ${e.message}`);
+    }
 }
 
 async function pushAssignmentNotification(task) {
@@ -261,6 +291,40 @@ async function pushAssignmentNotification(task) {
 // ─── Notification listener (for non-supervisors) ──────────────────────────
 let notifListener = null;
 
+// Pull tasks from this user's group subcollection and merge into local board
+async function syncGroupTasksToBoard() {
+    if (!currentUser || !currentGroup) return;
+    try {
+        const snap = await db.collection('groups').doc(currentGroup.code)
+            .collection('tasks').doc(currentUser.uid).get();
+        if (!snap.exists || !snap.data().tasks) return;
+
+        const groupTasks = snap.data().tasks;
+
+        // Collect all task IDs already on our board (by id) to avoid duplicates
+        const existingIds = new Set(
+            ['todo','working','done'].flatMap(c => (tasks[c] || []).map(t => t.id))
+        );
+
+        let changed = false;
+        ['todo','working','done'].forEach(col => {
+            (groupTasks[col] || []).forEach(t => {
+                if (!existingIds.has(t.id)) {
+                    tasks[col] = tasks[col] || [];
+                    tasks[col].push(t);
+                    existingIds.add(t.id);
+                    changed = true;
+                }
+            });
+        });
+
+        if (changed) {
+            saveAll();
+            renderAllColumns();
+        }
+    } catch(_) {}
+}
+
 function startNotifListener() {
     if (!currentUser) return;
     stopNotifListener();
@@ -274,8 +338,8 @@ function startNotifListener() {
                     showTaskyToast(`📋 New task from @${n.fromHandle}: "${n.taskText}"`);
                     // Mark read
                     change.doc.ref.update({ read: true }).catch(() => {});
-                    // Also reload tasks from cloud
-                    syncFromCloud(true);
+                    // Merge the new task from the group subcollection into the local board
+                    syncGroupTasksToBoard();
                 }
             });
         });
@@ -486,7 +550,7 @@ function renderMemberDetail(list) {
             item.innerHTML = `
                 <span class="member-task-priority">${t.priority === 'high' ? '🔴' : t.priority === 'medium' ? '🟡' : '🟢'}</span>
                 <div class="member-task-body">
-                    <span class="member-task-text">${escapeHtml(t.text)}</span>
+                    <span class="member-task-text">${escHtml(t.text)}</span>
                     ${t.dueDate ? `<span class="member-task-date ${isOverdue ? 'overdue' : ''}">📅 ${new Date(t.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>` : ''}
                     ${t.assignedBy ? `<span class="member-task-assigned">from @${t.assignedBy}</span>` : ''}
                 </div>
@@ -895,10 +959,10 @@ createTaskCard = function(task, column) {
         const badge = document.createElement('div');
         badge.className = 'task-assign-badge';
         if (task.assignedTo) {
-            badge.innerHTML += `<span class="assign-to">→ @${escapeHtml(task.assignedTo)}</span>`;
+            badge.innerHTML += `<span class="assign-to">→ @${escHtml(task.assignedTo)}</span>`;
         }
         if (task.assignedBy && task.assignedBy !== currentHandle) {
-            badge.innerHTML += `<span class="assign-from">from @${escapeHtml(task.assignedBy)}</span>`;
+            badge.innerHTML += `<span class="assign-from">from @${escHtml(task.assignedBy)}</span>`;
         }
         const meta = card.querySelector('.task-meta');
         if (meta) meta.appendChild(badge);
@@ -921,6 +985,8 @@ function setupCollabAuth() {
             await ensureHandle();
             await loadActiveGroup();
             startNotifListener();
+            // Pick up any tasks assigned while offline
+            setTimeout(syncGroupTasksToBoard, 1500);
         } else {
             stopGroupListener();
             stopNotifListener();
