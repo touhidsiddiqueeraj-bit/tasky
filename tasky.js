@@ -11,13 +11,25 @@
 
         // ─── Migration: sanitize decimal task IDs (Date.now()+Math.random() produced
         //     floats like 1779562537655.4753 which are invalid CSS selectors and crash
-        //     querySelector, causing an infinite reload loop on returning users) ───────
+        //     querySelector, causing an infinite reload loop on returning users).
+        //     Uses a Set to guarantee uniqueness — Math.round() alone can collide. ────
         (function migrateDecimalIds() {
             let dirty = false;
+            const seen = new Set();
+            // Collect all existing integer IDs first so we don't collide with them
+            ['todo', 'working', 'done'].forEach(col => {
+                (tasks[col] || []).forEach(task => {
+                    if (Number.isInteger(task.id)) seen.add(task.id);
+                });
+            });
+            let nextId = Date.now();
             ['todo', 'working', 'done'].forEach(col => {
                 (tasks[col] || []).forEach(task => {
                     if (!Number.isInteger(task.id)) {
-                        task.id = Math.round(task.id);
+                        while (seen.has(nextId)) nextId++;
+                        task.id = nextId;
+                        seen.add(nextId);
+                        nextId++;
                         dirty = true;
                     }
                 });
@@ -292,7 +304,7 @@
         function addTask(text, column, priority) {
             taskCounter++;
             const task = {
-                id: Date.now() + Math.floor(Math.random() * 1000),
+                id: Date.now() * 1000 + taskCounter,
                 number: taskCounter,
                 text: text,
                 priority: priority || 'medium',
@@ -686,7 +698,7 @@
         function addTaskToTodo(text) {
             taskCounter++;
             const task = {
-                id: Date.now(),
+                id: Date.now() * 1000 + taskCounter,
                 number: taskCounter,
                 text: text,
                 priority: 'medium',
