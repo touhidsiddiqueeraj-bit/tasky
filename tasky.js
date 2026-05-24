@@ -1,1210 +1,984 @@
-// ─── State ────────────────────────────────────────────────────────────────
-        let tasks = JSON.parse(localStorage.getItem('tasks')) || { todo: [], working: [], done: [] };
-        let taskCounter = parseInt(localStorage.getItem('taskCounter')) || 0;
+// ═══════════════════════════════════════════════════════════════════════════
+//  TASKY — COLLABORATIVE LAYER  (append after tasky.js, or replace it)
+//  Adds: groups, supervisor role, task assignment, team panel, member summary
+// ═══════════════════════════════════════════════════════════════════════════
 
-        // Returns the lowest positive integer not already used as a task number.
-        // This lets deleted numbers be reused instead of incrementing forever.
-        function getNextNumber() {
-            const used = new Set();
-            ['todo', 'working', 'done'].forEach(col =>
-                (tasks[col] || []).forEach(t => used.add(t.number)));
-            let n = 1;
-            while (used.has(n)) n++;
-            return n;
-        }
-        let isLightMode = localStorage.getItem('theme') === 'light';
-        let customBg = localStorage.getItem('customBg') || null;
-        let cardOpacity = parseInt(localStorage.getItem('cardOpacity')) || 100;
-        let selectedTask = null;   // { column, taskId }
-        let activeFilters = { todo: null, working: null, done: null };
-        let taskSelectorActive = false;
-        let taskSelectorBuffer = '';
+// ─── Collab State ─────────────────────────────────────────────────────────
+let currentGroup      = null;   // { code, name, supervisorUid, supervisorHandle, members[] }
+let currentHandle     = null;   // short username like "jon"
+let isSupervisor      = false;
+let groupListener     = null;   // Firestore onSnapshot unsubscribe
+let teamPanelMember   = null;   // handle being inspected in team panel
 
-        // ─── Migration: sanitize decimal task IDs (Date.now()+Math.random() produced
-        //     floats like 1779562537655.4753 which are invalid CSS selectors and crash
-        //     querySelector, causing an infinite reload loop on returning users).
-        //     Uses a Set to guarantee uniqueness — Math.round() alone can collide. ────
-        (function migrateDecimalIds() {
-            let dirty = false;
-            const seen = new Set();
-            // Collect all existing integer IDs first so we don't collide with them
-            ['todo', 'working', 'done'].forEach(col => {
-                (tasks[col] || []).forEach(task => {
-                    if (Number.isInteger(task.id)) seen.add(task.id);
-                });
-            });
-            let nextId = Date.now();
-            ['todo', 'working', 'done'].forEach(col => {
-                (tasks[col] || []).forEach(task => {
-                    if (!Number.isInteger(task.id)) {
-                        while (seen.has(nextId)) nextId++;
-                        task.id = nextId;
-                        seen.add(nextId);
-                        nextId++;
-                        dirty = true;
-                    }
-                });
-            });
-            if (dirty) {
-                localStorage.setItem('tasks', JSON.stringify(tasks));
-            }
-        })();
-        let voiceRecognition = null;
-        let voiceActive      = false;
-        let spaceHeld        = false;
-        let voiceSR           = null;
-        let voiceAccumulated  = '';
-        let voiceSession       = 0;        // incremented each startVoice; stale onend calls are ignored
-        let currentUser = null;       // Firebase user object
-        let app = null;              // Firebase app instance
-        let db = null;               // Firestore instance
-        let syncTimeout = null;      // debounce for cloud sync
+// ─── Handle / Identity ────────────────────────────────────────────────────
+async function ensureHandle() {
+    if (!currentUser) return null;
+    if (currentHandle) return currentHandle;
 
-        // ─── Init ─────────────────────────────────────────────────────────────────
-        if (isLightMode) {
-            document.body.classList.add('light-mode');
-            updateThemeButton();
-        }
-        // NOTE: Onboarding visibility is handled entirely in the HTML <script> block.
-        // tasky.js no longer touches #onboarding (that id does not exist in the HTML).
+    // Try to load from Firestore first
+    const ref = db.collection('users').doc(currentUser.uid);
+    const snap = await ref.get();
+    if (snap.exists && snap.data().handle) {
+        currentHandle = snap.data().handle;
+        return currentHandle;
+    }
+    return null;
+}
 
-        if (customBg) applyCustomBg();
-        initOpacity();
+async function saveHandle(handle) {
+    if (!currentUser) return;
+    await db.collection('users').doc(currentUser.uid).set({ handle, email: currentUser.email }, { merge: true });
+    currentHandle = handle;
+}
 
-        // ─── Firebase / Cloud Sync ─────────────────────────────────────────────────
-        app = firebase.initializeApp({
-            apiKey: "AIzaSyBN8ZJil4vWWJ6XPPGgp20htp8IBxDLL_o",
-            authDomain: "tasky-95785.firebaseapp.com",
-            projectId: "tasky-95785",
-            storageBucket: "tasky-95785.firebasestorage.app",
-            messagingSenderId: "285483279389",
-            appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
+// ─── Group Code Generator ─────────────────────────────────────────────────
+function genGroupCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+}
+
+// ─── Create Group ─────────────────────────────────────────────────────────
+async function createGroup(groupName) {
+    if (!currentUser || !currentHandle) return null;
+    const code = genGroupCode();
+    const groupData = {
+        name: groupName,
+        code,
+        supervisorUid: currentUser.uid,
+        supervisorHandle: currentHandle,
+        members: [{ uid: currentUser.uid, handle: currentHandle, email: currentUser.email }],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    await db.collection('groups').doc(code).set(groupData);
+    await db.collection('users').doc(currentUser.uid).set({ activeGroup: code }, { merge: true });
+    return code;
+}
+
+// ─── Join Group ───────────────────────────────────────────────────────────
+async function joinGroup(code) {
+    if (!currentUser || !currentHandle) return { ok: false, err: 'Not signed in' };
+    const ref = db.collection('groups').doc(code.toUpperCase().trim());
+    const snap = await ref.get();
+    if (!snap.exists) return { ok: false, err: 'Group not found. Check the code.' };
+
+    const data = snap.data();
+    const already = data.members.some(m => m.uid === currentUser.uid);
+    if (!already) {
+        await ref.update({
+            members: firebase.firestore.FieldValue.arrayUnion({
+                uid: currentUser.uid,
+                handle: currentHandle,
+                email: currentUser.email
+            })
         });
-        db = firebase.firestore(app);
-        // Use the modern cache setting instead of the deprecated enablePersistence().
-        // Falls back to memory-only if IndexedDB is unavailable or has stale SDK data.
+    }
+    await db.collection('users').doc(currentUser.uid).set({ activeGroup: code.toUpperCase() }, { merge: true });
+    return { ok: true };
+}
+
+// ─── Leave Group ──────────────────────────────────────────────────────────
+async function leaveGroup() {
+    if (!currentUser || !currentGroup) return;
+    // Remove self from members (unless supervisor — supervisor must transfer first)
+    if (isSupervisor && currentGroup.members.length > 1) {
+        showTaskyToast('Transfer supervisor role before leaving.');
+        return;
+    }
+    const ref = db.collection('groups').doc(currentGroup.code);
+    const snap = await ref.get();
+    if (snap.exists) {
+        const updated = (snap.data().members || []).filter(m => m.uid !== currentUser.uid);
+        if (updated.length === 0) {
+            await ref.delete();
+        } else {
+            await ref.update({ members: updated });
+        }
+    }
+    await db.collection('users').doc(currentUser.uid).update({ activeGroup: firebase.firestore.FieldValue.delete() });
+    stopGroupListener();
+    currentGroup = null;
+    isSupervisor = false;
+    teamPanelMember = null;
+    renderGroupUI();
+}
+
+// ─── Load & Listen to Group ───────────────────────────────────────────────
+async function loadActiveGroup() {
+    if (!currentUser) return;
+    const userSnap = await db.collection('users').doc(currentUser.uid).get();
+    const code = userSnap.exists ? userSnap.data().activeGroup : null;
+    if (!code) { currentGroup = null; renderGroupUI(); return; }
+
+    startGroupListener(code);
+}
+
+function startGroupListener(code) {
+    stopGroupListener();
+    groupListener = db.collection('groups').doc(code).onSnapshot(snap => {
+        if (!snap.exists) { currentGroup = null; isSupervisor = false; renderGroupUI(); return; }
+        currentGroup = { ...snap.data(), code };
+        isSupervisor = currentGroup.supervisorUid === currentUser.uid;
+        renderGroupUI();
+        // Real-time: reload tasks for supervisor team view
+        if (isSupervisor) renderTeamPanel();
+    });
+}
+
+function stopGroupListener() {
+    if (groupListener) { groupListener(); groupListener = null; }
+}
+
+// ─── Assigned-to task parsing ─────────────────────────────────────────────
+// Syntax: "fix auth bug to::jon priority::high date::20may"
+function parseAssignedTask(raw) {
+    const result = { text: raw, assignedTo: null, priority: null, dueDate: null };
+
+    // Extract `to::handle`
+    const toMatch = raw.match(/\bto::(\w+)/i);
+    if (toMatch) {
+        result.assignedTo = toMatch[1].toLowerCase();
+        raw = raw.replace(toMatch[0], '').trim();
+    }
+
+    // Extract `priority::high|medium|low`
+    const priMatch = raw.match(/\bpriority::(high|medium|med|low)/i);
+    if (priMatch) {
+        const p = priMatch[1].toLowerCase();
+        result.priority = p === 'med' ? 'medium' : p;
+        raw = raw.replace(priMatch[0], '').trim();
+    }
+
+    // Extract `date::20may` or `date::2024-05-20` or `date::today` or `date::tomorrow`
+    const dateMatch = raw.match(/\bdate::(\S+)/i);
+    if (dateMatch) {
+        result.dueDate = parseNaturalDate(dateMatch[1]);
+        raw = raw.replace(dateMatch[0], '').trim();
+    }
+
+    // Clean up leftover double-spaces
+    result.text = raw.replace(/\s{2,}/g, ' ').trim();
+    return result;
+}
+
+function parseNaturalDate(str) {
+    str = str.toLowerCase().trim();
+    const today = new Date();
+    if (str === 'today') return today.toISOString().split('T')[0];
+    if (str === 'tomorrow') {
+        const t = new Date(today); t.setDate(t.getDate() + 1);
+        return t.toISOString().split('T')[0];
+    }
+    // Formats like "20may", "20 may", "may20", "20-may", "20/05", "2025-05-20"
+    const months = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+    // Try dd-mon or mon-dd
+    const m1 = str.match(/^(\d{1,2})[-\/\s]?([a-z]{3})/);
+    if (m1 && months[m1[2]] !== undefined) {
+        const d = new Date(today.getFullYear(), months[m1[2]], parseInt(m1[1]));
+        // If date is in the past, bump to next year
+        if (d < today) d.setFullYear(d.getFullYear() + 1);
+        return d.toISOString().split('T')[0];
+    }
+    const m2 = str.match(/^([a-z]{3})[-\/\s]?(\d{1,2})/);
+    if (m2 && months[m2[1]] !== undefined) {
+        const d = new Date(today.getFullYear(), months[m2[1]], parseInt(m2[2]));
+        if (d < today) d.setFullYear(d.getFullYear() + 1);
+        return d.toISOString().split('T')[0];
+    }
+    // Try dd/mm or mm/dd
+    const m3 = str.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+    if (m3) {
+        const d = new Date(today.getFullYear(), parseInt(m3[2]) - 1, parseInt(m3[1]));
+        if (d < today) d.setFullYear(d.getFullYear() + 1);
+        return d.toISOString().split('T')[0];
+    }
+    // ISO
+    const iso = new Date(str);
+    if (!isNaN(iso)) return iso.toISOString().split('T')[0];
+    return null;
+}
+
+// ─── Collab addTask override ──────────────────────────────────────────────
+// Wraps the original addTaskToTodo to handle assignment syntax
+const _origAddTaskToTodo = addTaskToTodo;
+function addTaskToTodo(text) {
+    // Only parse assignment syntax if in a group and is supervisor
+    if (currentGroup && isSupervisor && text.includes('to::')) {
+        const parsed = parseAssignedTask(text);
+        // Validate assignee is in group
+        const member = currentGroup.members.find(m => m.handle === parsed.assignedTo);
+        if (!member) {
+            showTaskyToast(`⚠️ No member "@${parsed.assignedTo}" in group`);
+            return;
+        }
+        addCollabTask(parsed);
+        return;
+    }
+    _origAddTaskToTodo(text);
+}
+
+function addCollabTask(parsed) {
+    const nextNum = getNextNumber();
+    taskCounter = Math.max(taskCounter, nextNum);
+    const task = {
+        id: Date.now() * 1000 + nextNum,
+        number: nextNum,
+        text: parsed.text,
+        priority: parsed.priority || 'medium',
+        dueDate: parsed.dueDate || null,
+        createdAt: new Date().toISOString(),
+        assignedTo: parsed.assignedTo || null,
+        assignedBy: currentHandle || null,
+        groupCode: currentGroup ? currentGroup.code : null
+    };
+    tasks.todo.push(task);
+    saveAll();
+    renderColumn('todo');
+    showTaskyToast(`✅ Assigned "${task.text}" → @${task.assignedTo}`);
+    // Push notification doc to Firestore for the assignee
+    pushAssignmentNotification(task);
+}
+
+async function pushAssignmentNotification(task) {
+    if (!currentGroup || !task.assignedTo) return;
+    const member = currentGroup.members.find(m => m.handle === task.assignedTo);
+    if (!member) return;
+    try {
+        await db.collection('notifications').add({
+            toUid: member.uid,
+            fromHandle: currentHandle,
+            groupCode: currentGroup.code,
+            taskText: task.text,
+            priority: task.priority,
+            dueDate: task.dueDate,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            read: false
+        });
+    } catch(_) {}
+}
+
+// ─── Notification listener (for non-supervisors) ──────────────────────────
+let notifListener = null;
+
+function startNotifListener() {
+    if (!currentUser) return;
+    stopNotifListener();
+    notifListener = db.collection('notifications')
+        .where('toUid', '==', currentUser.uid)
+        .where('read', '==', false)
+        .onSnapshot(snap => {
+            snap.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                    const n = change.doc.data();
+                    showTaskyToast(`📋 New task from @${n.fromHandle}: "${n.taskText}"`);
+                    // Mark read
+                    change.doc.ref.update({ read: true }).catch(() => {});
+                    // Also reload tasks from cloud
+                    syncFromCloud(true);
+                }
+            });
+        });
+}
+
+function stopNotifListener() {
+    if (notifListener) { notifListener(); notifListener = null; }
+}
+
+// ─── Collab saveAll: writes tasks to group doc too if in a group ──────────
+const _origPushToCloud = pushToCloud;
+function pushToCloud() {
+    _origPushToCloud();
+    if (currentGroup && currentUser) {
+        pushGroupTasks();
+    }
+}
+
+let groupPushTimeout = null;
+function pushGroupTasks() {
+    if (groupPushTimeout) clearTimeout(groupPushTimeout);
+    groupPushTimeout = setTimeout(async () => {
+        if (!currentGroup || !currentUser) return;
         try {
-            db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
-            db.enablePersistence({ synchronizeTabs: false }).catch(err => {
-                if (err.code === 'failed-precondition' || err.code === 'unimplemented') {
-                    if (err.code === 'failed-precondition') {
-                        // 'failed-precondition' fires for two reasons:
-                        //   1. Another tab already has persistence open — reloading won't help, skip.
-                        //   2. Stale IndexedDB from old SDK — delete it and reload ONCE.
-                        //
-                        // We detect case 2 by checking if the IDB actually exists.
-                        // Guard: use localStorage+timestamp so the flag survives the reload
-                        // (sessionStorage is wiped on every reload, causing infinite loops).
-                        const GUARD_KEY = '_fs_reloaded_at';
-                        const last = parseInt(localStorage.getItem(GUARD_KEY) || '0', 10);
-                        const now  = Date.now();
-                        if (now - last > 15000) {   // not reloaded in last 15 s → try cleanup
-                            // Check if the stale DB actually exists before reloading
-                            const dbName = `firestore/[DEFAULT]/tasky-95785/(default)/main`;
-                            const check  = indexedDB.open(dbName);
-                            check.onsuccess = (e) => {
-                                e.target.result.close();
-                                // DB exists — delete it and reload once
-                                localStorage.setItem(GUARD_KEY, String(now));
-                                const del = indexedDB.deleteDatabase(dbName);
-                                del.onsuccess = () => location.reload();
-                                del.onerror   = () => {}; // if delete fails, just continue
-                            };
-                            check.onerror = () => {}; // DB doesn't exist — multi-tab case, ignore
-                        }
-                        // Guard active or multi-tab: fall through to memory-only mode silently.
-                    }
-                }
-            });
-        } catch(_) {}
-
-        renderAllColumns();
-        updateDailySummary();
-        setupKeyboard();          // single unified keyboard handler
-        setupVoice();             // speech recognition
-        setupFirebase();          // Firebase cloud sync
-
-        // ─── Custom background upload ─────────────────────────────────────────────
-        var bgInput = document.getElementById('bg-upload-input');
-        if (bgInput) {
-            bgInput.addEventListener('change', function(e) {
-                var file = e.target.files[0];
-                if (!file) return;
-                var reader = new FileReader();
-                reader.onload = function(ev) {
-                    customBg = ev.target.result;
-                    try {
-                        localStorage.setItem('customBg', customBg);
-                        applyCustomBg();
-                        showToast('Background set', () => {});
-                    } catch(_) {
-                        showToast('Image too large to save', () => {});
-                        customBg = null;
-                    }
-                };
-                reader.readAsDataURL(file);
-                this.value = '';
-            });
-        }
-
-        // ─── Card opacity slider ────────────────────────────────────────────────────
-        var opacitySlider = document.getElementById('card-opacity-slider');
-        if (opacitySlider) {
-            opacitySlider.addEventListener('input', function() {
-                setCardOpacity(parseInt(this.value));
-            });
-        }
-
-        // ─── Firebase Auth ─────────────────────────────────────────────────────────
-        function setupFirebase() {
-            firebase.auth(app).onAuthStateChanged(user => {
-                const prevUid = currentUser ? currentUser.uid : null;
-                currentUser = user;
-
-                if (user) {
-                    if (user.uid !== prevUid) {
-                        syncFromCloud(!!prevUid);
-                    }
-                } else {
-                    tasks = { todo: [], working: [], done: [] };
-                    taskCounter = 0;
-                    renderAllColumns();
-                    updateDailySummary();
-                    deselectTask();
-                }
-
-                updateAuthUI();
-            });
-        }
-
-        function signInWithGoogle() {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            firebase.auth(app).signInWithPopup(provider).catch(err => {
-                console.error('Sign-in error:', err);
-            });
-            const dd = document.getElementById('dropdown');
-            if (dd) dd.classList.remove('show');
-        }
-
-        function signOut() {
-            firebase.auth(app).signOut().catch(() => {});
-            const dd = document.getElementById('dropdown');
-            if (dd) dd.classList.remove('show');
-        }
-
-        function updateAuthUI() {
-            const authBtn    = document.getElementById('auth-btn');
-            const signoutBtn = document.getElementById('signout-btn');
-            const userInfo   = document.getElementById('user-info');
-            const avatar     = document.getElementById('user-avatar');
-            const email      = document.getElementById('user-email');
-            const syncEl     = document.getElementById('sync-status');
-
-            if (currentUser) {
-                if (authBtn)    authBtn.style.display    = 'none';
-                if (signoutBtn) signoutBtn.style.display = 'flex';
-                if (userInfo)   userInfo.style.display   = 'flex';
-                if (avatar)     avatar.textContent = currentUser.email ? currentUser.email[0].toUpperCase() : '?';
-                if (email)      email.textContent  = currentUser.email || '';
-                setSyncStatus('synced');
-            } else {
-                if (authBtn)    authBtn.style.display    = 'flex';
-                if (signoutBtn) signoutBtn.style.display = 'none';
-                if (userInfo)   userInfo.style.display   = 'none';
-                if (syncEl)     syncEl.classList.remove('visible');
-            }
-        }
-
-        function setSyncStatus(state) {
-            const el = document.getElementById('sync-status');
-            if (!el) return;
-            el.classList.remove('synced', 'syncing', 'offline', 'visible');
-            if (!currentUser) return;
-            el.classList.add('visible', state);
-            const labels = { synced: '☁️ Synced', syncing: '☁️ Syncing…', offline: '☁️ Offline' };
-            el.textContent = labels[state] || '';
-        }
-
-        function getUserDocRef() {
-            if (!currentUser) return null;
-            return db.collection('users').doc(currentUser.uid);
-        }
-
-        function pushToCloud() {
-            if (!currentUser) return;
-            setSyncStatus('syncing');
-            if (syncTimeout) clearTimeout(syncTimeout);
-            syncTimeout = setTimeout(() => {
-                const docRef = getUserDocRef();
-                if (!docRef) return;
-                docRef.set({
+            await db.collection('groups').doc(currentGroup.code)
+                .collection('tasks').doc(currentUser.uid).set({
                     tasks: JSON.parse(JSON.stringify(tasks)),
-                    taskCounter: taskCounter,
+                    handle: currentHandle,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }).then(() => setSyncStatus('synced')).catch(() => setSyncStatus('offline'));
-            }, 500);
-        }
-
-        function syncFromCloud(replace) {
-            if (!currentUser) return;
-            const docRef = getUserDocRef();
-            if (!docRef) return;
-            setSyncStatus('syncing');
-            docRef.get().then(snap => {
-                if (!snap.exists) {
-                    if (replace) {
-                        tasks = { todo: [], working: [], done: [] };
-                        taskCounter = 0;
-                    } else {
-                        pushToCloud();
-                    }
-                    saveAll();
-                    renderAllColumns();
-                    updateDailySummary();
-                    setSyncStatus('synced');
-                    return;
-                }
-                const cloudData = snap.data();
-                if (!cloudData || !cloudData.tasks) {
-                    if (replace) {
-                        tasks = { todo: [], working: [], done: [] };
-                        taskCounter = 0;
-                    } else {
-                        pushToCloud();
-                    }
-                    saveAll();
-                    renderAllColumns();
-                    updateDailySummary();
-                    setSyncStatus('synced');
-                    return;
-                }
-                if (replace) {
-                    tasks = JSON.parse(JSON.stringify(cloudData.tasks));
-                    taskCounter = cloudData.taskCounter || 0;
-                } else {
-                    const merged = mergeTasks(tasks, cloudData.tasks, taskCounter, cloudData.taskCounter || 0);
-                    tasks = merged.tasks;
-                    taskCounter = merged.taskCounter;
-                }
-                saveAll();
-                renderAllColumns();
-                updateDailySummary();
-                setSyncStatus('synced');
-            }).catch(() => setSyncStatus('offline'));
-        }
-
-        function mergeTasks(localTasks, cloudTasks, localCounter, cloudCounter) {
-            const merged = { todo: [], working: [], done: [] };
-            for (const col of ['todo', 'working', 'done']) {
-                const byNumber = {};
-                const local = localTasks[col] || [];
-                const cloud = cloudTasks[col] || [];
-                [...local, ...cloud].forEach(t => {
-                    if (!t || !t.number) return;
-                    const existing = byNumber[t.number];
-                    if (!existing || new Date(t.createdAt) > new Date(existing.createdAt)) {
-                        byNumber[t.number] = t;
-                    }
                 });
-                merged[col] = Object.values(byNumber).sort((a, b) => a.number - b.number);
-            }
-            return { tasks: merged, taskCounter: Math.max(localCounter, cloudCounter) };
-        }
+        } catch(_) {}
+    }, 600);
+}
 
-        // ─── Public task API (used by Task Groups expansion in HTML) ───────────────
-        function addTask(text, column, priority) {
-            const nextNum = getNextNumber();
-            taskCounter = Math.max(taskCounter, nextNum);
-            const task = {
-                id: Date.now() * 1000 + nextNum,
-                number: nextNum,
-                text: text,
-                priority: priority || 'medium',
-                dueDate: null,
-                createdAt: new Date().toISOString()
-            };
-            tasks[column] = tasks[column] || [];
-            tasks[column].push(task);
-            saveAll();
-            renderColumn(column);
-        }
+// ─── Team Panel Data (supervisor) ─────────────────────────────────────────
+let teamTasksCache = {}; // { uid: { tasks, handle } }
 
-        // ─── Unified keyboard handler ─────────────────────────────────────────────
-        function setupKeyboard() {
-            const container = document.getElementById('floating-container');
-            const input     = document.getElementById('floating-input');
-
-            // ── Input-specific keys ───────────────────────────────────────────────
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    const text = input.value.trim();
-                    if (text) {
-                        addTaskToTodo(text);
-                        input.value = '';
-                    }
-                    closeFloatingInput();
-                    e.stopPropagation();
-                    return;
-                }
-                if (e.key === 'Escape') {
-                    input.value = '';
-                    closeFloatingInput();
-                    e.stopPropagation();
-                    return;
-                }
-                // Stop ALL keys from bubbling to the document handler while input is active
-                e.stopPropagation();
-            });
-
-            // Close input when clicking outside
-            document.addEventListener('click', (e) => {
-                if (taskSelectorActive && !e.target.closest('#task-selector')) {
-                    exitTaskSelector();
-                }
-                if (
-                    !container.contains(e.target) &&
-                    !e.target.closest('.task-card') &&
-                    !e.target.closest('#mobile-add-btn')
-                ) {
-                    if (!input.value.trim()) {
-                        closeFloatingInput();
-                    }
-                }
-            });
-
-            // ── Global keys ───────────────────────────────────────────────────────
-            document.addEventListener('keydown', (e) => {
-                const tag = e.target.tagName;
-                if (tag === 'TEXTAREA' || tag === 'SELECT') return;
-                if (tag === 'INPUT' && e.target !== input) return;
-                if (e.ctrlKey || e.metaKey) return;
-
-                const key = e.key;
-
-                // ── Alt combinations ──────────────────────────────────────────────
-                if (e.altKey) {
-                    if (taskSelectorActive) exitTaskSelector();
-
-                    if (key === 'g' || key === 'G') {
-                        e.preventDefault();
-                        deselectTask();
-                        enterTaskSelector();
-                        return;
-                    }
-
-                    if (key >= '1' && key <= '9') {
-                        e.preventDefault();
-                        const num = parseInt(key);
-                        const found = findTaskByNumber(num);
-                        if (found) {
-                            deselectTask();
-                            selectTask(found.column, found.task.id);
-                            scrollTaskIntoView(found.task.id);
-                        }
-                        return;
-                    }
-
-                    return;
-                }
-
-                // ── If a task is selected: shortcut mode ──────────────────────────
-                if (selectedTask) {
-                    const { column, taskId } = selectedTask;
-
-                    if (key === 'ArrowLeft')  { e.preventDefault(); moveTaskBackward(column, taskId); return; }
-                    if (key === 'ArrowRight') { e.preventDefault(); moveTaskForward(column, taskId);  return; }
-                    if (key === '1') { e.preventDefault(); setPriority(column, taskId, 'high');   return; }
-                    if (key === '2') { e.preventDefault(); setPriority(column, taskId, 'medium'); return; }
-                    if (key === '3') { e.preventDefault(); setPriority(column, taskId, 'low');    return; }
-                    if (key === 'Delete' || key === 'Backspace') {
-                        e.preventDefault();
-                        const col = column, id = taskId;
-                        deselectTask();
-                        deleteTaskWithUndo(col, id);
-                        return;
-                    }
-                    if (key === 'Escape') { e.preventDefault(); deselectTask(); return; }
-                    // Any other key while selected → fall through to open input
-                }
-
-                // ── No task selected ──────────────────────────────────────────────
-                if (key === 'Escape' || key === 'Delete') return;
-                if (key === 'ArrowLeft' || key === 'ArrowRight' ||
-                    key === 'ArrowUp'   || key === 'ArrowDown') return;
-
-                // ── Goto mode (Alt+G) ─────────────────────────────────────────────
-                if (taskSelectorActive) {
-                    e.preventDefault();
-                    if (key >= '0' && key <= '9') {
-                        taskSelectorBuffer += key;
-                        updateTaskSelectorUI();
-                    } else if (key === 'Backspace') {
-                        taskSelectorBuffer = taskSelectorBuffer.slice(0, -1);
-                        updateTaskSelectorUI();
-                    } else if (key === 'Enter') {
-                        if (taskSelectorBuffer) {
-                            const num = parseInt(taskSelectorBuffer);
-                            const found = findTaskByNumber(num);
-                            if (found) {
-                                deselectTask();
-                                selectTask(found.column, found.task.id);
-                                scrollTaskIntoView(found.task.id);
-                            }
-                        }
-                        exitTaskSelector();
-                    } else if (key === 'Escape') {
-                        exitTaskSelector();
-                    }
-                    return;
-                }
-
-                // Space held → start voice
-                if (key === ' ') {
-                    e.preventDefault();
-                    if (!spaceHeld) {
-                        spaceHeld = true;
-                        startVoice();
-                    }
-                    return;
-                }
-
-                // Block other keys while voice is active
-                if (voiceActive) {
-                    e.preventDefault();
-                    return;
-                }
-
-                if (key.length === 1) {
-                    openFloatingInput();
-                }
-            });
-
-            window.addEventListener('keyup', (e) => {
-                if (e.key === ' ' && spaceHeld) {
-                    spaceHeld = false;
-                    stopVoice();
-                }
-            }, true);
-
-            window.addEventListener('blur', () => {
-                if (spaceHeld) { spaceHeld = false; stopVoice(); }
-            });
-
-            document.addEventListener('visibilitychange', () => {
-                if (document.hidden && spaceHeld) { spaceHeld = false; stopVoice(); }
-            });
-        }
-
-        function mobileFabTap() {
-            openFloatingInput();
-        }
-
-        function openFloatingInput() {
-            if (taskSelectorActive) exitTaskSelector();
-            const container = document.getElementById('floating-container');
-            const input     = document.getElementById('floating-input');
-            const fab       = document.getElementById('mobile-add-btn');
-            container.classList.add('active');
-            if (fab) fab.classList.add('hidden');
-            input.focus();
-        }
-
-        function closeFloatingInput() {
-            const container = document.getElementById('floating-container');
-            const input     = document.getElementById('floating-input');
-            const fab       = document.getElementById('mobile-add-btn');
-            container.classList.remove('active');
-            if (fab) fab.classList.remove('hidden');
-            input.blur();
-        }
-
-        // Also expose as hideFloatingInput for the Task Groups suggestion code
-        function hideFloatingInput() { closeFloatingInput(); }
-
-        // ─── Voice input ──────────────────────────────────────────────────────────
-        function setupVoice() {
-            voiceSR = window.SpeechRecognition || window.webkitSpeechRecognition || null;
-            setupMobileMic();
-        }
-
-        function makeRecognition() {
-            const rec     = new voiceSR();
-            const session = voiceSession;
-
-            rec.continuous     = false;
-            rec.interimResults = true;
-            rec.lang           = 'en-US';
-
-            rec.onresult = (e) => {
-                if (voiceSession !== session) return;
-                let interim = '', final = '';
-                for (let i = e.resultIndex; i < e.results.length; i++) {
-                    const t = e.results[i][0].transcript;
-                    if (e.results[i].isFinal) final += t;
-                    else interim += t;
-                }
-                if (final) voiceAccumulated += (voiceAccumulated ? ' ' : '') + final.trim();
-                const el = document.getElementById('voice-transcript');
-                if (el) el.textContent = voiceAccumulated + (interim ? ' ' + interim : '');
-            };
-
-            rec.onerror = (e) => {
-                if (voiceSession !== session) return;
-                if (e.error === 'not-allowed') {
-                    showToast('Mic permission denied — enable it in browser settings', () => {});
-                    forceStopVoice();
-                }
-            };
-
-            rec.onend = () => {
-                if (voiceSession !== session) return;
-                if (!voiceActive) return;
-                voiceRecognition = makeRecognition();
-                try { voiceRecognition.start(); } catch (_) {}
-            };
-
-            return rec;
-        }
-
-        function startVoice(isMobile = false) {
-            if (!voiceSR || voiceActive) return;
-            voiceSession    += 1;
-            voiceActive      = true;
-            voiceAccumulated = '';
-            const overlay    = document.getElementById('voice-overlay');
-            const transcript = document.getElementById('voice-transcript');
-            const hint       = document.getElementById('voice-hint');
-            if (transcript) transcript.textContent = '';
-            if (hint && isMobile) hint.textContent = 'Release button to confirm';
-            if (hint && !isMobile) hint.innerHTML = 'Release <kbd style="background:rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.3)">Space</kbd> to confirm';
-            if (overlay) overlay.classList.add('active');
-            voiceRecognition = makeRecognition();
-            try { voiceRecognition.start(); } catch (_) { forceStopVoice(); }
-        }
-
-        function stopVoice() {
-            if (!voiceActive) return;
-            voiceActive   = false;
-            voiceSession += 1;
-            const overlay = document.getElementById('voice-overlay');
-            if (overlay) overlay.classList.remove('active');
-            const el   = document.getElementById('voice-transcript');
-            const text = (voiceAccumulated + (el ? ' ' + el.textContent : '')).trim();
-            try { voiceRecognition.stop(); } catch (_) {}
-            voiceRecognition = null;
-            if (text) {
-                const input = document.getElementById('floating-input');
-                input.value = text;
-                openFloatingInput();
-            }
-        }
-
-        function forceStopVoice() {
-            voiceActive   = false;
-            voiceSession += 1;
-            const overlay = document.getElementById('voice-overlay');
-            if (overlay) overlay.classList.remove('active');
-            try { if (voiceRecognition) voiceRecognition.stop(); } catch (_) {}
-            voiceRecognition = null;
-        }
-
-        // ─── Mobile mic: hold-to-talk ─────────────────────────────────────────────
-        function setupMobileMic() {
-            const btn = document.getElementById('mobile-mic-btn');
-            if (!btn) return;
-
-            btn.style.touchAction = 'none';
-
-            function onPress(e) {
-                e.preventDefault();
-                if (!voiceSR) {
-                    showToast('Voice not supported in this browser', () => {});
-                    return;
-                }
-                btn.setPointerCapture(e.pointerId);
-                startVoice(true);
-            }
-
-            function onRelease(e) {
-                e.preventDefault();
-                stopVoice();
-            }
-
-            btn.addEventListener('pointerdown',   onPress);
-            btn.addEventListener('pointerup',     onRelease);
-            btn.addEventListener('pointercancel', onRelease);
-        }
-
-        // ─── Task selection ───────────────────────────────────────────────────────
-        function selectTask(column, taskId) {
-            deselectTask();
-            selectedTask = { column, taskId };
-            const card = document.getElementById(`task-${taskId}`);
-            if (card) card.classList.add('selected');
-        }
-
-        function deselectTask() {
-            if (selectedTask) {
-                const card = document.getElementById(`task-${selectedTask.taskId}`);
-                if (card) card.classList.remove('selected');
-                selectedTask = null;
-            }
-        }
-
-        function restoreSelection() {
-            if (!selectedTask) return;
-            const card = document.getElementById(`task-${selectedTask.taskId}`);
-            if (card) {
-                card.classList.add('selected');
+async function fetchAllMemberTasks() {
+    if (!currentGroup) return;
+    teamTasksCache = {};
+    const promises = currentGroup.members.map(async m => {
+        try {
+            const snap = await db.collection('groups').doc(currentGroup.code)
+                .collection('tasks').doc(m.uid).get();
+            if (snap.exists) {
+                teamTasksCache[m.uid] = { ...snap.data(), handle: m.handle };
             } else {
-                selectedTask = null;
+                teamTasksCache[m.uid] = { tasks: { todo: [], working: [], done: [] }, handle: m.handle };
             }
+        } catch(_) {
+            teamTasksCache[m.uid] = { tasks: { todo: [], working: [], done: [] }, handle: m.handle };
         }
+    });
+    await Promise.all(promises);
+}
 
-        // ─── Task selector helpers (Alt+G) ────────────────────────────────────────
-        function findTaskByNumber(num) {
-            for (const col of ['todo', 'working', 'done']) {
-                const task = tasks[col].find(t => t.number === num);
-                if (task) return { column: col, task };
-            }
-            return null;
-        }
+// ─── Group UI Rendering ───────────────────────────────────────────────────
+function renderGroupUI() {
+    const board = document.querySelector('.board');
+    if (!board) return;
 
-        function enterTaskSelector() {
-            taskSelectorActive = true;
-            taskSelectorBuffer = '';
-            const el = document.getElementById('task-selector');
-            if (el) el.classList.add('active');
-            updateTaskSelectorUI();
-        }
+    // Remove old 4th column if present
+    const existing4th = document.getElementById('collab-team-column');
+    if (existing4th) existing4th.remove();
 
-        function exitTaskSelector() {
-            taskSelectorActive = false;
-            taskSelectorBuffer = '';
-            const el = document.getElementById('task-selector');
-            if (el) el.classList.remove('active');
-        }
+    // Update board class
+    board.classList.toggle('board-4col', !!(currentGroup && isSupervisor));
 
-        function updateTaskSelectorUI() {
-            const buf = document.getElementById('task-selector-buffer');
-            if (buf) buf.textContent = taskSelectorBuffer;
-        }
+    // Update collab badge in header
+    renderCollabBadge();
 
-        function scrollTaskIntoView(taskId) {
-            const card = document.getElementById(`task-${taskId}`);
-            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+    if (currentGroup && isSupervisor) {
+        // Inject 4th column — Team
+        const teamCol = buildTeamColumn();
+        board.appendChild(teamCol);
+        renderTeamPanel();
+    }
 
-        // ─── Movement helpers ─────────────────────────────────────────────────────
-        function moveTaskForward(column, taskId) {
-            if (column === 'todo')    moveTaskWithUndo('todo',    'working', taskId);
-            else if (column === 'working') moveTaskWithUndo('working', 'done', taskId);
-        }
+    // Update collab summary bar
+    renderCollabSummary();
 
-        function moveTaskBackward(column, taskId) {
-            if (column === 'done')    moveTaskWithUndo('done',    'working', taskId);
-            else if (column === 'working') moveTaskWithUndo('working', 'todo', taskId);
-        }
+    // Update dropdown collab items
+    renderCollabDropdownItems();
+}
 
-        // ─── CRUD ─────────────────────────────────────────────────────────────────
-        function addTaskToTodo(text) {
-            const nextNum = getNextNumber();
-            taskCounter = Math.max(taskCounter, nextNum);
-            const task = {
-                id: Date.now() * 1000 + nextNum,
-                number: nextNum,
-                text: text,
-                priority: 'medium',
-                dueDate: null,
-                createdAt: new Date().toISOString()
-            };
-            tasks.todo.push(task);
-            saveAll();
-            renderColumn('todo');
-        }
+function renderCollabBadge() {
+    let badge = document.getElementById('collab-badge');
+    if (!badge) {
+        badge = document.createElement('div');
+        badge.id = 'collab-badge';
+        badge.className = 'collab-badge';
+        document.querySelector('.top-menu').appendChild(badge);
+    }
+    if (currentGroup) {
+        badge.style.display = 'flex';
+        badge.innerHTML = `
+            <span class="collab-badge-dot ${isSupervisor ? 'supervisor' : 'member'}"></span>
+            <span>${currentGroup.name}</span>
+            <span class="collab-badge-code">${currentGroup.code}</span>
+            ${isSupervisor ? '<span class="collab-badge-role">Supervisor</span>' : ''}
+        `;
+    } else {
+        badge.style.display = 'none';
+    }
+}
 
-        function deleteTask(column, taskId) {
-            tasks[column] = tasks[column].filter(t => t.id !== taskId);
-            saveAll();
-            renderColumn(column);
-        }
-
-        function deleteTaskWithUndo(column, taskId) {
-            const task = tasks[column].find(t => t.id === taskId);
-            if (!task) return;
-
-            const snapshot = { column, task: { ...task } };
-            tasks[column] = tasks[column].filter(t => t.id !== taskId);
-            saveAll();
-            renderColumn(column);
-
-            showToast(`Deleted "#${task.number} ${task.text}"`, () => {
-                tasks[snapshot.column].push(snapshot.task);
-                saveAll();
-                renderColumn(snapshot.column);
-            });
-        }
-
-        function moveTask(fromColumn, toColumn, taskId) {
-            const idx = tasks[fromColumn].findIndex(t => t.id === taskId);
-            if (idx === -1) return;
-            const [task] = tasks[fromColumn].splice(idx, 1);
-            tasks[toColumn].push(task);
-            saveAll();
-            renderColumn(fromColumn);
-            renderColumn(toColumn);
-            if (toColumn === 'done') updateDailySummary();
-        }
-
-        function moveTaskWithUndo(fromColumn, toColumn, taskId) {
-            const task = tasks[fromColumn].find(t => t.id === taskId);
-            if (!task) return;
-
-            moveTask(fromColumn, toColumn, taskId);
-
-            if (selectedTask && selectedTask.taskId === taskId) {
-                selectedTask.column = toColumn;
-                restoreSelection();
-            }
-
-            const arrow = (toColumn === 'working' && fromColumn === 'todo') ||
-                          (toColumn === 'done'    && fromColumn === 'working') ? '→' : '←';
-            showToast(`Moved ${arrow} "${task.text}"`, () => {
-                const idx = tasks[toColumn].findIndex(t => t.id === taskId);
-                if (idx !== -1) {
-                    const [movedTask] = tasks[toColumn].splice(idx, 1);
-                    tasks[fromColumn].push(movedTask);
-                    saveAll();
-                    renderColumn(fromColumn);
-                    renderColumn(toColumn);
-                    if (fromColumn === 'done' || toColumn === 'done') updateDailySummary();
-                    if (selectedTask && selectedTask.taskId === taskId) {
-                        selectedTask.column = fromColumn;
-                        restoreSelection();
-                    }
-                }
-            });
-        }
-
-        function setPriority(column, taskId, priority) {
-            const task = tasks[column].find(t => t.id === taskId);
-            if (!task) return;
-            task.priority = priority;
-            saveAll();
-            renderColumn(column);
-            restoreSelection();
-        }
-
-        function cyclePriority(column, taskId) {
-            const task = tasks[column].find(t => t.id === taskId);
-            if (!task) return;
-            const priorities = ['low', 'medium', 'high'];
-            task.priority = priorities[(priorities.indexOf(task.priority) + 1) % 3];
-            saveAll();
-            renderColumn(column);
-            restoreSelection();
-        }
-
-        function setDueDate(column, taskId, date) {
-            const task = tasks[column].find(t => t.id === taskId);
-            if (!task) return;
-            task.dueDate = date || null;
-            saveAll();
-            renderColumn(column);
-            restoreSelection();
-        }
-
-        // ─── Filters ──────────────────────────────────────────────────────────────
-        function toggleFilter(column, priority, dotElement) {
-            if (activeFilters[column] === priority) {
-                activeFilters[column] = null;
-                dotElement.classList.remove('active');
-            } else {
-                dotElement.closest('.column').querySelectorAll('.filter-dot')
-                    .forEach(d => d.classList.remove('active'));
-                activeFilters[column] = priority;
-                dotElement.classList.add('active');
-            }
-            renderColumn(column);
-        }
-
-        // ─── Done column ──────────────────────────────────────────────────────────
-        async function clearDoneTasks() {
-            if (tasks.done.length === 0) return;
-            if (!await showConfirm('Clear Completed', 'Remove all done tasks? You can undo this.', 'Clear All')) return;
-            const cleared = [...tasks.done];
-            tasks.done = [];
-            saveAll();
-            renderColumn('done');
-            updateDailySummary();
-            showToast(`Cleared ${cleared.length} completed tasks`, () => {
-                tasks.done = cleared;
-                saveAll();
-                renderColumn('done');
-                updateDailySummary();
-            });
-        }
-
-        // ─── Persistence ──────────────────────────────────────────────────────────
-        function saveAll() {
-            localStorage.setItem('tasks', JSON.stringify(tasks));
-            localStorage.setItem('taskCounter', taskCounter.toString());
-            // Keep a local snapshot so we can restore state on logout
-            localStorage.setItem('tasks_local', JSON.stringify(tasks));
-            localStorage.setItem('taskCounter_local', taskCounter.toString());
-            pushToCloud();
-        }
-
-        // ─── Toast ────────────────────────────────────────────────────────────────
-        function showToast(message, undoCallback) {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-
-            const msgSpan = document.createElement('span');
-            msgSpan.textContent = message;
-
-            const undoBtn = document.createElement('button');
-            undoBtn.className = 'toast-undo-btn';
-            undoBtn.textContent = 'Undo';
-            undoBtn.onclick = () => {
-                toast.remove();
-                if (undoCallback) undoCallback();
-            };
-
-            toast.appendChild(msgSpan);
-            toast.appendChild(undoBtn);
-            container.appendChild(toast);
-
-            setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3000);
-        }
-
-        // ─── Daily summary ────────────────────────────────────────────────────────
-        function updateDailySummary() {
-            const today = new Date().toDateString();
-            const doneToday = tasks.done.filter(t => new Date(t.createdAt).toDateString() === today).length;
-            const el = document.getElementById('daily-summary');
-            if (el) el.textContent = doneToday > 0 ? `Today: ${doneToday}` : '';
-        }
-
-        // ─── Render ───────────────────────────────────────────────────────────────
-        function renderAllColumns() {
-            renderColumn('todo');
-            renderColumn('working');
-            renderColumn('done');
-        }
-
-        function renderColumn(column) {
-            const list   = document.getElementById(`${column}-list`);
-            const count  = document.getElementById(`${column}-count`);
-            const filter = activeFilters[column];
-
-            let columnTasks = tasks[column];
-            if (filter) columnTasks = columnTasks.filter(t => t.priority === filter);
-
-            list.innerHTML = '';
-
-            if (columnTasks.length === 0) {
-                list.innerHTML = filter
-                    ? `<div class="empty-state"><div class="empty-state-icon">🔍</div><div>No ${filter} priority tasks</div></div>`
-                    : getEmptyState(column);
-            } else {
-                columnTasks.forEach(task => list.appendChild(createTaskCard(task, column)));
-            }
-
-            const actual = tasks[column].length;
-            if (count.textContent !== String(actual)) {
-                count.classList.add('pulse');
-                setTimeout(() => count.classList.remove('pulse'), 400);
-            }
-            count.textContent = actual;
-        }
-
-        function getEmptyState(column) {
-            const states = {
-                todo:    `<div class="empty-state"><div class="empty-state-icon">⌨️</div><div>Start typing to add tasks</div><div style="font-size:11px;opacity:0.6;">Press any key to begin</div></div>`,
-                working: `<div class="empty-state"><div class="empty-state-icon">↔️</div><div>Drag tasks here</div><div style="font-size:11px;opacity:0.6;">Or use arrow keys to move</div></div>`,
-                done:    `<div class="empty-state"><div class="empty-state-icon">🎉</div><div>Complete something!</div><div style="font-size:11px;opacity:0.6;">Move tasks here when finished</div></div>`
-            };
-            return states[column];
-        }
-
-        function createTaskCard(task, column) {
-            const card = document.createElement('div');
-            card.className = `task-card priority-${task.priority}`;
-            card.draggable = true;
-            card.id = `task-${task.id}`;
-
-            const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && column !== 'done';
-            const dateDisplay = task.dueDate
-                ? new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                : '';
-            const priorityLabel = task.priority.charAt(0).toUpperCase() + task.priority.slice(1);
-
-            card.innerHTML = `
-                <div class="drag-handle">⋮⋮</div>
-                <div class="task-header">
-                    <span class="task-number">#${task.number}</span>
-                    <span class="task-text">${escapeHtml(task.text)}</span>
+function buildTeamColumn() {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'column-wrapper';
+    wrapper.id = 'collab-team-column';
+    wrapper.innerHTML = `
+        <div class="column-ring collab-ring"></div>
+        <div class="column-ring-inner collab-ring-inner"></div>
+        <div class="column" id="team-column-inner">
+            <div class="column-header">
+                <div class="column-header-left">
+                    <h2 class="column-title">👥 Team</h2>
                 </div>
-                <div class="task-meta">
-                    <div class="task-left">
-                        <span class="priority-badge ${task.priority}" title="Click to cycle priority (or press 1/2/3 when selected)">
-                            ${task.priority === 'high' ? '🔴' : task.priority === 'medium' ? '🟡' : '🟢'} ${priorityLabel}
-                        </span>
-                        ${task.dueDate ? `<span class="due-date ${isOverdue ? 'overdue' : ''}">📅 ${dateDisplay}</span>` : ''}
-                    </div>
-                    <div class="task-hover-controls">
-                        <button class="date-btn" title="Set due date">
-                            📅 ${task.dueDate ? 'Change' : 'Date'}
-                        </button>
-                        <input type="date" id="date-picker-${task.id}" value="${task.dueDate || ''}"
-                               style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;">
-                        ${column === 'todo'    ? `<button class="move-btn" title="Move to Working On (→)">→</button>` : ''}
-                        ${column === 'working' ? `<button class="move-btn back-btn" title="Move back to To Do (←)">←</button><button class="move-btn fwd-btn" title="Move to Done (→)">→</button>` : ''}
-                        ${column === 'done'    ? `<button class="move-btn" title="Move back to Working On (←)">←</button>` : ''}
-                        <button class="delete-btn" title="Delete (Del)">✕</button>
-                    </div>
+                <span class="task-count" id="team-member-count">0</span>
+            </div>
+            <div class="task-list" id="team-list" style="overflow-y:auto;"></div>
+        </div>
+    `;
+    return wrapper;
+}
+
+async function renderTeamPanel() {
+    const list = document.getElementById('team-list');
+    const countEl = document.getElementById('team-member-count');
+    if (!list || !currentGroup) return;
+
+    await fetchAllMemberTasks();
+
+    if (countEl) countEl.textContent = currentGroup.members.length;
+
+    list.innerHTML = '';
+
+    // If a member is being inspected
+    if (teamPanelMember) {
+        renderMemberDetail(list);
+        return;
+    }
+
+    // List all members
+    currentGroup.members.forEach(m => {
+        const data = teamTasksCache[m.uid] || { tasks: { todo: [], working: [], done: [] } };
+        const todoCount    = (data.tasks.todo    || []).length;
+        const workingCount = (data.tasks.working || []).length;
+        const doneCount    = (data.tasks.done    || []).length;
+        const isSup = m.uid === currentGroup.supervisorUid;
+
+        const card = document.createElement('div');
+        card.className = 'member-card';
+        card.innerHTML = `
+            <div class="member-avatar ${isSup ? 'supervisor' : ''}">${m.handle[0].toUpperCase()}</div>
+            <div class="member-info">
+                <div class="member-name">@${m.handle} ${isSup ? '<span class="sup-tag">SUP</span>' : ''}</div>
+                <div class="member-stats">
+                    <span class="stat-pill todo">${todoCount} todo</span>
+                    <span class="stat-pill working">${workingCount} working</span>
+                    <span class="stat-pill done">${doneCount} done</span>
+                </div>
+            </div>
+            <button class="member-inspect-btn" title="Inspect member">→</button>
+        `;
+        card.querySelector('.member-inspect-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            teamPanelMember = m.handle;
+            renderTeamPanel();
+        });
+        list.appendChild(card);
+    });
+}
+
+function renderMemberDetail(list) {
+    const member = currentGroup.members.find(m => m.handle === teamPanelMember);
+    if (!member) { teamPanelMember = null; renderTeamPanel(); return; }
+
+    const data = teamTasksCache[member.uid] || { tasks: { todo: [], working: [], done: [] } };
+
+    const header = document.createElement('div');
+    header.className = 'member-detail-header';
+    header.innerHTML = `
+        <button class="member-back-btn" id="member-back-btn">← Back</button>
+        <div class="member-detail-name">
+            <div class="member-avatar small">${member.handle[0].toUpperCase()}</div>
+            @${member.handle}
+        </div>
+    `;
+    header.querySelector('#member-back-btn').addEventListener('click', () => {
+        teamPanelMember = null;
+        renderTeamPanel();
+    });
+    list.appendChild(header);
+
+    ['todo', 'working', 'done'].forEach(col => {
+        const colTasks = (data.tasks[col] || []);
+        if (colTasks.length === 0) return;
+        const colHeader = document.createElement('div');
+        colHeader.className = 'member-detail-col-label';
+        colHeader.textContent = col === 'todo' ? '📝 To Do' : col === 'working' ? '⚡ Working On' : '✅ Done';
+        list.appendChild(colHeader);
+
+        colTasks.forEach(t => {
+            const item = document.createElement('div');
+            item.className = `member-task-item priority-${t.priority}`;
+            const isOverdue = t.dueDate && new Date(t.dueDate) < new Date() && col !== 'done';
+            item.innerHTML = `
+                <span class="member-task-priority">${t.priority === 'high' ? '🔴' : t.priority === 'medium' ? '🟡' : '🟢'}</span>
+                <div class="member-task-body">
+                    <span class="member-task-text">${escapeHtml(t.text)}</span>
+                    ${t.dueDate ? `<span class="member-task-date ${isOverdue ? 'overdue' : ''}">📅 ${new Date(t.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>` : ''}
+                    ${t.assignedBy ? `<span class="member-task-assigned">from @${t.assignedBy}</span>` : ''}
                 </div>
             `;
-
-            card.querySelector('.priority-badge').addEventListener('click', (e) => {
-                e.stopPropagation();
-                cyclePriority(column, task.id);
-            });
-
-            card.querySelector('.date-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                openDatePicker(task.id);
-            });
-
-            card.querySelector('input[type="date"]').addEventListener('change', (e) => {
-                setDueDate(column, task.id, e.target.value);
-            });
-
-            card.querySelector('.delete-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (selectedTask && selectedTask.taskId === task.id) deselectTask();
-                deleteTaskWithUndo(column, task.id);
-            });
-
-            if (column === 'todo') {
-                card.querySelector('.move-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    moveTaskWithUndo('todo', 'working', task.id);
-                });
-            }
-            if (column === 'working') {
-                card.querySelector('.back-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    moveTaskWithUndo('working', 'todo', task.id);
-                });
-                card.querySelector('.fwd-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    moveTaskWithUndo('working', 'done', task.id);
-                });
-            }
-            if (column === 'done') {
-                card.querySelector('.move-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    moveTaskWithUndo('done', 'working', task.id);
-                });
-            }
-
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('button') || e.target.closest('.priority-badge')) return;
-                if (taskSelectorActive) exitTaskSelector();
-                if (selectedTask && selectedTask.taskId === task.id) {
-                    deselectTask();
-                } else {
-                    selectTask(column, task.id);
-                }
-            });
-
-            card.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, fromColumn: column }));
-                card.style.opacity = '0.4';
-                deselectTask();
-            });
-            card.addEventListener('dragend', () => { card.style.opacity = ''; });
-
-            return card;
-        }
-
-        function escapeHtml(str) {
-            return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-        }
-
-        // ─── Date picker ──────────────────────────────────────────────────────────
-        function openDatePicker(taskId) {
-            const picker = document.getElementById(`date-picker-${taskId}`);
-            if (!picker) return;
-            Object.assign(picker.style, { position:'relative', opacity:'1', width:'auto', height:'auto', pointerEvents:'all' });
-            try { picker.showPicker(); } catch (_) { picker.click(); }
-            setTimeout(() => {
-                Object.assign(picker.style, { position:'absolute', opacity:'0', width:'0', height:'0', pointerEvents:'none' });
-            }, 100);
-        }
-
-        // ─── Drag & drop ──────────────────────────────────────────────────────────
-        function allowDrop(e) { e.preventDefault(); }
-
-        function drop(e) {
-            e.preventDefault();
-            const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-            const listEl = e.target.closest('.task-list');
-            if (!listEl) return;
-            const toColumn = listEl.id.replace('-list', '');
-            if (data.fromColumn !== toColumn) {
-                moveTaskWithUndo(data.fromColumn, toColumn, data.taskId);
-                updateDailySummary();
-            }
-        }
-
-        // ─── Menu ─────────────────────────────────────────────────────────────────
-        function toggleMenu() {
-            document.getElementById('dropdown').classList.toggle('show');
-        }
-
-        document.addEventListener('click', (e) => {
-            if (!document.querySelector('.top-menu').contains(e.target)) {
-                document.getElementById('dropdown').classList.remove('show');
-            }
+            list.appendChild(item);
         });
+    });
 
-        function toggleTheme() {
-            document.body.classList.toggle('light-mode');
-            isLightMode = document.body.classList.contains('light-mode');
-            localStorage.setItem('theme', isLightMode ? 'light' : 'dark');
-            updateThemeButton();
+    if ((data.tasks.todo||[]).length + (data.tasks.working||[]).length + (data.tasks.done||[]).length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.innerHTML = '<div class="empty-state-icon">🎉</div><div>No tasks yet</div>';
+        list.appendChild(empty);
+    }
+}
+
+// ─── Summary bar ──────────────────────────────────────────────────────────
+async function renderCollabSummary() {
+    let bar = document.getElementById('collab-summary-bar');
+
+    if (!currentGroup || !isSupervisor) {
+        if (bar) bar.remove();
+        return;
+    }
+
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'collab-summary-bar';
+        bar.className = 'collab-summary-bar';
+        document.querySelector('.container').after(bar);
+    }
+
+    await fetchAllMemberTasks();
+
+    bar.innerHTML = `
+        <div class="summary-bar-title">📊 Team Summary — ${currentGroup.name}</div>
+        <div class="summary-bar-rows" id="summary-bar-rows"></div>
+    `;
+
+    const rowsEl = bar.querySelector('#summary-bar-rows');
+
+    currentGroup.members.forEach(m => {
+        const data = teamTasksCache[m.uid] || { tasks: { todo: [], working: [], done: [] } };
+        const todo    = data.tasks.todo    || [];
+        const working = data.tasks.working || [];
+        const done    = data.tasks.done    || [];
+        const total   = todo.length + working.length + done.length;
+
+        const row = document.createElement('div');
+        row.className = 'summary-row';
+        row.innerHTML = `
+            <div class="summary-member">
+                <div class="member-avatar tiny ${m.uid === currentGroup.supervisorUid ? 'supervisor' : ''}">${m.handle[0].toUpperCase()}</div>
+                <span>@${m.handle}</span>
+            </div>
+            <div class="summary-counts">
+                <span class="stat-pill todo">${todo.length}</span>
+                <span class="stat-pill working">${working.length}</span>
+                <span class="stat-pill done">${done.length}</span>
+            </div>
+            <div class="summary-bar-visual">
+                <div class="summary-bar-fill todo" style="width:${total ? (todo.length/total*100) : 0}%"></div>
+                <div class="summary-bar-fill working" style="width:${total ? (working.length/total*100) : 0}%"></div>
+                <div class="summary-bar-fill done" style="width:${total ? (done.length/total*100) : 0}%"></div>
+            </div>
+        `;
+        row.addEventListener('click', () => {
+            teamPanelMember = m.handle;
+            // Scroll to team panel
+            const col = document.getElementById('collab-team-column');
+            if (col) col.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            renderTeamPanel();
+        });
+        rowsEl.appendChild(row);
+    });
+}
+
+// ─── Dropdown collab items ────────────────────────────────────────────────
+function renderCollabDropdownItems() {
+    // Remove old collab items
+    document.querySelectorAll('.collab-dd-item').forEach(el => el.remove());
+
+    const dropdown = document.getElementById('dropdown');
+    if (!dropdown) return;
+
+    const divider = document.createElement('div');
+    divider.className = 'dropdown-divider collab-dd-item';
+    dropdown.insertBefore(divider, dropdown.firstChild);
+
+    if (!currentGroup) {
+        // Show Create Group + Join Group
+        const createBtn = makeDropdownItem('👥', 'Create Group', () => openCollabModal('create'));
+        const joinBtn   = makeDropdownItem('🔗', 'Join Group',   () => openCollabModal('join'));
+        createBtn.classList.add('collab-dd-item');
+        joinBtn.classList.add('collab-dd-item');
+        dropdown.insertBefore(joinBtn,   dropdown.firstChild);
+        dropdown.insertBefore(createBtn, dropdown.firstChild);
+    } else {
+        // Show group info + Leave
+        const infoBtn  = makeDropdownItem('👥', `${currentGroup.name} (${currentGroup.code})`, () => openCollabModal('info'));
+        const leaveBtn = makeDropdownItem('🚪', 'Leave Group', () => leaveGroup());
+        infoBtn.style.color = '#a78bfa';
+        leaveBtn.style.color = '#ef4444';
+        infoBtn.classList.add('collab-dd-item');
+        leaveBtn.classList.add('collab-dd-item');
+        dropdown.insertBefore(leaveBtn, dropdown.firstChild);
+        dropdown.insertBefore(infoBtn,  dropdown.firstChild);
+    }
+}
+
+function makeDropdownItem(icon, text, onClick) {
+    const btn = document.createElement('button');
+    btn.className = 'dropdown-item';
+    btn.innerHTML = `<span>${icon}</span><span>${text}</span>`;
+    btn.addEventListener('click', () => {
+        document.getElementById('dropdown').classList.remove('show');
+        onClick();
+    });
+    return btn;
+}
+
+// ─── Collab Modal ─────────────────────────────────────────────────────────
+function openCollabModal(mode) {
+    if (!currentUser) {
+        showTaskyToast('Sign in with Google first to use groups.');
+        return;
+    }
+    let modal = document.getElementById('collab-modal-overlay');
+    if (!modal) {
+        modal = buildCollabModal();
+        document.body.appendChild(modal);
+    }
+    modal.classList.remove('hidden');
+    modal.classList.add('visible');
+    showCollabModalPane(mode);
+}
+
+function closeCollabModal() {
+    const modal = document.getElementById('collab-modal-overlay');
+    if (!modal) return;
+    modal.classList.remove('visible');
+    modal.classList.add('hidden');
+    setTimeout(() => modal.classList.remove('hidden'), 300);
+}
+
+function buildCollabModal() {
+    const overlay = document.createElement('div');
+    overlay.id = 'collab-modal-overlay';
+    overlay.className = 'tg-overlay hidden';
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeCollabModal(); });
+
+    overlay.innerHTML = `
+    <div class="tg-modal" style="width:min(520px,96vw);">
+        <div class="tg-header">
+            <div class="tg-header-title" id="collab-modal-title">👥 Groups</div>
+            <button class="tg-close-btn" onclick="closeCollabModal()">✕</button>
+        </div>
+        <div class="tg-body" style="padding:0;">
+            <!-- Handle setup pane -->
+            <div id="collab-pane-handle" class="collab-pane" style="display:none;padding:28px;">
+                <p class="collab-pane-desc">Choose a short username so teammates can assign tasks to you. You can't change this later.</p>
+                <div class="tg-field-label" style="margin-top:16px;">Your username (3–16 chars, letters/numbers)</div>
+                <input class="tg-input" id="collab-handle-input" type="text" placeholder="e.g. jon, sara, dev01" maxlength="16">
+                <div id="collab-handle-error" style="color:#f87171;font-size:12px;margin-top:6px;display:none;"></div>
+                <div style="display:flex;gap:10px;margin-top:16px;">
+                    <button class="tg-save-btn" id="collab-handle-save-btn">Save Username</button>
+                </div>
+            </div>
+            <!-- Create pane -->
+            <div id="collab-pane-create" class="collab-pane" style="display:none;padding:28px;">
+                <p class="collab-pane-desc">Start a new group. You'll be the supervisor and get a shareable 6-character code.</p>
+                <div class="tg-field-label" style="margin-top:16px;">Group Name</div>
+                <input class="tg-input" id="collab-group-name-input" type="text" placeholder='e.g. "Dev Team", "Sprint 12"' maxlength="40">
+                <div id="collab-create-error" style="color:#f87171;font-size:12px;margin-top:6px;display:none;"></div>
+                <div style="display:flex;gap:10px;margin-top:16px;">
+                    <button class="tg-save-btn" id="collab-create-btn">Create Group</button>
+                </div>
+            </div>
+            <!-- Join pane -->
+            <div id="collab-pane-join" class="collab-pane" style="display:none;padding:28px;">
+                <p class="collab-pane-desc">Enter the 6-character group code from your supervisor.</p>
+                <div class="tg-field-label" style="margin-top:16px;">Group Code</div>
+                <input class="tg-input" id="collab-join-code-input" type="text" placeholder="e.g. AB3X7K" maxlength="6"
+                    style="text-transform:uppercase;letter-spacing:.2em;font-size:20px;font-weight:700;">
+                <div id="collab-join-error" style="color:#f87171;font-size:12px;margin-top:6px;display:none;"></div>
+                <div style="display:flex;gap:10px;margin-top:16px;">
+                    <button class="tg-save-btn" id="collab-join-btn">Join Group</button>
+                </div>
+            </div>
+            <!-- Success pane -->
+            <div id="collab-pane-success" class="collab-pane" style="display:none;padding:28px;text-align:center;">
+                <div style="font-size:48px;margin-bottom:12px;">🎉</div>
+                <div id="collab-success-title" style="font-size:18px;font-weight:700;color:#e2d9ff;margin-bottom:8px;"></div>
+                <div id="collab-success-body" style="font-size:14px;color:rgba(255,255,255,0.55);line-height:1.6;margin-bottom:20px;"></div>
+                <div id="collab-code-display" style="display:none;">
+                    <div style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);
+                        border-radius:16px;padding:20px 24px;display:inline-block;margin-bottom:20px;">
+                        <div style="font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#a78bfa;margin-bottom:6px;">Share this code</div>
+                        <div id="collab-share-code" style="font-size:32px;font-weight:800;letter-spacing:.3em;color:#e2d9ff;"></div>
+                    </div>
+                    <button class="tg-icon-btn" onclick="copyGroupCode()" style="margin:0 auto;display:flex;">📋 Copy Code</button>
+                </div>
+                <button class="tg-save-btn" onclick="closeCollabModal()" style="margin-top:16px;">Done</button>
+            </div>
+            <!-- Info pane -->
+            <div id="collab-pane-info" class="collab-pane" style="display:none;padding:28px;">
+                <div id="collab-info-content"></div>
+            </div>
+        </div>
+    </div>`;
+
+    // Wire up buttons
+    overlay.querySelector('#collab-handle-save-btn').addEventListener('click', handleSaveHandle);
+    overlay.querySelector('#collab-create-btn').addEventListener('click', handleCreateGroup);
+    overlay.querySelector('#collab-join-btn').addEventListener('click', handleJoinGroup);
+    overlay.querySelector('#collab-join-code-input').addEventListener('input', e => {
+        e.target.value = e.target.value.toUpperCase();
+    });
+    overlay.querySelector('#collab-join-code-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') handleJoinGroup();
+    });
+
+    return overlay;
+}
+
+async function showCollabModalPane(mode) {
+    // Hide all panes
+    document.querySelectorAll('.collab-pane').forEach(p => p.style.display = 'none');
+    const title = document.getElementById('collab-modal-title');
+
+    // If no handle yet, go to handle pane first
+    const handle = await ensureHandle();
+    if (!handle && mode !== 'info') {
+        document.getElementById('collab-pane-handle').style.display = 'block';
+        if (title) title.textContent = '👤 Set Username';
+        document.getElementById('collab-handle-input').focus();
+        // Store intended mode
+        document.getElementById('collab-pane-handle').dataset.nextMode = mode;
+        return;
+    }
+
+    if (mode === 'create') {
+        document.getElementById('collab-pane-create').style.display = 'block';
+        if (title) title.textContent = '👥 Create Group';
+        document.getElementById('collab-group-name-input').focus();
+    } else if (mode === 'join') {
+        document.getElementById('collab-pane-join').style.display = 'block';
+        if (title) title.textContent = '🔗 Join Group';
+        document.getElementById('collab-join-code-input').focus();
+    } else if (mode === 'info') {
+        document.getElementById('collab-pane-info').style.display = 'block';
+        if (title) title.textContent = '👥 Group Info';
+        renderGroupInfoPane();
+    }
+}
+
+function renderGroupInfoPane() {
+    const el = document.getElementById('collab-info-content');
+    if (!el || !currentGroup) return;
+    el.innerHTML = `
+        <div style="margin-bottom:16px;">
+            <div class="tg-field-label">Group Name</div>
+            <div style="font-size:18px;font-weight:700;color:#e2d9ff;margin-top:4px;">${escHtml(currentGroup.name)}</div>
+        </div>
+        <div style="margin-bottom:20px;">
+            <div class="tg-field-label">Your Code</div>
+            <div style="font-size:28px;font-weight:800;letter-spacing:.3em;color:#a78bfa;margin-top:4px;">${currentGroup.code}</div>
+            <button class="tg-icon-btn" onclick="copyGroupCode()" style="margin-top:8px;">📋 Copy Code</button>
+        </div>
+        <div>
+            <div class="tg-field-label">Members (${currentGroup.members.length})</div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
+                ${currentGroup.members.map(m => `
+                    <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 12px;">
+                        <div class="member-avatar tiny ${m.uid === currentGroup.supervisorUid ? 'supervisor' : ''}">${m.handle[0].toUpperCase()}</div>
+                        <span style="font-size:14px;color:#e2d9ff;">@${escHtml(m.handle)}</span>
+                        ${m.uid === currentGroup.supervisorUid ? '<span class="sup-tag">SUPERVISOR</span>' : ''}
+                        ${m.email ? `<span style="font-size:11px;color:rgba(255,255,255,0.3);margin-left:auto;">${escHtml(m.email)}</span>` : ''}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+        ${isSupervisor ? `
+        <div style="margin-top:20px;">
+            <div class="tg-field-label">Supervisor Tip</div>
+            <div style="font-size:13px;color:rgba(255,255,255,0.45);line-height:1.6;margin-top:6px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:10px;padding:12px;">
+                Assign tasks with: <code style="color:#c4b5fd;">fix auth to::jon priority::high date::20may</code><br>
+                Supports: <code style="color:#c4b5fd;">to::</code> <code style="color:#c4b5fd;">priority::</code> <code style="color:#c4b5fd;">date::</code>
+            </div>
+        </div>` : ''}
+    `;
+}
+
+function copyGroupCode() {
+    const code = currentGroup ? currentGroup.code :
+        document.getElementById('collab-share-code')?.textContent;
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => showTaskyToast('📋 Code copied!')).catch(() => {});
+}
+
+// ─── Handle button handlers ───────────────────────────────────────────────
+async function handleSaveHandle() {
+    const input = document.getElementById('collab-handle-input');
+    const errEl = document.getElementById('collab-handle-error');
+    const handle = input.value.trim().toLowerCase();
+
+    errEl.style.display = 'none';
+    if (!/^[a-z0-9]{3,16}$/.test(handle)) {
+        errEl.textContent = 'Username must be 3–16 lowercase letters or numbers.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    const btn = document.getElementById('collab-handle-save-btn');
+    btn.textContent = 'Saving…'; btn.disabled = true;
+
+    // Check uniqueness
+    const existing = await db.collection('users').where('handle', '==', handle).get();
+    if (!existing.empty) {
+        errEl.textContent = 'Username taken. Try another.';
+        errEl.style.display = 'block';
+        btn.textContent = 'Save Username'; btn.disabled = false;
+        return;
+    }
+
+    await saveHandle(handle);
+    btn.textContent = 'Save Username'; btn.disabled = false;
+
+    // Continue to intended mode
+    const pane = document.getElementById('collab-pane-handle');
+    const nextMode = pane.dataset.nextMode || 'create';
+    showCollabModalPane(nextMode);
+}
+
+async function handleCreateGroup() {
+    const input = document.getElementById('collab-group-name-input');
+    const errEl = document.getElementById('collab-create-error');
+    const name  = input.value.trim();
+
+    errEl.style.display = 'none';
+    if (!name) { errEl.textContent = 'Enter a group name.'; errEl.style.display = 'block'; return; }
+
+    const btn = document.getElementById('collab-create-btn');
+    btn.textContent = 'Creating…'; btn.disabled = true;
+
+    try {
+        const code = await createGroup(name);
+        startGroupListener(code);
+        startNotifListener();
+
+        document.querySelectorAll('.collab-pane').forEach(p => p.style.display = 'none');
+        document.getElementById('collab-pane-success').style.display = 'block';
+        document.getElementById('collab-modal-title').textContent = '✅ Group Created';
+        document.getElementById('collab-success-title').textContent = `"${name}" is ready`;
+        document.getElementById('collab-success-body').textContent = 'Share the code below with teammates so they can join.';
+        document.getElementById('collab-code-display').style.display = 'block';
+        document.getElementById('collab-share-code').textContent = code;
+    } catch(e) {
+        errEl.textContent = 'Failed to create group. Try again.';
+        errEl.style.display = 'block';
+    }
+    btn.textContent = 'Create Group'; btn.disabled = false;
+}
+
+async function handleJoinGroup() {
+    const input = document.getElementById('collab-join-code-input');
+    const errEl = document.getElementById('collab-join-error');
+    const code  = input.value.trim().toUpperCase();
+
+    errEl.style.display = 'none';
+    if (code.length < 4) { errEl.textContent = 'Enter a valid group code.'; errEl.style.display = 'block'; return; }
+
+    const btn = document.getElementById('collab-join-btn');
+    btn.textContent = 'Joining…'; btn.disabled = true;
+
+    const result = await joinGroup(code);
+    if (!result.ok) {
+        errEl.textContent = result.err;
+        errEl.style.display = 'block';
+        btn.textContent = 'Join Group'; btn.disabled = false;
+        return;
+    }
+
+    startGroupListener(code);
+    startNotifListener();
+
+    const snap = await db.collection('groups').doc(code).get();
+    const groupName = snap.exists ? snap.data().name : code;
+
+    document.querySelectorAll('.collab-pane').forEach(p => p.style.display = 'none');
+    document.getElementById('collab-pane-success').style.display = 'block';
+    document.getElementById('collab-modal-title').textContent = '✅ Joined!';
+    document.getElementById('collab-success-title').textContent = `Joined "${groupName}"`;
+    document.getElementById('collab-success-body').textContent = `You're now a member. Tasks assigned to you will appear on your board.`;
+    document.getElementById('collab-code-display').style.display = 'none';
+
+    btn.textContent = 'Join Group'; btn.disabled = false;
+}
+
+// ─── Task card: show assignment badge ────────────────────────────────────
+// Monkey-patch createTaskCard to show assignedTo/assignedBy info
+const _origCreateTaskCard = createTaskCard;
+function createTaskCard(task, column) {
+    const card = _origCreateTaskCard(task, column);
+    if (task.assignedTo || task.assignedBy) {
+        const badge = document.createElement('div');
+        badge.className = 'task-assign-badge';
+        if (task.assignedTo) {
+            badge.innerHTML += `<span class="assign-to">→ @${escapeHtml(task.assignedTo)}</span>`;
         }
-
-        function updateThemeButton() {
-            const icon = document.getElementById('theme-icon');
-            const text = document.getElementById('theme-text');
-            if (icon) icon.textContent = isLightMode ? '🌙' : '☀️';
-            if (text) text.textContent = isLightMode ? 'Dark Mode' : 'Light Mode';
+        if (task.assignedBy && task.assignedBy !== currentHandle) {
+            badge.innerHTML += `<span class="assign-from">from @${escapeHtml(task.assignedBy)}</span>`;
         }
+        const meta = card.querySelector('.task-meta');
+        if (meta) meta.appendChild(badge);
+    }
+    return card;
+}
 
-        // ─── Custom background ─────────────────────────────────────────────────────
-        function applyCustomBg() {
-            var img = document.getElementById('custom-bg-img');
-            var container = document.getElementById('custom-bg');
-            if (!img || !container) return;
-            img.src = customBg;
-            container.style.display = 'block';
-            var rm = document.getElementById('bg-remove-inline-btn');
-            if (rm) rm.style.display = 'inline-flex';
-            var st = document.getElementById('bg-status-label');
-            if (st) st.style.display = 'block';
+// ─── Helper (HTML escape for collab modal; tasky.js uses escapeHtml) ──────
+function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Hook into Firebase auth flow ─────────────────────────────────────────
+// We need to augment setupFirebase's onAuthStateChanged callback
+// Rather than override, we add a second listener after the app boots
+function setupCollabAuth() {
+    firebase.auth(app).onAuthStateChanged(async user => {
+        if (user) {
+            await ensureHandle();
+            await loadActiveGroup();
+            startNotifListener();
+        } else {
+            stopGroupListener();
+            stopNotifListener();
+            currentGroup  = null;
+            isSupervisor  = false;
+            currentHandle = null;
+            teamPanelMember = null;
+            teamTasksCache  = {};
+            renderGroupUI();
         }
+    });
+}
 
-        function triggerBgUpload() {
-            document.getElementById('bg-upload-input').click();
-            var dd = document.getElementById('dropdown');
-            if (dd) dd.classList.remove('show');
-        }
+// ─── STATE exposure (tasky.js accesses these globals) ─────────────────────
+// Expose STATE-like object for tgExpandGroup compatibility
+window.STATE = {
+    get tasks() { return tasks; }
+};
 
-        function removeCustomBg() {
-            customBg = null;
-            localStorage.removeItem('customBg');
-            document.getElementById('custom-bg').style.display = 'none';
-            var rm = document.getElementById('bg-remove-inline-btn');
-            if (rm) rm.style.display = 'none';
-            var st = document.getElementById('bg-status-label');
-            if (st) st.style.display = 'none';
-            var dd = document.getElementById('dropdown');
-            if (dd) dd.classList.remove('show');
-        }
+// ─── Boot ─────────────────────────────────────────────────────────────────
+(function bootCollab() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupCollabAuth);
+    } else {
+        setupCollabAuth();
+    }
+})();
 
-        // ─── Background modal ───────────────────────────────────────────────────────
-        function openBgModal() {
-            var overlay = document.getElementById('bg-modal-overlay');
-            if (overlay) {
-                overlay.classList.remove('hidden');
-                overlay.classList.add('visible');
-                var slider = document.getElementById('card-opacity-slider');
-                if (slider) slider.value = cardOpacity;
-                var val = document.getElementById('card-opacity-value');
-                if (val) val.textContent = cardOpacity + '%';
-            }
-            var dd = document.getElementById('dropdown');
-            if (dd) dd.classList.remove('show');
-        }
+// ─── Floating input assignment hint visibility ─────────────────────────────
+function updateAssignHintVisibility() {
+    const hint = document.getElementById('floating-assign-hint');
+    if (!hint) return;
+    hint.style.display = (currentGroup && isSupervisor) ? 'inline' : 'none';
+}
 
-        function closeBgModal() {
-            var overlay = document.getElementById('bg-modal-overlay');
-            if (overlay) {
-                overlay.classList.remove('visible');
-                overlay.classList.add('hidden');
-                setTimeout(function() { overlay.classList.remove('hidden'); }, 270);
-            }
-        }
+// Patch openFloatingInput to also show assignment hint
+const _origOpenFloatingInput = openFloatingInput;
+function openFloatingInput() {
+    _origOpenFloatingInput();
+    updateAssignHintVisibility();
+}
 
-        function bgOverlayClick(e) {
-            if (e.target === document.getElementById('bg-modal-overlay')) closeBgModal();
-        }
+// Also update placeholder
+function updateInputPlaceholder() {
+    const input = document.getElementById('floating-input');
+    if (!input) return;
+    if (currentGroup && isSupervisor) {
+        input.placeholder = 'Add task — or: fix auth to::jon priority::high date::20may';
+    } else {
+        input.placeholder = 'Type to add task or group name…';
+    }
+}
 
-        function setCardOpacity(val) {
-            cardOpacity = Math.max(40, Math.min(100, val));
-            document.body.style.setProperty('--card-opacity', cardOpacity / 100);
-            localStorage.setItem('cardOpacity', cardOpacity);
-            var valEl = document.getElementById('card-opacity-value');
-            if (valEl) valEl.textContent = cardOpacity + '%';
-        }
-
-        function initOpacity() {
-            setCardOpacity(cardOpacity);
-        }
-
-        // ─── CSV export ───────────────────────────────────────────────────────────
-        function exportToCSV() {
-            const rows = [];
-            Object.keys(tasks).forEach(status => {
-                tasks[status].forEach(task => {
-                    rows.push({
-                        Number:    task.number,
-                        Task:      task.text,
-                        Status:    status === 'todo' ? 'To Do' : status === 'working' ? 'Working On' : 'Done',
-                        Priority:  task.priority,
-                        'Due Date': task.dueDate || 'None',
-                        Created:   new Date(task.createdAt).toLocaleDateString()
-                    });
-                });
-            });
-
-            rows.sort((a, b) => a.Number - b.Number);
-            const headers = ['Number', 'Task', 'Status', 'Priority', 'Due Date', 'Created'];
-            const csv = [
-                headers.join(','),
-                ...rows.map(r => headers.map(h => `"${String(r[h]).replace(/"/g, '""')}"`).join(','))
-            ].join('\n');
-
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `tasky_tasks_${new Date().toISOString().split('T')[0]}.csv`;
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            document.getElementById('dropdown').classList.remove('show');
-        }
-
-        // ─── Reset ────────────────────────────────────────────────────────────────
-        async function resetAllData() {
-            if (!await showConfirm('Reset Everything', 'Delete all tasks and reset Tasky? This cannot be undone.')) return;
-            tasks = { todo: [], working: [], done: [] };
-            taskCounter = 0;
-            if (currentUser) {
-                const docRef = getUserDocRef();
-                if (docRef) docRef.delete().catch(() => {});
-            }
-            saveAll();
-            renderAllColumns();
-            updateDailySummary();
-            deselectTask();
-            exitTaskSelector();
-            document.getElementById('dropdown').classList.remove('show');
-            showToast('All data reset', () => {});
-        }
+// Hook into renderGroupUI to update placeholder — we tag it with a post-hook
+// rather than redeclaring (avoids strict-mode duplicate function errors)
+const _afterRenderGroupUI = renderGroupUI;
+window.renderGroupUI = function() {
+    _afterRenderGroupUI.call(this, ...arguments);
+    updateInputPlaceholder();
+    updateAssignHintVisibility();
+};
