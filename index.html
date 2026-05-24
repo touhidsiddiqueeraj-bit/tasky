@@ -648,6 +648,33 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════
+     CUSTOM CONFIRM DIALOG
+     ═══════════════════════════════════════════════ -->
+<div class="tg-overlay hidden" id="confirm-overlay">
+  <div class="tg-modal" id="confirm-modal" style="width:min(380px,92vw);padding:0;">
+    <div style="padding:28px 28px 0;">
+      <div id="confirm-title" style="font-size:17px;font-weight:700;color:var(--text-primary,#fff);margin-bottom:10px;"></div>
+      <div id="confirm-body" style="font-size:14px;color:rgba(255,255,255,0.6);line-height:1.5;"></div>
+    </div>
+    <div style="display:flex;gap:10px;padding:22px 28px 24px;justify-content:flex-end;">
+      <button id="confirm-cancel-btn"
+        style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);
+               color:rgba(255,255,255,0.75);padding:9px 20px;border-radius:10px;
+               cursor:pointer;font-size:14px;font-weight:600;transition:background .2s;"
+        onmouseover="this.style.background='rgba(255,255,255,0.12)'"
+        onmouseout="this.style.background='rgba(255,255,255,0.07)'"
+        onclick="confirmDialogResolve(false)">Cancel</button>
+      <button id="confirm-ok-btn"
+        style="background:#ef4444;border:none;color:#fff;padding:9px 20px;border-radius:10px;
+               cursor:pointer;font-size:14px;font-weight:600;transition:background .2s;"
+        onmouseover="this.style.background='#dc2626'"
+        onmouseout="this.style.background='#ef4444'"
+        onclick="confirmDialogResolve(true)">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
      BACKGROUND SETTINGS MODAL
      ═══════════════════════════════════════════════ -->
 <div class="tg-overlay hidden" id="bg-modal-overlay" onclick="bgOverlayClick(event)">
@@ -1125,20 +1152,20 @@ function tgStartEdit(id) {
   hideTgError();
 }
 
-function tgDeleteGroup(id) {
+async function tgDeleteGroup(id) {
   const groups = tgLoad();
   const group  = groups.find(g => g.id === id);
   if (!group) return;
-  if (!confirm(`Delete group "${group.name}"? This cannot be undone.`)) return;
+  if (!await showConfirm('Delete Group', `Delete "${group.name}"? This cannot be undone.`)) return;
   tgSave(groups.filter(g => g.id !== id));
   renderTgGroupsList();
   showTaskyToast(`Group "${group.name}" deleted`);
 }
 
-function tgDeleteAllGroups() {
+async function tgDeleteAllGroups() {
   const groups = tgLoad();
   if (!groups.length) return;
-  if (!confirm(`Delete all ${groups.length} group${groups.length!==1?'s':''}? This cannot be undone.`)) return;
+  if (!await showConfirm('Delete All Groups', `Delete all ${groups.length} group${groups.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
   tgSave([]);
   renderTgGroupsList();
   showTaskyToast('All groups deleted');
@@ -1362,5 +1389,30 @@ if (document.readyState === 'loading') {
   _boot();
 }
 </script>
+<script>
+/* ============================================================
+   CUSTOM CONFIRM DIALOG
+   ============================================================ */
+let confirmDialogResolve = null;
+
+function showConfirm(title, body, okLabel = 'Delete') {
+  return new Promise(resolve => {
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-body').textContent  = body;
+    document.getElementById('confirm-ok-btn').textContent = okLabel;
+    const overlay = document.getElementById('confirm-overlay');
+    overlay.classList.remove('hidden');
+    overlay.classList.add('visible');
+    confirmDialogResolve = (result) => {
+      overlay.classList.remove('visible');
+      overlay.classList.add('hidden');
+      setTimeout(() => overlay.classList.remove('hidden'), 270);
+      confirmDialogResolve = null;
+      resolve(result);
+    };
+  });
+}
+</script>
+
 </body>
 </html>
