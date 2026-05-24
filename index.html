@@ -387,15 +387,15 @@
 .dropdown-menu {
   max-height: calc(100vh - 60px);
   overflow-y: auto;
-  /* Grow upward by default; flip downward on short screens */
-  top: auto;
-  bottom: 100%;
+  /* Anchor to top-left of the brand button; grow downward but flip if near bottom */
+  top: 100%;
+  bottom: auto;
 }
-/* If the dropdown would overflow the top, flip it downward */
+/* If the dropdown would overflow the bottom, flip it upward */
 @media (max-height: 520px) {
   .dropdown-menu {
-    top: 100%;
-    bottom: auto;
+    top: auto;
+    bottom: 100%;
   }
 }
 </style>
@@ -405,11 +405,6 @@
   <div class="orb orb-1"></div>
   <div class="orb orb-2"></div>
   <div class="orb orb-3"></div>
-</div>
-
-<div class="custom-bg" id="custom-bg" style="display:none;">
-  <img id="custom-bg-img" alt="">
-  <div class="custom-bg-overlay"></div>
 </div>
 
 <!-- ═══════════════════════════════════════════════
@@ -633,40 +628,6 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════
-     BACKGROUND SETTINGS MODAL
-     ═══════════════════════════════════════════════ -->
-<div class="tg-overlay hidden" id="bg-modal-overlay" onclick="bgOverlayClick(event)">
-  <div class="tg-modal" id="bg-modal" style="width:min(440px,95vw);">
-    <div class="tg-header">
-      <div class="tg-header-title">
-        <span>🖼️</span> Background Settings
-      </div>
-      <button class="tg-close-btn" onclick="closeBgModal()" title="Close">✕</button>
-    </div>
-    <div class="tg-body" style="padding:24px 28px;gap:20px;overflow-y:auto;">
-      <div>
-        <div class="tg-field-label">Background Image</div>
-        <div style="display:flex;gap:10px;margin-top:8px;">
-          <button class="tg-save-btn" onclick="triggerBgUpload()" style="flex:1;justify-content:center;">Choose Image</button>
-          <button class="tg-danger-btn" id="bg-remove-inline-btn" onclick="removeCustomBg()" style="display:none;">Remove</button>
-        </div>
-        <div id="bg-status-label" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:8px;display:none;">✓ Background set</div>
-      </div>
-      <div>
-        <div class="tg-field-label">Task Card Opacity</div>
-        <input type="range" id="card-opacity-slider" class="opacity-slider" min="40" max="100" value="100">
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">
-          <span>Less visible</span>
-          <span id="card-opacity-value">100%</span>
-          <span>Fully opaque</span>
-        </div>
-      <button class="tg-save-btn" onclick="closeBgModal()" style="width:100%;justify-content:center;align-self:stretch;margin-top:4px;">Confirm</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════════
      GROUP SUGGESTION DROPDOWN
      ═══════════════════════════════════════════════ -->
 <div class="tg-suggestion-box" id="tg-suggestion-box">
@@ -694,11 +655,6 @@
     <button class="dropdown-item" onclick="toggleTheme()">
       <span id="theme-icon">☀️</span>
       <span id="theme-text">Light Mode</span>
-    </button>
-    <div class="dropdown-divider"></div>
-    <button class="dropdown-item" onclick="openBgModal()">
-      <span>🖼️</span>
-      <span>Background</span>
     </button>
     <button class="dropdown-item" onclick="exportToCSV()">
       <span>📊</span>
@@ -839,8 +795,6 @@
 </button>
 <button class="mobile-mic-btn" id="mobile-mic-btn">🎙️</button>
 
-<input type="file" id="bg-upload-input" accept="image/*" style="display:none;">
-
 <!-- ▼▼▼  FIXED: v10 compat CDN (v11 removed the compat layer) ▼▼▼ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -886,7 +840,6 @@ function dismissOnboarding() {
 
 function showOnboarding() {
   localStorage.removeItem(STORAGE_KEY);
-  localStorage.removeItem('hasOnboarded');
   ['onboarding-desktop','onboarding-mobile'].forEach(id =>
     document.getElementById(id).classList.remove('hidden'));
   initOnboarding();
@@ -1171,12 +1124,12 @@ let tgSuggFocusIdx = -1;
 function tgGetSuggestions(query) {
   if (!query || query.length < 1) return [];
   const q = query.toLowerCase();
-  return tgLoad().filter(g => g.name.toLowerCase().startsWith(q));
+  return tgLoad().filter(g => g.name.toLowerCase().includes(q));
 }
 
 function tgUpdateSuggestionBox(query) {
   tgSuggestions  = tgGetSuggestions(query);
-  tgSuggFocusIdx = -1;
+  tgSuggFocusIdx = tgSuggestions.length > 0 ? 0 : -1;
 
   const box       = document.getElementById('tg-suggestion-box');
   const list      = document.getElementById('tg-suggestion-list');
@@ -1189,7 +1142,7 @@ function tgUpdateSuggestionBox(query) {
   }
 
   list.innerHTML = tgSuggestions.map((g,i) => `
-    <div class="tg-suggestion-item" data-idx="${i}"
+    <div class="tg-suggestion-item ${i===0?'focused':''}" data-idx="${i}"
       onmousedown="tgExpandGroup('${g.id}',event)"
       onmouseover="tgSuggFocus(${i})">
       <div class="tg-suggestion-glyph">⊞</div>
@@ -1232,13 +1185,11 @@ function tgHandleInputKeydown(e) {
 
   if (e.key === 'ArrowDown') {
     e.preventDefault();
-    e.stopPropagation();
     tgSuggFocus(Math.min(tgSuggFocusIdx+1, tgSuggestions.length-1));
     return true;
   }
   if (e.key === 'ArrowUp') {
     e.preventDefault();
-    e.stopPropagation();
     tgSuggFocus(Math.max(tgSuggFocusIdx-1, 0));
     return true;
   }
@@ -1305,8 +1256,7 @@ function patchFloatingInput() {
     tgUpdateSuggestionBox(input.value.trim());
   });
 
-  document.addEventListener('keydown', function(e) {
-    if (e.target !== input) return;
+  input.addEventListener('keydown', e => {
     tgHandleInputKeydown(e);
   }, true);
 
