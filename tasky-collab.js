@@ -202,7 +202,7 @@ function parseNaturalDate(str) {
 // ─── Collab addTask override ──────────────────────────────────────────────
 // Wraps the original addTaskToTodo to handle assignment syntax
 const _origAddTaskToTodo = addTaskToTodo;
-function addTaskToTodo(text) {
+addTaskToTodo = function(text) {
     // Only parse assignment syntax if in a group and is supervisor
     if (currentGroup && isSupervisor && text.includes('to::')) {
         const parsed = parseAssignedTask(text);
@@ -287,7 +287,7 @@ function stopNotifListener() {
 
 // ─── Collab saveAll: writes tasks to group doc too if in a group ──────────
 const _origPushToCloud = pushToCloud;
-function pushToCloud() {
+pushToCloud = function() {
     _origPushToCloud();
     if (currentGroup && currentUser) {
         pushGroupTasks();
@@ -889,7 +889,7 @@ async function handleJoinGroup() {
 // ─── Task card: show assignment badge ────────────────────────────────────
 // Monkey-patch createTaskCard to show assignedTo/assignedBy info
 const _origCreateTaskCard = createTaskCard;
-function createTaskCard(task, column) {
+createTaskCard = function(task, column) {
     const card = _origCreateTaskCard(task, column);
     if (task.assignedTo || task.assignedBy) {
         const badge = document.createElement('div');
