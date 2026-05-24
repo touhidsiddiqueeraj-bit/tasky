@@ -458,11 +458,15 @@ function buildTeamColumn() {
                 <div class="column-header-left">
                     <h2 class="column-title">👥 Team</h2>
                 </div>
-                <span class="task-count" id="team-member-count">0</span>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <button class="assign-quick-btn" id="assign-quick-btn" title="Assign a task to a member">+ Assign</button>
+                    <span class="task-count" id="team-member-count">0</span>
+                </div>
             </div>
             <div class="task-list" id="team-list" style="overflow-y:auto;"></div>
         </div>
     `;
+    wrapper.querySelector('#assign-quick-btn').addEventListener('click', () => openAssignModal(null));
     return wrapper;
 }
 
@@ -503,8 +507,15 @@ async function renderTeamPanel() {
                     <span class="stat-pill done">${doneCount} done</span>
                 </div>
             </div>
-            <button class="member-inspect-btn" title="Inspect member">→</button>
+            <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
+                <button class="member-assign-btn" title="Assign task to @${m.handle}">+ Assign</button>
+                <button class="member-inspect-btn" title="View tasks">View →</button>
+            </div>
         `;
+        card.querySelector('.member-assign-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            openAssignModal(m.handle);
+        });
         card.querySelector('.member-inspect-btn').addEventListener('click', (e) => {
             e.stopPropagation();
             teamPanelMember = m.handle;
@@ -512,6 +523,140 @@ async function renderTeamPanel() {
         });
         list.appendChild(card);
     });
+
+    // Summary table at the bottom
+    renderTeamSummaryTable(list);
+}
+
+function renderTeamSummaryTable(list) {
+    if (!currentGroup || !isSupervisor) return;
+
+    const divider = document.createElement('div');
+    divider.className = 'team-summary-divider';
+    divider.textContent = '📊 Team Summary';
+    list.appendChild(divider);
+
+    // Collect all tasks across all members
+    let totalTodo = 0, totalWorking = 0, totalDone = 0;
+    const assignedTasks = []; // { text, assignedTo, priority, dueDate, col }
+
+    currentGroup.members.forEach(m => {
+        const data = teamTasksCache[m.uid] || { tasks: { todo: [], working: [], done: [] } };
+        const todo    = data.tasks.todo    || [];
+        const working = data.tasks.working || [];
+        const done    = data.tasks.done    || [];
+        totalTodo    += todo.length;
+        totalWorking += working.length;
+        totalDone    += done.length;
+
+        // Collect assigned tasks (tasks with assignedBy = supervisor assigned them)
+        [...todo, ...working].forEach(t => {
+            if (t.assignedBy) assignedTasks.push({ ...t, col: todo.includes(t) ? 'todo' : 'working', member: m.handle });
+        });
+    });
+
+    const total = totalTodo + totalWorking + totalDone;
+
+    // Totals row
+    const totalsCard = document.createElement('div');
+    totalsCard.className = 'summary-totals-card';
+    totalsCard.innerHTML = `
+        <div class="summary-total-item">
+            <span class="summary-total-num todo-color">${totalTodo}</span>
+            <span class="summary-total-label">To Do</span>
+        </div>
+        <div class="summary-total-sep"></div>
+        <div class="summary-total-item">
+            <span class="summary-total-num working-color">${totalWorking}</span>
+            <span class="summary-total-label">In Progress</span>
+        </div>
+        <div class="summary-total-sep"></div>
+        <div class="summary-total-item">
+            <span class="summary-total-num done-color">${totalDone}</span>
+            <span class="summary-total-label">Done</span>
+        </div>
+        <div class="summary-total-sep"></div>
+        <div class="summary-total-item">
+            <span class="summary-total-num">${total}</span>
+            <span class="summary-total-label">Total</span>
+        </div>
+    `;
+    list.appendChild(totalsCard);
+
+    // Per-member table
+    const table = document.createElement('div');
+    table.className = 'team-summary-table';
+
+    // Header
+    table.innerHTML = `
+        <div class="tst-row tst-header">
+            <div class="tst-cell tst-member-col">Member</div>
+            <div class="tst-cell tst-num-col">📝</div>
+            <div class="tst-cell tst-num-col">⚡</div>
+            <div class="tst-cell tst-num-col">✅</div>
+            <div class="tst-cell tst-bar-col">Progress</div>
+        </div>
+    `;
+
+    currentGroup.members.forEach(m => {
+        const data = teamTasksCache[m.uid] || { tasks: { todo: [], working: [], done: [] } };
+        const todo    = (data.tasks.todo    || []).length;
+        const working = (data.tasks.working || []).length;
+        const done    = (data.tasks.done    || []).length;
+        const mtotal  = todo + working + done;
+        const isSup   = m.uid === currentGroup.supervisorUid;
+        const pct     = mtotal ? Math.round(done / mtotal * 100) : 0;
+
+        const row = document.createElement('div');
+        row.className = 'tst-row';
+        row.innerHTML = `
+            <div class="tst-cell tst-member-col">
+                <div class="member-avatar tiny ${isSup ? 'supervisor' : ''}">${m.handle[0].toUpperCase()}</div>
+                <span class="tst-handle">@${escHtml(m.handle)}</span>
+            </div>
+            <div class="tst-cell tst-num-col"><span class="stat-pill todo">${todo}</span></div>
+            <div class="tst-cell tst-num-col"><span class="stat-pill working">${working}</span></div>
+            <div class="tst-cell tst-num-col"><span class="stat-pill done">${done}</span></div>
+            <div class="tst-cell tst-bar-col">
+                <div class="tst-bar-track">
+                    <div class="tst-bar-fill" style="width:${pct}%"></div>
+                </div>
+                <span class="tst-pct">${pct}%</span>
+            </div>
+        `;
+        row.addEventListener('click', () => {
+            teamPanelMember = m.handle;
+            renderTeamPanel();
+        });
+        table.appendChild(row);
+    });
+
+    list.appendChild(table);
+
+    // Active tasks section (assigned & in progress)
+    const activeTasks = assignedTasks.filter(t => t.col === 'working');
+    if (activeTasks.length > 0) {
+        const activeLabel = document.createElement('div');
+        activeLabel.className = 'team-summary-divider';
+        activeLabel.textContent = '⚡ Currently Working On';
+        list.appendChild(activeLabel);
+
+        activeTasks.forEach(t => {
+            const item = document.createElement('div');
+            item.className = `member-task-item priority-${t.priority || 'medium'}`;
+            item.style.marginTop = '4px';
+            const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
+            item.innerHTML = `
+                <span class="member-task-priority">${t.priority === 'high' ? '🔴' : t.priority === 'medium' ? '🟡' : '🟢'}</span>
+                <div class="member-task-body">
+                    <span class="member-task-text">${escHtml(t.text)}</span>
+                    <span class="member-task-assigned">@${escHtml(t.member)}</span>
+                    ${t.dueDate ? `<span class="member-task-date ${isOverdue ? 'overdue' : ''}">📅 ${new Date(t.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>` : ''}
+                </div>
+            `;
+            list.appendChild(item);
+        });
+    }
 }
 
 function renderMemberDetail(list) {
@@ -774,6 +919,116 @@ function buildCollabModal() {
     });
 
     return overlay;
+}
+
+// ─── GUI Assign Task Modal ────────────────────────────────────────────────
+function openAssignModal(preselectedHandle) {
+    let modal = document.getElementById('assign-modal-overlay');
+    if (!modal) {
+        modal = buildAssignModal();
+        document.body.appendChild(modal);
+    }
+
+    // Populate member dropdown
+    const memberSelect = modal.querySelector('#assign-member-select');
+    memberSelect.innerHTML = '<option value="">— Select member —</option>';
+    (currentGroup.members || []).forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.handle;
+        opt.textContent = `@${m.handle}${m.uid === currentGroup.supervisorUid ? ' (Supervisor)' : ''}`;
+        memberSelect.appendChild(opt);
+    });
+    if (preselectedHandle) memberSelect.value = preselectedHandle;
+
+    // Reset fields
+    modal.querySelector('#assign-task-text').value = '';
+    modal.querySelector('#assign-priority-select').value = 'medium';
+    modal.querySelector('#assign-due-date').value = '';
+    modal.querySelector('#assign-error').style.display = 'none';
+    modal.querySelector('#assign-submit-btn').textContent = 'Assign Task';
+    modal.querySelector('#assign-submit-btn').disabled = false;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('visible');
+    modal.querySelector('#assign-task-text').focus();
+}
+
+function closeAssignModal() {
+    const modal = document.getElementById('assign-modal-overlay');
+    if (!modal) return;
+    modal.classList.remove('visible');
+    modal.classList.add('hidden');
+    setTimeout(() => modal.classList.remove('hidden'), 300);
+}
+
+function buildAssignModal() {
+    const overlay = document.createElement('div');
+    overlay.id = 'assign-modal-overlay';
+    overlay.className = 'tg-overlay hidden';
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeAssignModal(); });
+
+    overlay.innerHTML = `
+    <div class="tg-modal" style="width:min(460px,96vw);">
+        <div class="tg-header">
+            <div class="tg-header-title">📋 Assign Task</div>
+            <button class="tg-close-btn" onclick="closeAssignModal()">✕</button>
+        </div>
+        <div class="tg-body" style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+            <div>
+                <div class="tg-field-label">Task description</div>
+                <textarea id="assign-task-text" class="tg-input assign-textarea"
+                    placeholder="Describe the task…" rows="3" maxlength="300"></textarea>
+            </div>
+            <div>
+                <div class="tg-field-label">Assign to</div>
+                <select id="assign-member-select" class="tg-input assign-select"></select>
+            </div>
+            <div style="display:flex;gap:12px;">
+                <div style="flex:1;">
+                    <div class="tg-field-label">Priority</div>
+                    <select id="assign-priority-select" class="tg-input assign-select">
+                        <option value="high">🔴 High</option>
+                        <option value="medium" selected>🟡 Medium</option>
+                        <option value="low">🟢 Low</option>
+                    </select>
+                </div>
+                <div style="flex:1;">
+                    <div class="tg-field-label">Due date (optional)</div>
+                    <input id="assign-due-date" class="tg-input" type="date">
+                </div>
+            </div>
+            <div id="assign-error" style="color:#f87171;font-size:12px;display:none;"></div>
+            <button class="tg-save-btn" id="assign-submit-btn" style="margin-top:4px;">Assign Task</button>
+            <div style="font-size:11px;color:rgba(255,255,255,0.25);text-align:center;margin-top:-8px;">
+                Power users: type <code style="color:#a78bfa;">task to::handle priority::high date::20may</code> in the main input
+            </div>
+        </div>
+    </div>`;
+
+    overlay.querySelector('#assign-submit-btn').addEventListener('click', handleAssignModalSubmit);
+    overlay.querySelector('#assign-task-text').addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAssignModalSubmit(); }
+    });
+    return overlay;
+}
+
+async function handleAssignModalSubmit() {
+    const text     = document.getElementById('assign-task-text').value.trim();
+    const handle   = document.getElementById('assign-member-select').value;
+    const priority = document.getElementById('assign-priority-select').value;
+    const dateVal  = document.getElementById('assign-due-date').value;
+    const errEl    = document.getElementById('assign-error');
+    const btn      = document.getElementById('assign-submit-btn');
+
+    errEl.style.display = 'none';
+    if (!text)   { errEl.textContent = 'Please enter a task description.'; errEl.style.display = 'block'; return; }
+    if (!handle) { errEl.textContent = 'Please select a member.';          errEl.style.display = 'block'; return; }
+
+    btn.textContent = 'Assigning…'; btn.disabled = true;
+
+    await addCollabTask({ text, assignedTo: handle, priority, dueDate: dateVal || null });
+
+    closeAssignModal();
 }
 
 async function showCollabModalPane(mode) {
