@@ -1545,20 +1545,24 @@
     color: #06b6d4;
 }
 
-/* ── Collab badge in top-menu ── */
+/* ── Collab badge — fixed position below the Tasky button ── */
 .collab-badge {
     display: none;
+    position: fixed;
+    bottom: 58px;   /* sits just above the brand button (which is bottom:20px + ~32px height) */
+    left: 70px;
     align-items: center;
     gap: 6px;
-    background: rgba(139,92,246,0.1);
-    border: 1px solid rgba(139,92,246,0.25);
+    background: rgba(139,92,246,0.12);
+    border: 1px solid rgba(139,92,246,0.28);
     border-radius: 20px;
-    padding: 5px 12px;
-    font-size: 12px;
+    padding: 4px 10px;
+    font-size: 11px;
     font-weight: 600;
     color: #a78bfa;
-    cursor: pointer;
-    margin-left: 8px;
+    z-index: 201;
+    white-space: nowrap;
+    cursor: default;
 }
 .collab-badge-dot {
     width: 7px;
