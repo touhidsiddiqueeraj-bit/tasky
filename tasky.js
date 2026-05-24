@@ -1,6 +1,17 @@
 // ─── State ────────────────────────────────────────────────────────────────
         let tasks = JSON.parse(localStorage.getItem('tasks')) || { todo: [], working: [], done: [] };
         let taskCounter = parseInt(localStorage.getItem('taskCounter')) || 0;
+
+        // Returns the lowest positive integer not already used as a task number.
+        // This lets deleted numbers be reused instead of incrementing forever.
+        function getNextNumber() {
+            const used = new Set();
+            ['todo', 'working', 'done'].forEach(col =>
+                (tasks[col] || []).forEach(t => used.add(t.number)));
+            let n = 1;
+            while (used.has(n)) n++;
+            return n;
+        }
         let isLightMode = localStorage.getItem('theme') === 'light';
         let customBg = localStorage.getItem('customBg') || null;
         let cardOpacity = parseInt(localStorage.getItem('cardOpacity')) || 100;
@@ -302,10 +313,11 @@
 
         // ─── Public task API (used by Task Groups expansion in HTML) ───────────────
         function addTask(text, column, priority) {
-            taskCounter++;
+            const nextNum = getNextNumber();
+            taskCounter = Math.max(taskCounter, nextNum);
             const task = {
-                id: Date.now() * 1000 + taskCounter,
-                number: taskCounter,
+                id: Date.now() * 1000 + nextNum,
+                number: nextNum,
                 text: text,
                 priority: priority || 'medium',
                 dueDate: null,
@@ -696,10 +708,11 @@
 
         // ─── CRUD ─────────────────────────────────────────────────────────────────
         function addTaskToTodo(text) {
-            taskCounter++;
+            const nextNum = getNextNumber();
+            taskCounter = Math.max(taskCounter, nextNum);
             const task = {
-                id: Date.now() * 1000 + taskCounter,
-                number: taskCounter,
+                id: Date.now() * 1000 + nextNum,
+                number: nextNum,
                 text: text,
                 priority: 'medium',
                 dueDate: null,
@@ -816,9 +829,9 @@
         }
 
         // ─── Done column ──────────────────────────────────────────────────────────
-        function clearDoneTasks() {
+        async function clearDoneTasks() {
             if (tasks.done.length === 0) return;
-            if (!confirm('Clear all completed tasks?')) return;
+            if (!await showConfirm('Clear Completed', 'Remove all done tasks? You can undo this.', 'Clear All')) return;
             const cleared = [...tasks.done];
             tasks.done = [];
             saveAll();
@@ -1109,6 +1122,7 @@
             var overlay = document.getElementById('bg-modal-overlay');
             if (overlay) {
                 overlay.classList.remove('hidden');
+                overlay.classList.add('visible');
                 var slider = document.getElementById('card-opacity-slider');
                 if (slider) slider.value = cardOpacity;
                 var val = document.getElementById('card-opacity-value');
@@ -1120,7 +1134,11 @@
 
         function closeBgModal() {
             var overlay = document.getElementById('bg-modal-overlay');
-            if (overlay) overlay.classList.add('hidden');
+            if (overlay) {
+                overlay.classList.remove('visible');
+                overlay.classList.add('hidden');
+                setTimeout(function() { overlay.classList.remove('hidden'); }, 270);
+            }
         }
 
         function bgOverlayClick(e) {
@@ -1174,8 +1192,8 @@
         }
 
         // ─── Reset ────────────────────────────────────────────────────────────────
-        function resetAllData() {
-            if (!confirm('Delete all tasks and reset Tasky? This cannot be undone.')) return;
+        async function resetAllData() {
+            if (!await showConfirm('Reset Everything', 'Delete all tasks and reset Tasky? This cannot be undone.')) return;
             tasks = { todo: [], working: [], done: [] };
             taskCounter = 0;
             if (currentUser) {
