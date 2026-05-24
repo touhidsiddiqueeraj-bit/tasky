@@ -13,12 +13,15 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   background: rgba(6,5,10,0.82);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
+}
+.onboarding-overlay.visible {
+  display: flex;
   animation: ob-fade-in 0.4s ease;
 }
 @keyframes ob-fade-in { from{opacity:0} to{opacity:1} }
@@ -867,37 +870,34 @@ function isMobile() { return window.matchMedia('(max-width:700px)').matches; }
 function initOnboarding() {
   // Check both possible keys so old sessions don't re-show onboarding
   if (localStorage.getItem(STORAGE_KEY) || localStorage.getItem('hasOnboarded') === 'true') {
-    // Normalise: write the current key so future checks are consistent
     localStorage.setItem(STORAGE_KEY, '1');
-    ['onboarding-desktop','onboarding-mobile'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'none';
-    });
+    // Already hidden by default — nothing to do
     return;
   }
-  if (isMobile()) {
-    document.getElementById('onboarding-desktop').style.display = 'none';
-    document.getElementById('onboarding-mobile').style.display  = 'flex';
-  } else {
-    document.getElementById('onboarding-desktop').style.display = 'flex';
-    document.getElementById('onboarding-mobile').style.display  = 'none';
-  }
+  // First visit: show the correct overlay
+  const showId = isMobile() ? 'onboarding-mobile' : 'onboarding-desktop';
+  const el = document.getElementById(showId);
+  if (el) el.classList.add('visible');
 }
 
 function dismissOnboarding() {
   localStorage.setItem(STORAGE_KEY,'1');
   ['onboarding-desktop','onboarding-mobile'].forEach(id => {
     const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('visible');
     el.classList.add('hidden');
-    setTimeout(() => el.style.display = 'none', 370);
+    setTimeout(() => el.classList.remove('hidden'), 370);
   });
 }
 
 function showOnboarding() {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem('hasOnboarded');
-  ['onboarding-desktop','onboarding-mobile'].forEach(id =>
-    document.getElementById(id).classList.remove('hidden'));
+  ['onboarding-desktop','onboarding-mobile'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.remove('hidden'); el.classList.remove('visible'); }
+  });
   initOnboarding();
   goToSlide(0);
   const dd = document.getElementById('dropdown');
