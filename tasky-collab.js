@@ -117,6 +117,7 @@ async function loadActiveGroup() {
 
 function startGroupListener(code) {
     stopGroupListener();
+    let firstSnapshot = true;
     groupListener = db.collection('groups').doc(code).onSnapshot(snap => {
         if (!snap.exists) { currentGroup = null; isSupervisor = false; stopTasksListener(); renderGroupUI(); return; }
         currentGroup = { ...snap.data(), code };
@@ -126,14 +127,15 @@ function startGroupListener(code) {
             startTasksListener(code);
         } else {
             stopTasksListener();
+            // On first load (page refresh), push member's current tasks to the
+            // group subcollection so the supervisor sees them immediately.
+            if (firstSnapshot) {
+                firstSnapshot = false;
+                pushGroupTasks();
+            }
         }
+        if (isSupervisor) firstSnapshot = false;
     });
-
-    // For members: also push their own tasks to the group subcollection now
-    // in case they had local tasks before joining (or after a hard refresh)
-    setTimeout(() => {
-        if (currentGroup && currentUser) pushGroupTasks();
-    }, 1000);
 }
 
 // Real-time listener on the tasks subcollection — supervisor only.
@@ -291,7 +293,7 @@ addTaskToTodo = function(text) {
         // Validate assignee is in group
         const member = currentGroup.members.find(m => m.handle === parsed.assignedTo);
         if (!member) {
-            showTaskyToast(`⚠️ No member "@${parsed.assignedTo}" in group`);
+            showTaskyToast(`⚠️ No member "@${parsed.assignedTo}" in this collaboration`);
             return;
         }
         addCollabTask(parsed);
@@ -401,7 +403,7 @@ async function syncGroupTasksToBoard() {
         });
 
         if (changed) {
-            saveAll();
+            saveAll();        // saves locally + calls pushToCloud → pushGroupTasks
             renderAllColumns();
         }
     } catch(_) {}
@@ -869,8 +871,8 @@ function renderCollabDropdownItems() {
 
     if (!currentGroup) {
         // Show Create Group + Join Group
-        const createBtn = makeDropdownItem('👥', 'Create Group', () => openCollabModal('create'));
-        const joinBtn   = makeDropdownItem('🔗', 'Join Group',   () => openCollabModal('join'));
+        const createBtn = makeDropdownItem('👥', 'Create Collaboration', () => openCollabModal('create'));
+        const joinBtn   = makeDropdownItem('🔗', 'Join Collaboration',   () => openCollabModal('join'));
         createBtn.classList.add('collab-dd-item');
         joinBtn.classList.add('collab-dd-item');
         dropdown.insertBefore(joinBtn,   dropdown.firstChild);
@@ -878,7 +880,7 @@ function renderCollabDropdownItems() {
     } else {
         // Show group info + Leave
         const infoBtn  = makeDropdownItem('👥', `${currentGroup.name} (${currentGroup.code})`, () => openCollabModal('info'));
-        const leaveBtn = makeDropdownItem('🚪', 'Leave Group', () => leaveGroup());
+        const leaveBtn = makeDropdownItem('🚪', 'Leave Collaboration', () => leaveGroup());
         infoBtn.style.color = '#a78bfa';
         leaveBtn.style.color = '#ef4444';
         infoBtn.classList.add('collab-dd-item');
@@ -902,7 +904,7 @@ function makeDropdownItem(icon, text, onClick) {
 // ─── Collab Modal ─────────────────────────────────────────────────────────
 function openCollabModal(mode) {
     if (!currentUser) {
-        showTaskyToast('Sign in with Google first to use groups.');
+        showTaskyToast('Sign in with Google first to use Collaborations.');
         return;
     }
     let modal = document.getElementById('collab-modal-overlay');
@@ -932,7 +934,7 @@ function buildCollabModal() {
     overlay.innerHTML = `
     <div class="tg-modal" style="width:min(520px,96vw);">
         <div class="tg-header">
-            <div class="tg-header-title" id="collab-modal-title">👥 Groups</div>
+            <div class="tg-header-title" id="collab-modal-title">👥 Collaborations</div>
             <button class="tg-close-btn" onclick="closeCollabModal()">✕</button>
         </div>
         <div class="tg-body" style="padding:0;">
@@ -948,23 +950,23 @@ function buildCollabModal() {
             </div>
             <!-- Create pane -->
             <div id="collab-pane-create" class="collab-pane" style="display:none;padding:28px;">
-                <p class="collab-pane-desc">Start a new group. You'll be the supervisor and get a shareable 6-character code.</p>
-                <div class="tg-field-label" style="margin-top:16px;">Group Name</div>
+                <p class="collab-pane-desc">Start a new Collaboration. You'll be the supervisor and share a 6-character code with teammates.</p>
+                <div class="tg-field-label" style="margin-top:16px;">Collaboration Name</div>
                 <input class="tg-input" id="collab-group-name-input" type="text" placeholder='e.g. "Dev Team", "Sprint 12"' maxlength="40">
                 <div id="collab-create-error" style="color:#f87171;font-size:12px;margin-top:6px;display:none;"></div>
                 <div style="display:flex;gap:10px;margin-top:16px;">
-                    <button class="tg-save-btn" id="collab-create-btn">Create Group</button>
+                    <button class="tg-save-btn" id="collab-create-btn">Create Collaboration</button>
                 </div>
             </div>
             <!-- Join pane -->
             <div id="collab-pane-join" class="collab-pane" style="display:none;padding:28px;">
-                <p class="collab-pane-desc">Enter the 6-character group code from your supervisor.</p>
-                <div class="tg-field-label" style="margin-top:16px;">Group Code</div>
+                <p class="collab-pane-desc">Enter the 6-character code from your supervisor.</p>
+                <div class="tg-field-label" style="margin-top:16px;">Collaboration Code</div>
                 <input class="tg-input" id="collab-join-code-input" type="text" placeholder="e.g. AB3X7K" maxlength="6"
                     style="text-transform:uppercase;letter-spacing:.2em;font-size:20px;font-weight:700;">
                 <div id="collab-join-error" style="color:#f87171;font-size:12px;margin-top:6px;display:none;"></div>
                 <div style="display:flex;gap:10px;margin-top:16px;">
-                    <button class="tg-save-btn" id="collab-join-btn">Join Group</button>
+                    <button class="tg-save-btn" id="collab-join-btn">Join Collaboration</button>
                 </div>
             </div>
             <!-- Success pane -->
@@ -1131,15 +1133,15 @@ async function showCollabModalPane(mode) {
 
     if (mode === 'create') {
         document.getElementById('collab-pane-create').style.display = 'block';
-        if (title) title.textContent = '👥 Create Group';
+        if (title) title.textContent = '👥 Create Collaboration';
         document.getElementById('collab-group-name-input').focus();
     } else if (mode === 'join') {
         document.getElementById('collab-pane-join').style.display = 'block';
-        if (title) title.textContent = '🔗 Join Group';
+        if (title) title.textContent = '🔗 Join Collaboration';
         document.getElementById('collab-join-code-input').focus();
     } else if (mode === 'info') {
         document.getElementById('collab-pane-info').style.display = 'block';
-        if (title) title.textContent = '👥 Group Info';
+        if (title) title.textContent = '👥 Collaboration Info';
         renderGroupInfoPane();
     }
 }
@@ -1149,7 +1151,7 @@ function renderGroupInfoPane() {
     if (!el || !currentGroup) return;
     el.innerHTML = `
         <div style="margin-bottom:16px;">
-            <div class="tg-field-label">Group Name</div>
+            <div class="tg-field-label">Collaboration Name</div>
             <div style="font-size:18px;font-weight:700;color:#e2d9ff;margin-top:4px;">${escHtml(currentGroup.name)}</div>
         </div>
         <div style="margin-bottom:20px;">
@@ -1228,7 +1230,7 @@ async function handleCreateGroup() {
     const name  = input.value.trim();
 
     errEl.style.display = 'none';
-    if (!name) { errEl.textContent = 'Enter a group name.'; errEl.style.display = 'block'; return; }
+    if (!name) { errEl.textContent = 'Enter a collaboration name.'; errEl.style.display = 'block'; return; }
 
     const btn = document.getElementById('collab-create-btn');
     btn.textContent = 'Creating…'; btn.disabled = true;
@@ -1240,16 +1242,16 @@ async function handleCreateGroup() {
 
         document.querySelectorAll('.collab-pane').forEach(p => p.style.display = 'none');
         document.getElementById('collab-pane-success').style.display = 'block';
-        document.getElementById('collab-modal-title').textContent = '✅ Group Created';
+        document.getElementById('collab-modal-title').textContent = '✅ Collaboration Created';
         document.getElementById('collab-success-title').textContent = `"${name}" is ready`;
         document.getElementById('collab-success-body').textContent = 'Share the code below with teammates so they can join.';
         document.getElementById('collab-code-display').style.display = 'block';
         document.getElementById('collab-share-code').textContent = code;
     } catch(e) {
-        errEl.textContent = 'Failed to create group. Try again.';
+        errEl.textContent = 'Failed to create collaboration. Try again.';
         errEl.style.display = 'block';
     }
-    btn.textContent = 'Create Group'; btn.disabled = false;
+    btn.textContent = 'Create Collaboration'; btn.disabled = false;
 }
 
 async function handleJoinGroup() {
@@ -1258,7 +1260,7 @@ async function handleJoinGroup() {
     const code  = input.value.trim().toUpperCase();
 
     errEl.style.display = 'none';
-    if (code.length < 4) { errEl.textContent = 'Enter a valid group code.'; errEl.style.display = 'block'; return; }
+    if (code.length < 4) { errEl.textContent = 'Enter a valid collaboration code.'; errEl.style.display = 'block'; return; }
 
     const btn = document.getElementById('collab-join-btn');
     btn.textContent = 'Joining…'; btn.disabled = true;
@@ -1267,7 +1269,7 @@ async function handleJoinGroup() {
     if (!result.ok) {
         errEl.textContent = result.err;
         errEl.style.display = 'block';
-        btn.textContent = 'Join Group'; btn.disabled = false;
+        btn.textContent = 'Join Collaboration'; btn.disabled = false;
         return;
     }
 
@@ -1284,7 +1286,7 @@ async function handleJoinGroup() {
     document.getElementById('collab-success-body').textContent = `You're now a member. Tasks assigned to you will appear on your board.`;
     document.getElementById('collab-code-display').style.display = 'none';
 
-    btn.textContent = 'Join Group'; btn.disabled = false;
+    btn.textContent = 'Join Collaboration'; btn.disabled = false;
 }
 
 // ─── Task card: show assignment badge ────────────────────────────────────
@@ -1322,8 +1324,8 @@ function setupCollabAuth() {
             await ensureHandle();
             await loadActiveGroup();
             startNotifListener();
-            // Pick up any tasks assigned while offline
-            setTimeout(syncGroupTasksToBoard, 1500);
+            // Pick up any tasks assigned while offline — currentGroup is set by now
+            await syncGroupTasksToBoard();
         } else {
             stopGroupListener();
             stopNotifListener();
@@ -1363,7 +1365,7 @@ function updateInputPlaceholder() {
     if (currentGroup && isSupervisor) {
         input.placeholder = 'Add task — or: fix auth to::jon priority::high date::20may';
     } else {
-        input.placeholder = 'Type to add task or group name…';
+        input.placeholder = 'Type to add task or template name…';
     }
 }
 
