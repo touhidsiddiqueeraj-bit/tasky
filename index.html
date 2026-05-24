@@ -723,10 +723,13 @@
      TOP MENU
      ═══════════════════════════════════════════════ -->
 <div class="top-menu">
-  <button class="brand-btn" onclick="toggleMenu()">
-    <span>Tasky</span>
-    <span style="font-size:12px;">▼</span>
-  </button>
+  <div style="display:flex;align-items:center;gap:0;">
+    <button class="brand-btn" onclick="toggleMenu()">
+      <span>Tasky</span>
+      <span style="font-size:12px;">▼</span>
+    </button>
+    <!-- collab badge injected here by JS -->
+  </div>
   <div class="dropdown-menu" id="dropdown">
     <button class="dropdown-item" onclick="openTgModal()">
       <span>⊞</span>
@@ -834,11 +837,12 @@
 <!-- Floating input -->
 <div class="floating-input-container" id="floating-container">
   <input type="text" class="floating-input" id="floating-input"
-    placeholder="Type to add task or group name…" maxlength="80">
+    placeholder="Type to add task or group name…" maxlength="120">
   <div class="floating-input-hint">
     <span><kbd>Enter</kbd> to add</span>
     <span><kbd>Esc</kbd> to cancel</span>
     <span id="floating-group-hint" style="display:none;color:#a78bfa;">⊞ group match — <kbd>↑</kbd><kbd>↓</kbd> navigate, <kbd>Enter</kbd> expand</span>
+    <span id="floating-assign-hint" style="display:none;color:#67e8f9;">👥 assign: <code>task text to::handle priority::high date::20may</code></span>
     <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority (select task first)</span>
     <span><kbd>←</kbd><kbd>→</kbd> move (select task first)</span>
     <span><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd> select task</span>
@@ -888,6 +892,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="tasky.js"></script>
+<script src="tasky-collab.js"></script>
 
 <script>
 /* ============================================================
