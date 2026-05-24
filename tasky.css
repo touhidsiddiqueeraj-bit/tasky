@@ -550,18 +550,12 @@
         }
 
         .column::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            z-index: 3;
+            content: none;
         }
 
-        .column-wrapper:nth-child(1) .column::before { background: var(--todo-color); }
-        .column-wrapper:nth-child(2) .column::before { background: var(--working-color); }
-        .column-wrapper:nth-child(3) .column::before { background: var(--done-color); }
+        .column-wrapper:nth-child(1) .column::before { background: none; }
+        .column-wrapper:nth-child(2) .column::before { background: none; }
+        .column-wrapper:nth-child(3) .column::before { background: none; }
 
         .column-header {
             display: flex;
