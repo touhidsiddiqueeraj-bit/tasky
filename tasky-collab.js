@@ -8,6 +8,7 @@ let currentGroup      = null;   // { code, name, supervisorUid, supervisorHandle
 let currentHandle     = null;   // short username like "jon"
 let isSupervisor      = false;
 let groupListener     = null;   // Firestore onSnapshot unsubscribe
+let tasksListener     = null;   // Firestore onSnapshot for tasks subcollection (supervisor)
 let teamPanelMember   = null;   // handle being inspected in team panel
 
 // ─── Handle / Identity ────────────────────────────────────────────────────
@@ -117,17 +118,98 @@ async function loadActiveGroup() {
 function startGroupListener(code) {
     stopGroupListener();
     groupListener = db.collection('groups').doc(code).onSnapshot(snap => {
-        if (!snap.exists) { currentGroup = null; isSupervisor = false; renderGroupUI(); return; }
+        if (!snap.exists) { currentGroup = null; isSupervisor = false; stopTasksListener(); renderGroupUI(); return; }
         currentGroup = { ...snap.data(), code };
         isSupervisor = currentGroup.supervisorUid === currentUser.uid;
         renderGroupUI();
-        // Real-time: reload tasks for supervisor team view
-        if (isSupervisor) renderTeamPanel();
+        if (isSupervisor) {
+            startTasksListener(code);
+        } else {
+            stopTasksListener();
+        }
     });
+
+    // For members: also push their own tasks to the group subcollection now
+    // in case they had local tasks before joining (or after a hard refresh)
+    setTimeout(() => {
+        if (currentGroup && currentUser) pushGroupTasks();
+    }, 1000);
+}
+
+// Real-time listener on the tasks subcollection — supervisor only.
+// Fires whenever ANY member updates their tasks, refreshing the team panel.
+function startTasksListener(code) {
+    if (tasksListener) return; // already listening
+    tasksListener = db.collection('groups').doc(code)
+        .collection('tasks').onSnapshot(snap => {
+            snap.docChanges().forEach(change => {
+                const uid = change.doc.id;
+                if (change.type === 'removed') {
+                    delete teamTasksCache[uid];
+                } else {
+                    const data = change.doc.data();
+                    const member = currentGroup && currentGroup.members.find(m => m.uid === uid);
+                    teamTasksCache[uid] = {
+                        tasks: data.tasks || { todo: [], working: [], done: [] },
+                        handle: data.handle || (member ? member.handle : uid)
+                    };
+                }
+            });
+            // Re-render team panel with fresh data (without a full Firestore fetch)
+            const list = document.getElementById('team-list');
+            if (list && currentGroup && isSupervisor && !teamPanelMember) {
+                // Lightweight re-render using cached data
+                list.innerHTML = '';
+                currentGroup.members.forEach(m => {
+                    const data = teamTasksCache[m.uid] || { tasks: { todo: [], working: [], done: [] } };
+                    const todoCount    = (data.tasks.todo    || []).length;
+                    const workingCount = (data.tasks.working || []).length;
+                    const doneCount    = (data.tasks.done    || []).length;
+                    const isSup = m.uid === currentGroup.supervisorUid;
+                    const card = document.createElement('div');
+                    card.className = 'member-card';
+                    card.innerHTML = `
+                        <div class="member-avatar ${isSup ? 'supervisor' : ''}">${m.handle[0].toUpperCase()}</div>
+                        <div class="member-info">
+                            <div class="member-name">@${m.handle} ${isSup ? '<span class="sup-tag">SUP</span>' : ''}</div>
+                            <div class="member-stats">
+                                <span class="stat-pill todo">${todoCount} todo</span>
+                                <span class="stat-pill working">${workingCount} working</span>
+                                <span class="stat-pill done">${doneCount} done</span>
+                            </div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
+                            <button class="member-assign-btn" title="Assign task to @${m.handle}">+ Assign</button>
+                            <button class="member-inspect-btn" title="View tasks">View →</button>
+                        </div>
+                    `;
+                    card.querySelector('.member-assign-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        openAssignModal(m.handle);
+                    });
+                    card.querySelector('.member-inspect-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        teamPanelMember = m.handle;
+                        renderTeamPanel();
+                    });
+                    list.appendChild(card);
+                });
+                renderTeamSummaryTable(list);
+            } else if (list && teamPanelMember) {
+                // Someone we're inspecting changed — re-render their detail
+                list.innerHTML = '';
+                renderMemberDetail(list);
+            }
+        });
+}
+
+function stopTasksListener() {
+    if (tasksListener) { tasksListener(); tasksListener = null; }
 }
 
 function stopGroupListener() {
     if (groupListener) { groupListener(); groupListener = null; }
+    stopTasksListener();
 }
 
 // ─── Assigned-to task parsing ─────────────────────────────────────────────
@@ -1245,6 +1327,7 @@ function setupCollabAuth() {
         } else {
             stopGroupListener();
             stopNotifListener();
+            stopTasksListener();
             currentGroup  = null;
             isSupervisor  = false;
             currentHandle = null;
