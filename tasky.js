@@ -171,10 +171,26 @@
         }
 
         function signOut() {
-            // Sign out then immediately sign back in anonymously so data is preserved
+            // Cancel any in-flight sync so the Google user's tasks don't get
+            // written to Firestore one last time after state is cleared.
+            if (syncTimeout) { clearTimeout(syncTimeout); syncTimeout = null; }
+
+            // Wipe local board state BEFORE signing out. The auth state change
+            // will trigger syncFromCloud on the new anon account; if tasks are
+            // still in localStorage at that point, pushToCloud writes them into
+            // the anon doc and they bleed back on the next Google login.
+            tasks = { todo: [], working: [], done: [] };
+            taskCounter = 0;
+            localStorage.setItem('tasks',             JSON.stringify(tasks));
+            localStorage.setItem('taskCounter',       '0');
+            localStorage.setItem('tasks_local',       JSON.stringify(tasks));
+            localStorage.setItem('taskCounter_local', '0');
+            renderAllColumns();
+
             firebase.auth(app).signOut().then(() => {
                 firebase.auth(app).signInAnonymously().catch(() => {});
             }).catch(() => {});
+
             const dd = document.getElementById('dropdown');
             if (dd) dd.classList.remove('show');
         }
