@@ -213,6 +213,8 @@
                 if (userInfo)   userInfo.style.display   = 'none';
                 if (syncEl)     syncEl.classList.remove('visible');
             }
+        }
+
         function setSyncStatus(state) {
             const el = document.getElementById('sync-status');
             if (!el) return;
