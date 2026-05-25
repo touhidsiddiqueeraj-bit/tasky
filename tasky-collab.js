@@ -1725,8 +1725,10 @@ async function addComment(taskId, text, taskText) {
     if (ref) {
         const key = `comments_${String(taskId).replace(/[^a-z0-9]/gi,'_')}`;
         await ref.set({ [key]: firebase.firestore.FieldValue.arrayUnion(entry) }, { merge: true });
-        // Re-render if panel open (live listener below handles it too)
+        // Re-render panel if open (live listener also handles it)
         _refreshOpenCommentPanel(taskId);
+        // Refresh inline strip on the card
+        loadCommentEntries(taskId).then(entries => _renderInlineComments(taskId, entries)).catch(() => {});
         // Ping the supervisor if the commenter is a member (not supervisor)
         if (!isSupervisor && currentGroup) {
             _pingCommentNotification(taskId, taskText, text.trim());
@@ -1735,6 +1737,8 @@ async function addComment(taskId, text, taskText) {
         if (!_soloActivity[taskId]) _soloActivity[taskId] = [];
         _soloActivity[taskId].push(entry);
         _refreshOpenCommentPanel(taskId);
+        // Refresh inline strip for solo mode
+        _renderInlineComments(taskId, _soloActivity[taskId]);
     }
 }
 
@@ -1766,6 +1770,7 @@ async function deleteComment(taskId, commentId) {
             _soloActivity[taskId] = _soloActivity[taskId].filter(e => e.id !== commentId);
         }
         _refreshOpenCommentPanel(taskId);
+        _renderInlineComments(taskId, _soloActivity[taskId] || []);
         return;
     }
     try {
@@ -1775,6 +1780,7 @@ async function deleteComment(taskId, commentId) {
         const entries = (snap.data()[key] || []).filter(e => e.id !== commentId);
         await ref.update({ [key]: entries });
         _refreshOpenCommentPanel(taskId);
+        loadCommentEntries(taskId).then(all => _renderInlineComments(taskId, all)).catch(() => {});
     } catch(_) {}
 }
 
@@ -1976,6 +1982,28 @@ function _renderCommentFeed(taskId, entries) {
     feed.scrollTop = feed.scrollHeight;
 }
 
+// ─── Inline comment preview helpers ──────────────────────────────────────
+
+// Render the inline comment strip below a task card.
+// Only shows entries with type === 'comment' (not activity logs).
+function _renderInlineComments(taskId, entries) {
+    const strip = document.getElementById(`inline-comments-${taskId}`);
+    if (!strip) return;
+    const comments = (entries || []).filter(e => e.type === 'comment');
+    if (comments.length === 0) {
+        strip.innerHTML = '';
+        strip.style.display = 'none';
+        return;
+    }
+    strip.style.display = 'block';
+    strip.innerHTML = comments.map(c => `
+        <div class="ic-entry">
+            <span class="ic-author">@${escHtml(c.authorHandle || 'me')}</span>
+            <span class="ic-text">${escHtml(c.text)}</span>
+            <span class="ic-ts">${fmtCommentTs(c.ts)}</span>
+        </div>`).join('');
+}
+
 // ─── Wire comment button into task cards (monkey-patch createTaskCard) ────
 // This runs AFTER tasky-collab.js's own createTaskCard monkey-patch so all
 // patches stack correctly.
@@ -1993,7 +2021,14 @@ createTaskCard = function(task, column) {
         openComments(task.id, task.text, column);
     });
 
-    // Badge: load comment count from all member docs (async, non-blocking)
+    // ── Inline comment strip (always visible below card) ──────────────────
+    const inlineStrip = document.createElement('div');
+    inlineStrip.className = 'ic-strip';
+    inlineStrip.id = `inline-comments-${task.id}`;
+    inlineStrip.style.display = 'none';
+    card.appendChild(inlineStrip);
+
+    // Load comments async; update badge and inline strip together
     if (currentGroup) {
         const key = `comments_${String(task.id).replace(/[^a-z0-9]/gi,'_')}`;
         const memberUids = (currentGroup.members || []).map(m => m.uid);
@@ -2003,16 +2038,25 @@ createTaskCard = function(task, column) {
                   .collection('tasks').doc(uid).get()
             )
         ).then(snaps => {
-            let count = 0;
+            let allEntries = [];
             snaps.forEach(snap => {
                 if (snap.exists && snap.data()[key]) {
-                    count += snap.data()[key].filter(e => e.type === 'comment').length;
+                    allEntries = allEntries.concat(snap.data()[key]);
                 }
             });
+            allEntries.sort((a, b) => a.ts > b.ts ? 1 : -1);
+            const count = allEntries.filter(e => e.type === 'comment').length;
             if (count > 0) {
                 commentBtn.innerHTML = `💬<span class="comment-count">${count}</span>`;
             }
+            _renderInlineComments(task.id, allEntries);
         }).catch(() => {});
+    } else {
+        // Solo mode — use in-memory activity store
+        const soloEntries = _soloActivity[task.id] || [];
+        if (soloEntries.length > 0) {
+            _renderInlineComments(task.id, soloEntries);
+        }
     }
 
     const hoverControls = card.querySelector('.task-hover-controls');
