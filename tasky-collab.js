@@ -40,6 +40,19 @@ async function saveHandle(handle) {
     localStorage.setItem('tasky_handle', handle);
 }
 
+// ─── Plan / Freemium ──────────────────────────────────────────────────────
+// plan field lives on users/{uid} in Firestore: { plan: 'free' | 'pro' }
+// Free tier: max 3 members per collaboration (including supervisor).
+// Pro tier:  unlimited members ($4/mo — billing not yet implemented).
+const FREE_MEMBER_LIMIT = 3;
+
+async function getUserPlan(uid) {
+    try {
+        const snap = await db.collection('users').doc(uid).get();
+        return (snap.exists && snap.data().plan) || 'free';
+    } catch(_) { return 'free'; }
+}
+
 // ─── Group Code Generator ─────────────────────────────────────────────────
 function genGroupCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -51,17 +64,20 @@ function genGroupCode() {
 // ─── Create Group ─────────────────────────────────────────────────────────
 async function createGroup(groupName) {
     if (!currentUser || !currentHandle) return null;
+    const plan = await getUserPlan(currentUser.uid);
     const code = genGroupCode();
     const groupData = {
         name: groupName,
         code,
         supervisorUid: currentUser.uid,
         supervisorHandle: currentHandle,
+        supervisorPlan: plan,          // cached so joinGroup can check without extra read
+        memberLimit: plan === 'pro' ? Infinity : FREE_MEMBER_LIMIT,
         members: [{ uid: currentUser.uid, handle: currentHandle, email: currentUser.email }],
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     await db.collection('groups').doc(code).set(groupData);
-    await db.collection('users').doc(currentUser.uid).set({ activeGroup: code }, { merge: true });
+    await db.collection('users').doc(currentUser.uid).set({ activeGroup: code, plan }, { merge: true });
     saveGroupCodeLocally(code);
     return code;
 }
@@ -75,7 +91,16 @@ async function joinGroup(code) {
 
     const data = snap.data();
     const already = data.members.some(m => m.uid === currentUser.uid);
+
     if (!already) {
+        // Enforce member limit — check supervisor's plan (stored on group doc)
+        const limit = (data.supervisorPlan === 'pro') ? Infinity : FREE_MEMBER_LIMIT;
+        if (data.members.length >= limit) {
+            return {
+                ok: false,
+                err: `This collaboration is on the free plan (max ${FREE_MEMBER_LIMIT} members). The supervisor needs to upgrade to Pro to add more.`
+            };
+        }
         await ref.update({
             members: firebase.firestore.FieldValue.arrayUnion({
                 uid: currentUser.uid,
@@ -1412,7 +1437,7 @@ function renderGroupInfoPane() {
             <button class="tg-icon-btn" onclick="copyGroupCode()" style="margin-top:8px;">📋 Copy Code</button>
         </div>
         <div>
-            <div class="tg-field-label">Members (${currentGroup.members.length})</div>
+            <div class="tg-field-label">Members (${currentGroup.members.length}${currentGroup.supervisorPlan !== 'pro' ? ' / ' + FREE_MEMBER_LIMIT + ' free' : ''})</div>
             <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
                 ${currentGroup.members.map(m => `
                     <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.04);border-radius:10px;padding:10px 12px;">
