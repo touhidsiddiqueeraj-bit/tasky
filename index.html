@@ -2,8 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tasky - Simple Task Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Tasky — Keyboard-first Task Tracker</title>
+<meta name="description" content="A fast, keyboard-first three-column task board. Zero friction, offline-first, cloud sync optional.">
+<meta name="theme-color" content="#0a0a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tasky">
+<meta name="mobile-web-app-capable" content="yes">
+<meta property="og:title" content="Tasky — Keyboard-first Task Tracker">
+<meta property="og:description" content="Three columns. Zero friction. Keyboard shortcuts, voice input, drag-and-drop, cloud sync.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a0a1a'/><rect x='4' y='5' width='24' height='6' rx='3' fill='%238B5CF6'/><rect x='4' y='13' width='17' height='6' rx='3' fill='%23F59E0B'/><rect x='4' y='21' width='12' height='6' rx='3' fill='%2310B981'/><path d='M7 8 L9.2 10.2 L12.5 6.5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
 <link rel="stylesheet" href="tasky.css">
 <style>
 /* ============================================================
@@ -409,199 +419,6 @@
   -webkit-appearance: none;
 }
 
-/* ── Dropdown coach marks ── */
-.dd-coach-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 190;              /* just below dropdown (z-index 200) */
-  background: rgba(6,5,10,0.55);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-  display: none;
-  cursor: pointer;
-  animation: dd-coach-in .25s ease;
-}
-.dd-coach-backdrop.visible { display: block; }
-@keyframes dd-coach-in { from{opacity:0} to{opacity:1} }
-
-.dd-coach-container {
-  position: fixed;
-  inset: 0;
-  z-index: 210;              /* above dropdown */
-  pointer-events: none;
-  display: none;
-}
-.dd-coach-container.visible { display: block; }
-
-/* Individual callout */
-.dd-callout {
-  position: absolute;
-  pointer-events: all;
-  background: linear-gradient(145deg, #1c1830, #13101f);
-  border: 1px solid rgba(139,92,246,0.4);
-  border-radius: 14px;
-  padding: 13px 16px 13px 14px;
-  width: 224px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(139,92,246,0.1);
-  animation: dd-callout-pop .28s cubic-bezier(.34,1.56,.64,1);
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-@keyframes dd-callout-pop {
-  from { opacity:0; transform:scale(.88) translateX(-6px); }
-  to   { opacity:1; transform:scale(1)   translateX(0); }
-}
-body.light-mode .dd-callout {
-  background: linear-gradient(145deg,#fff,#f5f3ff);
-  border-color: rgba(109,40,217,0.35);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-}
-
-/* Arrow pointing left toward the dropdown */
-.dd-callout::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  top: 18px;
-  width: 0; height: 0;
-  border-top: 7px solid transparent;
-  border-bottom: 7px solid transparent;
-  border-right: 8px solid rgba(139,92,246,0.45);
-}
-.dd-callout::after {
-  content: '';
-  position: absolute;
-  left: -6px;
-  top: 19px;
-  width: 0; height: 0;
-  border-top: 6px solid transparent;
-  border-bottom: 6px solid transparent;
-  border-right: 7px solid #1c1830;
-}
-body.light-mode .dd-callout::after { border-right-color: #fff; }
-
-.dd-callout-icon {
-  font-size: 22px;
-  line-height: 1;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-.dd-callout-body {}
-.dd-callout-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #e2d9ff;
-  margin-bottom: 4px;
-  line-height: 1.2;
-}
-body.light-mode .dd-callout-title { color: #3b1d8a; }
-.dd-callout-desc {
-  font-size: 12px;
-  color: rgba(255,255,255,0.52);
-  line-height: 1.55;
-}
-body.light-mode .dd-callout-desc { color: rgba(0,0,0,0.5); }
-.dd-callout-desc strong { color: #a78bfa; font-weight: 600; }
-body.light-mode .dd-callout-desc strong { color: #7c3aed; }
-
-/* Coach nav buttons (Next / Skip / Got it) */
-.dd-coach-nav {
-  position: fixed;
-  bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 215;
-  pointer-events: all;
-  display: none;
-  gap: 10px;
-  align-items: center;
-  animation: dd-callout-pop .3s .15s both;
-}
-.dd-coach-nav.visible { display: flex; }
-.dd-coach-skip {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15);
-  color: rgba(255,255,255,0.55);
-  border-radius: 22px;
-  padding: 11px 22px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background .2s;
-}
-body.light-mode .dd-coach-skip { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.15); color: rgba(0,0,0,0.45); }
-.dd-coach-skip:hover { background: rgba(255,255,255,0.14); }
-.dd-coach-next {
-  background: linear-gradient(135deg,#8B5CF6,#6d28d9);
-  color: #fff;
-  border: none;
-  border-radius: 22px;
-  padding: 11px 28px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  letter-spacing: .04em;
-  box-shadow: 0 4px 20px rgba(139,92,246,0.45);
-  white-space: nowrap;
-  transition: filter .15s;
-}
-.dd-coach-next:hover { filter: brightness(1.1); }
-.dd-coach-step-counter {
-  font-size: 11px;
-  color: rgba(255,255,255,0.35);
-  white-space: nowrap;
-}
-body.light-mode .dd-coach-step-counter { color: rgba(0,0,0,0.35); }
-/* Dismiss button kept for compat */
-.dd-coach-dismiss {
-  position: fixed;
-  bottom: 28px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 215;
-  pointer-events: all;
-  background: linear-gradient(135deg,#8B5CF6,#6d28d9);
-  color: #fff;
-  border: none;
-  border-radius: 22px;
-  padding: 11px 28px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  letter-spacing: .04em;
-  box-shadow: 0 4px 20px rgba(139,92,246,0.45);
-  animation: dd-callout-pop .3s .15s both;
-  white-space: nowrap;
-  display: none;
-}
-.dd-coach-dismiss:hover { filter: brightness(1.1); transform: translateX(-50%) translateY(-1px); }
-
-/* On mobile, callouts flip to point upward from items */
-@media (max-width: 768px) {
-  .dd-callout {
-    width: 200px;
-  }
-  .dd-callout::before {
-    left: auto; right: auto;
-    top: -8px; left: 20px;
-    border-left: 7px solid transparent;
-    border-right: 7px solid transparent;
-    border-top: none;
-    border-bottom: 8px solid rgba(139,92,246,0.45);
-  }
-  .dd-callout::after {
-    left: auto; right: auto;
-    top: -6px; left: 21px;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-top: none;
-    border-bottom: 7px solid #1c1830;
-  }
-  body.light-mode .dd-callout::after { border-bottom-color: #fff; }
-}
-
 /* ── Dropdown: prevent clipping when logged in (extra items make it tall) ── */
 .dropdown-menu {
   max-height: calc(100vh - 60px);
@@ -646,7 +463,9 @@ body.light-mode .dd-coach-step-counter { color: rgba(0,0,0,0.35); }
 <div class="onboarding-overlay ob-desktop" id="onboarding-desktop">
   <div class="ob-desktop-card">
     <div class="ob-d-hero">
-      <div class="ob-d-logo">Tasky</div>
+      <div class="ob-d-logo">
+        <svg width="16" height="16" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:6px;"><rect x="1" y="2" width="20" height="5" rx="2.5" fill="rgba(255,255,255,0.7)"/><rect x="1" y="8.5" width="14" height="5" rx="2.5" fill="rgba(255,255,255,0.5)"/><rect x="1" y="15" width="10" height="5" rx="2.5" fill="rgba(255,255,255,0.35)"/></svg>Tasky
+      </div>
       <div class="ob-d-headline">Your keyboard-first<br>task tracker</div>
       <div class="ob-d-tagline">Three columns. Zero friction. Here's all you need to know.</div>
     </div>
@@ -948,16 +767,7 @@ body.light-mode .dd-coach-step-counter { color: rgba(0,0,0,0.35); }
   <div id="tg-suggestion-list"></div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     DROPDOWN COACH MARKS (first-open onboarding)
-     ═══════════════════════════════════════════════ -->
-<div id="dd-coach-backdrop" class="dd-coach-backdrop" aria-hidden="true"></div>
-<div id="dd-coach-container" class="dd-coach-container" aria-live="polite"></div>
-<div id="dd-coach-nav" class="dd-coach-nav">
-  <button class="dd-coach-skip" id="dd-coach-skip-btn" onclick="event.stopPropagation();dismissDdCoach()">Skip</button>
-  <span class="dd-coach-step-counter" id="dd-coach-step-counter"></span>
-  <button class="dd-coach-next" id="dd-coach-next-btn" onclick="event.stopPropagation();ddCoachNext()">Next →</button>
-</div>
+
 
 <!-- Toast container -->
 <div class="toast-container" id="toast-container"></div>
@@ -967,8 +777,30 @@ body.light-mode .dd-coach-step-counter { color: rgba(0,0,0,0.35); }
      ═══════════════════════════════════════════════ -->
 <div class="top-menu">
   <button class="brand-btn" onclick="toggleMenu()">
+    <svg class="tasky-logo" width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- Three stacked task rows representing the kanban columns -->
+      <rect x="1" y="2" width="20" height="5" rx="2.5" fill="url(#lg-todo)" opacity="0.95"/>
+      <rect x="1" y="8.5" width="14" height="5" rx="2.5" fill="url(#lg-working)" opacity="0.95"/>
+      <rect x="1" y="15" width="10" height="5" rx="2.5" fill="url(#lg-done)" opacity="0.95"/>
+      <!-- Checkmark on first row -->
+      <path d="M4.5 4.5 L6.2 6.1 L8.8 3.2" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      <defs>
+        <linearGradient id="lg-todo" x1="1" y1="2" x2="21" y2="7" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#8B5CF6"/>
+          <stop offset="100%" stop-color="#6d28d9"/>
+        </linearGradient>
+        <linearGradient id="lg-working" x1="1" y1="8.5" x2="15" y2="13.5" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#F59E0B"/>
+          <stop offset="100%" stop-color="#d97706"/>
+        </linearGradient>
+        <linearGradient id="lg-done" x1="1" y1="15" x2="11" y2="20" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#10B981"/>
+          <stop offset="100%" stop-color="#059669"/>
+        </linearGradient>
+      </defs>
+    </svg>
     <span>Tasky</span>
-    <span style="font-size:12px;">▼</span>
+    <span class="brand-chevron">▼</span>
   </button>
   <div class="dropdown-menu" id="dropdown">
     <button class="dropdown-item" onclick="openTgModal()">
@@ -1624,196 +1456,6 @@ function showTaskyToast(msg) {
   setTimeout(() => t.remove(), 3500);
 }
 
-/* ============================================================
-   DROPDOWN COACH MARKS
-   ============================================================ */
-const DD_COACH_KEY = 'tasky_dd_coach_seen_v1';
-
-// Config: which menu items to explain
-// selector: CSS selector inside #dropdown, icon, title, desc
-const DD_COACH_STEPS = [
-  {
-    selector: 'button[onclick="openTgModal()"]',
-    icon: '⊞',
-    title: 'Task Groups',
-    desc: 'Save a <strong>named set of tasks</strong> (e.g. "Sprint Setup"). Type the group name when adding a task and all its tasks expand onto the board instantly.'
-  },
-  {
-    selector: '.collab-dd-item[data-coach="create"], button.collab-dd-item:first-of-type',
-    fallbackText: 'Create Collaboration',
-    icon: '👥',
-    title: 'Collaboration',
-    desc: 'Start a <strong>team workspace</strong>. Share the 6-char code with teammates. As supervisor you get a live Team column to assign tasks with priority & due dates.'
-  },
-  {
-    selector: 'button[onclick="signInWithGoogle()"]',
-    icon: '☁️',
-    title: 'Cloud Sync',
-    desc: 'Sign in with Google to <strong>sync across devices</strong>. Your tasks survive cache clears — anonymous auto-save keeps data even without signing in.'
-  }
-];
-
-// Step-by-step coach: shows one callout at a time, user clicks Next or Skip
-let _ddCoachStep = 0;
-let _ddCoachActive = false;
-let _ddCoachVisibleSteps = []; // indices into DD_COACH_STEPS that have live targets
-
-// Prevent tasky.js global click handler from closing dropdown during coach
-(function _guardDropdownDuringCoach() {
-  // We intercept document clicks at capture phase to stop propagation
-  // when coach is active and the click is on coach UI elements
-  document.addEventListener('click', function(e) {
-    if (!_ddCoachActive) return;
-    const nav = document.getElementById('dd-coach-nav');
-    const container = document.getElementById('dd-coach-container');
-    // If click is on nav or callout container, stop it reaching tasky.js listener
-    if ((nav && nav.contains(e.target)) || (container && container.contains(e.target))) {
-      e.stopImmediatePropagation();
-    }
-  }, true); // capture phase runs before tasky.js bubble-phase listener
-})();
-
-function showDdCoach() {
-  if (localStorage.getItem(DD_COACH_KEY)) return;
-  setTimeout(_initDdCoach, 80);
-}
-
-function _resolveDdCoachTargets() {
-  const dropdown = document.getElementById('dropdown');
-  if (!dropdown) return [];
-  const resolved = [];
-  DD_COACH_STEPS.forEach((step, i) => {
-    let target = dropdown.querySelector(step.selector);
-    if (!target && step.fallbackText) {
-      for (const el of dropdown.querySelectorAll('button, .dropdown-item')) {
-        if (el.textContent.includes(step.fallbackText)) { target = el; break; }
-      }
-    }
-    if (!target) {
-      const all = dropdown.querySelectorAll('button.dropdown-item.collab-dd-item');
-      if (all.length > 0) target = all[0];
-    }
-    if (target) {
-      const rect = target.getBoundingClientRect();
-      if (rect.width > 0) resolved.push({ step, target, rect });
-    }
-  });
-  return resolved;
-}
-
-function _initDdCoach() {
-  const dropdown = document.getElementById('dropdown');
-  if (!dropdown || !dropdown.classList.contains('show')) return;
-  _ddCoachVisibleSteps = _resolveDdCoachTargets();
-  if (_ddCoachVisibleSteps.length === 0) return;
-  _ddCoachStep = 0;
-  _ddCoachActive = true;
-  // Elevate dropdown once for the entire session
-  dropdown.style.zIndex = '205';
-  _showDdCoachStep();
-}
-
-function _showDdCoachStep() {
-  const backdrop  = document.getElementById('dd-coach-backdrop');
-  const container = document.getElementById('dd-coach-container');
-  const nav       = document.getElementById('dd-coach-nav');
-  const nextBtn   = document.getElementById('dd-coach-next-btn');
-  const counter   = document.getElementById('dd-coach-step-counter');
-  if (!backdrop || !container || !nav) return;
-
-  const dropdown = document.getElementById('dropdown');
-  if (!dropdown) { dismissDdCoach(); return; }
-
-  // Re-resolve so positions are fresh
-  _ddCoachVisibleSteps = _resolveDdCoachTargets();
-  if (_ddCoachVisibleSteps.length === 0) { dismissDdCoach(); return; }
-  if (_ddCoachStep >= _ddCoachVisibleSteps.length) { dismissDdCoach(); return; }
-
-  const { step, target } = _ddCoachVisibleSteps[_ddCoachStep];
-  const rect = target.getBoundingClientRect();
-  const isMobile = window.innerWidth <= 768;
-  const total = _ddCoachVisibleSteps.length;
-  const isLast = _ddCoachStep === total - 1;
-
-  container.innerHTML = '';
-
-  const callout = document.createElement('div');
-  callout.className = 'dd-callout';
-  callout.innerHTML = `
-    <div class="dd-callout-icon">${step.icon}</div>
-    <div class="dd-callout-body">
-      <div class="dd-callout-title">${step.title}</div>
-      <div class="dd-callout-desc">${step.desc}</div>
-    </div>`;
-
-  if (!isMobile) {
-    const dropRect = dropdown.getBoundingClientRect();
-    const top = rect.top + (rect.height / 2) - 22;
-    const left = dropRect.right + 14;
-    callout.style.top  = Math.max(8, Math.min(top, window.innerHeight - 160)) + 'px';
-    callout.style.left = left + 'px';
-  } else {
-    const top  = rect.bottom + 8;
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - 216));
-    callout.style.top  = top + 'px';
-    callout.style.left = left + 'px';
-    const arrowLeft = (rect.left + rect.width / 2) - left - 6;
-    callout.style.setProperty('--arrow-left', arrowLeft + 'px');
-  }
-
-  container.appendChild(callout);
-
-  counter.textContent = `${_ddCoachStep + 1} of ${total}`;
-  nextBtn.textContent = isLast ? 'Got it ✓' : 'Next →';
-
-  backdrop.classList.add('visible');
-  container.classList.add('visible');
-  nav.classList.add('visible');
-}
-
-function ddCoachNext() {
-  _ddCoachStep++;
-  if (_ddCoachStep >= _ddCoachVisibleSteps.length) {
-    dismissDdCoach();
-  } else {
-    _showDdCoachStep();
-  }
-}
-
-function dismissDdCoach() {
-  localStorage.setItem(DD_COACH_KEY, '1');
-  _ddCoachActive = false;
-  const backdrop  = document.getElementById('dd-coach-backdrop');
-  const container = document.getElementById('dd-coach-container');
-  const nav       = document.getElementById('dd-coach-nav');
-  const dropdown  = document.getElementById('dropdown');
-  if (backdrop)  backdrop.classList.remove('visible');
-  if (container) container.classList.remove('visible');
-  if (nav)       nav.classList.remove('visible');
-  if (dropdown)  dropdown.style.zIndex = '';
-}
-
-// Patch toggleMenu to trigger coach on first open
-function _patchToggleMenuForCoach() {
-  // Wait for toggleMenu to be defined by tasky.js
-  const _waitForToggleMenu = setInterval(() => {
-    if (typeof toggleMenu === 'function') {
-      clearInterval(_waitForToggleMenu);
-      const _origToggleMenu = toggleMenu;
-      window.toggleMenu = function() {
-        _origToggleMenu();
-        const dd = document.getElementById('dropdown');
-        if (dd && dd.classList.contains('show')) {
-          showDdCoach();
-        } else {
-          // Dropdown just closed — hide coach if open
-          dismissDdCoach();
-        }
-      };
-    }
-  }, 50);
-}
-
 /* ─── Notification safe shim ─────────────────────────────────────────── */
 // Fallback used if tasky-collab.js hasn't run yet (should not happen in practice)
 async function _safeEnableNotifs() {
@@ -1831,7 +1473,7 @@ async function _safeEnableNotifs() {
     try {
       new Notification('Tasky Notifications', {
         body: "You'll be notified for new tasks and due dates.",
-        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">✅</text></svg>'
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%230a0a1a"/><rect x="4" y="5" width="24" height="6" rx="3" fill="%238B5CF6"/><rect x="4" y="13" width="17" height="6" rx="3" fill="%23F59E0B"/><rect x="4" y="21" width="12" height="6" rx="3" fill="%2310B981"/><path d="M7 8 L9.2 10.2 L12.5 6.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>'
       });
     } catch(_) {}
   } else if (perm === 'denied') {
@@ -1846,7 +1488,6 @@ async function _safeEnableNotifs() {
 function _boot() {
   initOnboarding();
   patchFloatingInput();
-  _patchToggleMenuForCoach();
 }
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', _boot);
