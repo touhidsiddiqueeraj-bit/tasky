@@ -83,34 +83,25 @@
         db = firebase.firestore(app);
         try {
             db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED, merge: true });
-            db.enablePersistence({ synchronizeTabs: false }).catch(async err => {
-                if (err.code === 'failed-precondition') {
-                    const GUARD_KEY = '_fs_reloaded_at';
-                    const last = parseInt(localStorage.getItem(GUARD_KEY) || '0', 10);
-                    const now  = Date.now();
-                    if (now - last > 15000) {
-                        localStorage.setItem(GUARD_KEY, String(now));
-                        // Enumerate ALL IndexedDB databases and delete any Firestore ones
-                        try {
-                            const dbs = await indexedDB.databases();
-                            const fsDbs = dbs.filter(d => d.name && d.name.includes('firestore'));
-                            await Promise.all(fsDbs.map(d => new Promise(res => {
-                                const req = indexedDB.deleteDatabase(d.name);
-                                req.onsuccess = res;
-                                req.onerror   = res;
-                            })));
-                            if (fsDbs.length > 0) location.reload();
-                        } catch(_) {
-                            // indexedDB.databases() not supported (Firefox) — try known name
-                            const dbName = `firestore/[DEFAULT]/tasky-95785/(default)/main`;
-                            const del = indexedDB.deleteDatabase(dbName);
-                            del.onsuccess = () => location.reload();
-                            del.onerror   = () => {};
-                        }
-                    }
-                }
-            });
         } catch(_) {}
+
+        // Delete any stale Firestore IndexedDB left by an older/newer SDK version.
+        // This runs once and is a no-op if the databases are already clean.
+        // We do NOT call enablePersistence() — it's deprecated and the stale IDB
+        // causes failed-precondition errors. Cloud sync works fine without it.
+        (async () => {
+            try {
+                const dbs = await indexedDB.databases();
+                await Promise.all(
+                    dbs
+                        .filter(d => d.name && d.name.toLowerCase().includes('firestore'))
+                        .map(d => new Promise(res => {
+                            const r = indexedDB.deleteDatabase(d.name);
+                            r.onsuccess = r.onerror = res;
+                        }))
+                );
+            } catch(_) {}
+        })();
 
         renderAllColumns();
         updateDailySummary();
