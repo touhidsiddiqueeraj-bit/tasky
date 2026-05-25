@@ -1062,6 +1062,7 @@
                 deleteTaskWithUndo(column, task.id);
             });
 
+
             if (column === 'todo') {
                 card.querySelector('.move-btn').addEventListener('click', (e) => {
                     e.stopPropagation();
