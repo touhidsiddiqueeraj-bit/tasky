@@ -1651,3 +1651,541 @@ renderGroupUI = function() {
     updateInputPlaceholder();
     updateAssignHintVisibility();
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CLOUD COMMENTS & ACTIVITY FEED
+//  Firestore path: groups/{code}/comments/{taskId}
+//  Document shape: { taskId, taskText, entries: [ { id, text, ts, type,
+//    authorHandle, authorUid } ] }
+//
+//  type = 'comment'  → user-written note
+//  type = 'activity' → auto-logged event (move, priority, assign)
+//
+//  Comments are only available when the user is in a collab group.
+//  Solo users still get activity logged locally to a lightweight in-memory
+//  store (no localStorage) so the panel renders, but won't persist.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── In-memory fallback for solo (non-collab) activity ──────────────────
+const _soloActivity = {};   // { [taskId]: [ entry, … ] }
+
+// ─── Firestore ref helper ────────────────────────────────────────────────
+function commentsDocRef(taskId) {
+    if (!currentGroup || !db) return null;
+    return db.collection('groups').doc(currentGroup.code)
+             .collection('comments').doc(String(taskId));
+}
+
+// ─── Log an activity event (called by move/priority/assign hooks) ────────
+async function logActivity(taskId, msg) {
+    const entry = {
+        id: Date.now() + Math.random(),
+        text: msg,
+        ts: new Date().toISOString(),
+        type: 'activity',
+        authorHandle: currentHandle || 'system',
+        authorUid: currentUser ? currentUser.uid : null
+    };
+
+    const ref = commentsDocRef(taskId);
+    if (ref) {
+        try {
+            await ref.set({
+                taskId: String(taskId),
+                entries: firebase.firestore.FieldValue.arrayUnion(entry)
+            }, { merge: true });
+        } catch(_) {}
+    } else {
+        // Solo fallback
+        if (!_soloActivity[taskId]) _soloActivity[taskId] = [];
+        _soloActivity[taskId].push(entry);
+    }
+}
+
+// ─── Add a user comment ──────────────────────────────────────────────────
+async function addComment(taskId, text, taskText) {
+    if (!text.trim()) return;
+    const entry = {
+        id: Date.now() + Math.random(),
+        text: text.trim(),
+        ts: new Date().toISOString(),
+        type: 'comment',
+        authorHandle: currentHandle || 'me',
+        authorUid: currentUser ? currentUser.uid : null
+    };
+
+    const ref = commentsDocRef(taskId);
+    if (ref) {
+        await ref.set({
+            taskId: String(taskId),
+            taskText: taskText || '',
+            entries: firebase.firestore.FieldValue.arrayUnion(entry)
+        }, { merge: true });
+
+        // Ping the supervisor if the commenter is a member (not supervisor)
+        if (!isSupervisor && currentGroup) {
+            _pingCommentNotification(taskId, taskText, text.trim());
+        }
+    } else {
+        if (!_soloActivity[taskId]) _soloActivity[taskId] = [];
+        _soloActivity[taskId].push(entry);
+        // Re-render feed if panel is open
+        _refreshOpenCommentPanel(taskId);
+    }
+}
+
+// ─── Ping supervisor when a member comments ──────────────────────────────
+async function _pingCommentNotification(taskId, taskText, commentText) {
+    if (!currentGroup || !currentUser) return;
+    const supMember = currentGroup.members.find(m => m.uid === currentGroup.supervisorUid);
+    if (!supMember || supMember.uid === currentUser.uid) return;
+    try {
+        await db.collection('notifications').add({
+            toUid:       supMember.uid,
+            fromHandle:  currentHandle,
+            type:        'comment',
+            groupCode:   currentGroup.code,
+            taskId:      String(taskId),
+            taskText:    taskText || '',
+            commentText: commentText,
+            createdAt:   firebase.firestore.FieldValue.serverTimestamp(),
+            read:        false
+        });
+    } catch(_) {}
+}
+
+// ─── Delete a comment (own comment only) ────────────────────────────────
+async function deleteComment(taskId, commentId) {
+    const ref = commentsDocRef(taskId);
+    if (!ref) {
+        // Solo fallback
+        if (_soloActivity[taskId]) {
+            _soloActivity[taskId] = _soloActivity[taskId].filter(e => e.id !== commentId);
+        }
+        _refreshOpenCommentPanel(taskId);
+        return;
+    }
+    try {
+        const snap = await ref.get();
+        if (!snap.exists) return;
+        const entries = (snap.data().entries || []).filter(e => e.id !== commentId);
+        await ref.update({ entries });
+        _refreshOpenCommentPanel(taskId);
+    } catch(_) {}
+}
+
+// ─── Load entries for a task ─────────────────────────────────────────────
+async function loadCommentEntries(taskId) {
+    const ref = commentsDocRef(taskId);
+    if (ref) {
+        try {
+            const snap = await ref.get();
+            if (snap.exists) return snap.data().entries || [];
+        } catch(_) {}
+        return [];
+    }
+    return _soloActivity[taskId] || [];
+}
+
+// ─── Live listener for the open comments panel ───────────────────────────
+let _commentsUnsubscribe = null;
+let _commentsOpenTaskId  = null;
+
+function _stopCommentsListener() {
+    if (_commentsUnsubscribe) { _commentsUnsubscribe(); _commentsUnsubscribe = null; }
+    _commentsOpenTaskId = null;
+}
+
+function _startCommentsListener(taskId) {
+    _stopCommentsListener();
+    _commentsOpenTaskId = taskId;
+    const ref = commentsDocRef(taskId);
+    if (!ref) return;
+    _commentsUnsubscribe = ref.onSnapshot(snap => {
+        if (!snap.exists) return;
+        _renderCommentFeed(taskId, snap.data().entries || []);
+    });
+}
+
+function _refreshOpenCommentPanel(taskId) {
+    if (_commentsOpenTaskId !== taskId) return;
+    if (_soloActivity[taskId]) _renderCommentFeed(taskId, _soloActivity[taskId]);
+}
+
+// ─── Format timestamp ────────────────────────────────────────────────────
+function fmtCommentTs(iso) {
+    const d = new Date(iso);
+    const diff = (Date.now() - d) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// ─── Open comments panel ─────────────────────────────────────────────────
+async function openComments(taskId, taskText, column) {
+    // Remove existing panel if open
+    const existing = document.getElementById('task-comments-panel');
+    if (existing) {
+        _stopCommentsListener();
+        existing.remove();
+        // If same task re-clicked, just close
+        if (_commentsOpenTaskId === taskId) { _commentsOpenTaskId = null; return; }
+    }
+
+    const inCollab = !!(currentGroup);
+    const panel = document.createElement('div');
+    panel.id = 'task-comments-panel';
+    panel.className = 'tcp-overlay';
+
+    const modeLabel = inCollab
+        ? `<span class="tcp-collab-badge">☁️ Synced</span>`
+        : `<span class="tcp-collab-badge tcp-solo">📵 Join a collab to sync</span>`;
+
+    panel.innerHTML = `
+        <div class="tcp-panel" id="tcp-inner">
+          <div class="tcp-header">
+            <div class="tcp-title">
+              <span class="tcp-icon">💬</span>
+              <div>
+                <div class="tcp-task-name">${escHtml(taskText)}</div>
+                <div style="margin-top:3px;">${modeLabel}</div>
+              </div>
+            </div>
+            <button class="tcp-close" id="tcp-close-btn">✕</button>
+          </div>
+          <div class="tcp-feed" id="tcp-feed">
+            <div class="tcp-loading">Loading…</div>
+          </div>
+          <div class="tcp-input-row">
+            <input class="tcp-input" id="tcp-input"
+              placeholder="${inCollab ? 'Comment… visible to all members (Enter to send)' : 'Note… (Join a collab to sync)'}"
+              maxlength="400">
+            <button class="tcp-send" id="tcp-send">Send</button>
+          </div>
+        </div>`;
+
+    document.body.appendChild(panel);
+
+    // Wire close
+    document.getElementById('tcp-close-btn').addEventListener('click', () => {
+        _stopCommentsListener();
+        panel.remove();
+    });
+    panel.addEventListener('click', e => {
+        if (e.target === panel) { _stopCommentsListener(); panel.remove(); }
+    });
+
+    // Wire send
+    const input = document.getElementById('tcp-input');
+    const sendBtn = document.getElementById('tcp-send');
+    async function sendComment() {
+        const text = input.value.trim();
+        if (!text) return;
+        sendBtn.disabled = true;
+        input.value = '';
+        try {
+            await addComment(taskId, text, taskText);
+            if (!currentGroup) {
+                // Solo: re-render manually since no live listener
+                const entries = await loadCommentEntries(taskId);
+                _renderCommentFeed(taskId, entries);
+            }
+        } catch(e) {
+            showTaskyToast('⚠️ Failed to save comment');
+        }
+        sendBtn.disabled = false;
+        input.focus();
+    }
+    input.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Enter') { e.preventDefault(); sendComment(); }
+        if (e.key === 'Escape') { e.preventDefault(); _stopCommentsListener(); panel.remove(); }
+    });
+    sendBtn.addEventListener('click', sendComment);
+
+    // Load initial entries then start live listener
+    const entries = await loadCommentEntries(taskId);
+    _renderCommentFeed(taskId, entries);
+    _startCommentsListener(taskId);   // no-op for solo
+    setTimeout(() => input.focus(), 60);
+}
+
+// ─── Render the feed ─────────────────────────────────────────────────────
+function _renderCommentFeed(taskId, entries) {
+    const feed = document.getElementById('tcp-feed');
+    if (!feed) return;
+    feed.innerHTML = '';
+
+    if (!entries || entries.length === 0) {
+        feed.innerHTML = '<div class="tcp-empty">No comments yet — add the first one!</div>';
+        return;
+    }
+
+    // Sort by ts ascending
+    const sorted = [...entries].sort((a, b) => a.ts > b.ts ? 1 : -1);
+
+    sorted.forEach(entry => {
+        const isOwn = entry.authorUid && currentUser && entry.authorUid === currentUser.uid;
+        const item = document.createElement('div');
+        item.className = `tcp-entry tcp-${entry.type}${isOwn ? ' tcp-own' : ''}`;
+
+        const authorLine = entry.type === 'comment'
+            ? `<span class="tcp-author">@${escHtml(entry.authorHandle || 'unknown')}</span>`
+            : '';
+
+        item.innerHTML = `
+          <div class="tcp-entry-body">
+            <div class="tcp-entry-inner">
+              ${authorLine}
+              <span class="tcp-entry-text">${entry.type === 'activity' ? '⚡ ' : ''}${escHtml(entry.text)}</span>
+            </div>
+            ${isOwn && entry.type === 'comment' ? `<button class="tcp-del-btn" data-cid="${entry.id}" title="Delete">✕</button>` : ''}
+          </div>
+          <span class="tcp-ts">${fmtCommentTs(entry.ts)}</span>`;
+
+        feed.appendChild(item);
+    });
+
+    // Wire delete buttons
+    feed.querySelectorAll('.tcp-del-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            await deleteComment(taskId, parseFloat(btn.dataset.cid));
+        });
+    });
+
+    feed.scrollTop = feed.scrollHeight;
+}
+
+// ─── Wire comment button into task cards (monkey-patch createTaskCard) ────
+// This runs AFTER tasky-collab.js's own createTaskCard monkey-patch so all
+// patches stack correctly.
+const _commentPatchOrigCreateTaskCard = createTaskCard;
+createTaskCard = function(task, column) {
+    const card = _commentPatchOrigCreateTaskCard(task, column);
+
+    // Count cloud comments from cache if available; just show a 💬 icon
+    const commentBtn = document.createElement('button');
+    commentBtn.className = 'comment-btn';
+    commentBtn.title = 'Comments & Activity';
+    commentBtn.innerHTML = '💬';
+    commentBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        openComments(task.id, task.text, column);
+    });
+
+    // Badge: update count from Firestore once if in collab
+    if (currentGroup) {
+        const ref = commentsDocRef(task.id);
+        if (ref) {
+            ref.get().then(snap => {
+                if (snap.exists) {
+                    const count = (snap.data().entries || []).filter(e => e.type === 'comment').length;
+                    if (count > 0) {
+                        commentBtn.innerHTML = `💬<span class="comment-count">${count}</span>`;
+                    }
+                }
+            }).catch(() => {});
+        }
+    }
+
+    const hoverControls = card.querySelector('.task-hover-controls');
+    if (hoverControls) {
+        // Insert before delete button
+        const delBtn = hoverControls.querySelector('.delete-btn');
+        hoverControls.insertBefore(commentBtn, delBtn || null);
+    }
+    return card;
+};
+
+// ─── Log activity via collab hooks ───────────────────────────────────────
+// Wrap moveTask, setPriority, addTaskToTodo to log activity to Firestore.
+// These wrap AFTER tasky-collab.js has already wrapped them, so we stack on top.
+
+const _actLogOrigMoveTask = moveTask;
+moveTask = function(fromCol, toCol, taskId) {
+    _actLogOrigMoveTask(fromCol, toCol, taskId);
+    const names = { todo: 'To Do', working: 'Working On', done: 'Done' };
+    logActivity(taskId, `Moved: ${names[fromCol]} → ${names[toCol]}`);
+};
+
+const _actLogOrigSetPriority = setPriority;
+setPriority = function(col, taskId, priority) {
+    _actLogOrigSetPriority(col, taskId, priority);
+    logActivity(taskId, `Priority → ${priority.charAt(0).toUpperCase() + priority.slice(1)}`);
+};
+
+// ─── NEW-TASK PUSH NOTIFICATION for members ───────────────────────────────
+// When a task arrives (via startNotifListener), show browser push if granted.
+// We hook into the existing startNotifListener by wrapping it.
+
+const _origStartNotifListener = startNotifListener;
+startNotifListener = function() {
+    _origStartNotifListener();
+};
+
+// Extend the notification snapshot to also fire browser push
+// We do this by wrapping the global notifListener startup.
+// Instead of patching the Firestore snapshot (too deep), we intercept
+// showTaskyToast — when a collab assignment comes in, we also fire push.
+const _origShowTaskyToast = showTaskyToast;
+window.showTaskyToast = function(msg) {
+    _origShowTaskyToast(msg);
+    // If it looks like a new task assignment notification, fire push
+    if (msg.startsWith('📋 New task from @') && 'Notification' in window && Notification.permission === 'granted') {
+        try {
+            new Notification('Tasky — New Task Assigned', {
+                body: msg.replace('📋 ', ''),
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">✅</text></svg>',
+                requireInteraction: true
+            });
+        } catch(_) {}
+    }
+    // Comment ping for supervisor
+    if (msg.includes('commented on') && 'Notification' in window && Notification.permission === 'granted') {
+        try {
+            new Notification('Tasky — New Comment', {
+                body: msg,
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">💬</text></svg>',
+            });
+        } catch(_) {}
+    }
+};
+
+// Extend startNotifListener's Firestore snapshot to also handle comment pings
+// and fire a browser notification. We replace the core logic by patching
+// stopNotifListener and re-opening with our extended version.
+const _origStopNotifListener = stopNotifListener;
+
+function _startExtendedNotifListener() {
+    if (!currentUser) return;
+    _origStopNotifListener();
+
+    window.notifListener = db.collection('notifications')
+        .where('toUid', '==', currentUser.uid)
+        .where('read', '==', false)
+        .onSnapshot(snap => {
+            snap.docChanges().forEach(change => {
+                if (change.type !== 'added') return;
+                const n = change.doc.data();
+                change.doc.ref.update({ read: true }).catch(() => {});
+
+                if (n.type === 'comment') {
+                    // Supervisor receives comment ping
+                    const msg = `💬 @${n.fromHandle} commented on "${n.taskText}": ${n.commentText}`;
+                    showTaskyToast(msg);
+                    // Browser push
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        try {
+                            new Notification('Tasky — New Comment', {
+                                body: `@${n.fromHandle}: "${n.commentText}" on task "${n.taskText}"`,
+                                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">💬</text></svg>',
+                            });
+                        } catch(_) {}
+                    }
+                    // Open the comment panel if it's already open for this task
+                    if (_commentsOpenTaskId === n.taskId) {
+                        loadCommentEntries(n.taskId).then(e => _renderCommentFeed(n.taskId, e));
+                    }
+                } else {
+                    // Default: task assignment ping
+                    const msg = `📋 New task from @${n.fromHandle}: "${n.taskText}"`;
+                    showTaskyToast(msg);
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        try {
+                            new Notification('Tasky — New Task Assigned', {
+                                body: `From @${n.fromHandle}: "${n.taskText}"${n.priority ? ' · ' + n.priority : ''}${n.dueDate ? ' · due ' + n.dueDate : ''}`,
+                                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">✅</text></svg>',
+                                requireInteraction: true
+                            });
+                        } catch(_) {}
+                    }
+                    syncGroupTasksToBoard();
+                }
+            });
+        });
+}
+
+// Override startNotifListener globally to use our extended version
+window.startNotifListener = _startExtendedNotifListener;
+
+// ─── Due date notifications ───────────────────────────────────────────────
+// Checks every 60s. Fires once per task per day.
+// Permission is requested the first time a due date is set.
+
+const _NOTIF_SEEN_KEY = 'tasky_notif_seen_v1';
+function _notifSeenLoad() {
+    try { return JSON.parse(localStorage.getItem(_NOTIF_SEEN_KEY)) || {}; } catch { return {}; }
+}
+
+function checkDueDateNotifications() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const seen = _notifSeenLoad();
+    const now  = new Date();
+
+    ['todo', 'working'].forEach(col => {
+        (tasks[col] || []).forEach(task => {
+            if (!task.dueDate) return;
+            const due       = new Date(task.dueDate);
+            const isOverdue = due < now;
+            const isDueToday = due.toDateString() === now.toDateString();
+            if (!isOverdue && !isDueToday) return;
+
+            const seenKey = `${task.id}_${due.toDateString()}`;
+            if (seen[seenKey]) return;
+
+            const label = isOverdue ? '⚠️ Overdue' : '📅 Due Today';
+            const body  = `#${task.number} ${task.text}${isOverdue ? ' · was due ' + due.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}`;
+            try {
+                const n = new Notification(`Tasky: ${label}`, {
+                    body,
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%23dc2626"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">📅</text></svg>',
+                    tag: seenKey
+                });
+                n.onclick = () => { window.focus(); n.close(); };
+            } catch(_) {}
+
+            seen[seenKey] = true;
+        });
+    });
+    localStorage.setItem(_NOTIF_SEEN_KEY, JSON.stringify(seen));
+}
+
+async function requestNotifPermission() {
+    if (!('Notification' in window)) return false;
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission === 'denied') return false;
+    const r = await Notification.requestPermission();
+    return r === 'granted';
+}
+
+// Ask on first due-date set
+const _actLogOrigSetDueDate = setDueDate;
+window.setDueDate = function(col, taskId, date) {
+    _actLogOrigSetDueDate(col, taskId, date);
+    if (date) {
+        requestNotifPermission().then(ok => {
+            if (ok) {
+                showTaskyToast('🔔 Due-date reminders enabled');
+                checkDueDateNotifications();
+            }
+        });
+    }
+};
+
+// Enable manually from dropdown
+window.enableDueDateNotifications = async function() {
+    const ok = await requestNotifPermission();
+    if (ok) {
+        showTaskyToast('🔔 Notifications enabled! Reminders for due tasks and new assignments.');
+        checkDueDateNotifications();
+    } else {
+        showTaskyToast('⚠️ Permission denied — check your browser notification settings.');
+    }
+};
+
+if ('Notification' in window && Notification.permission === 'granted') {
+    checkDueDateNotifications();
+}
+setInterval(checkDueDateNotifications, 60_000);
