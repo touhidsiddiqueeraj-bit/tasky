@@ -81,33 +81,34 @@
             appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
         });
         db = firebase.firestore(app);
-        // Modern persistent cache setup — avoids the deprecated enableIndexedDbPersistence()
-        // and the double-settings warning. Falls back silently if IndexedDB is unavailable.
         try {
-            db.settings({
-                cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
-                merge: true
-            });
-            db.enablePersistence({ synchronizeTabs: false }).catch(err => {
+            db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED, merge: true });
+            db.enablePersistence({ synchronizeTabs: false }).catch(async err => {
                 if (err.code === 'failed-precondition') {
-                    // Stale IndexedDB from old SDK version — delete and reload once
                     const GUARD_KEY = '_fs_reloaded_at';
                     const last = parseInt(localStorage.getItem(GUARD_KEY) || '0', 10);
                     const now  = Date.now();
                     if (now - last > 15000) {
-                        const dbName = `firestore/[DEFAULT]/tasky-95785/(default)/main`;
-                        const check  = indexedDB.open(dbName);
-                        check.onsuccess = (e) => {
-                            e.target.result.close();
-                            localStorage.setItem(GUARD_KEY, String(now));
+                        localStorage.setItem(GUARD_KEY, String(now));
+                        // Enumerate ALL IndexedDB databases and delete any Firestore ones
+                        try {
+                            const dbs = await indexedDB.databases();
+                            const fsDbs = dbs.filter(d => d.name && d.name.includes('firestore'));
+                            await Promise.all(fsDbs.map(d => new Promise(res => {
+                                const req = indexedDB.deleteDatabase(d.name);
+                                req.onsuccess = res;
+                                req.onerror   = res;
+                            })));
+                            if (fsDbs.length > 0) location.reload();
+                        } catch(_) {
+                            // indexedDB.databases() not supported (Firefox) — try known name
+                            const dbName = `firestore/[DEFAULT]/tasky-95785/(default)/main`;
                             const del = indexedDB.deleteDatabase(dbName);
                             del.onsuccess = () => location.reload();
                             del.onerror   = () => {};
-                        };
-                        check.onerror = () => {};
+                        }
                     }
                 }
-                // unimplemented (Safari private) or guard active: memory-only, that's fine
             });
         } catch(_) {}
 
