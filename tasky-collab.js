@@ -16,24 +16,16 @@ async function ensureHandle() {
     if (!currentUser) return null;
     if (currentHandle) return currentHandle;
 
-    // Use REST to bypass the broken IndexedDB/memory cache
-    try {
-        const token = await currentUser.getIdToken(true);
-        const projectId = 'tasky-95785';
-        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${currentUser.uid}`;
-        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (res.ok) {
-            const doc = await res.json();
-            const handle = doc.fields?.handle?.stringValue || null;
-            if (handle) { currentHandle = handle; return currentHandle; }
-        }
-    } catch(_) {}
+    // Check localStorage first (written on saveHandle)
+    const localHandle = localStorage.getItem('tasky_handle');
+    if (localHandle) { currentHandle = localHandle; return currentHandle; }
 
-    // Fallback to SDK
+    // Fall back to Firestore SDK
     try {
         const snap = await db.collection('users').doc(currentUser.uid).get();
         if (snap.exists && snap.data().handle) {
             currentHandle = snap.data().handle;
+            localStorage.setItem('tasky_handle', currentHandle);
             return currentHandle;
         }
     } catch(_) {}
@@ -45,6 +37,7 @@ async function saveHandle(handle) {
     if (!currentUser) return;
     await db.collection('users').doc(currentUser.uid).set({ handle, email: currentUser.email }, { merge: true });
     currentHandle = handle;
+    localStorage.setItem('tasky_handle', handle);
 }
 
 // ─── Group Code Generator ─────────────────────────────────────────────────
@@ -69,6 +62,7 @@ async function createGroup(groupName) {
     };
     await db.collection('groups').doc(code).set(groupData);
     await db.collection('users').doc(currentUser.uid).set({ activeGroup: code }, { merge: true });
+    saveGroupCodeLocally(code);
     return code;
 }
 
@@ -91,6 +85,7 @@ async function joinGroup(code) {
         });
     }
     await db.collection('users').doc(currentUser.uid).set({ activeGroup: code.toUpperCase() }, { merge: true });
+    saveGroupCodeLocally(code.toUpperCase());
     return { ok: true };
 }
 
@@ -113,6 +108,7 @@ async function leaveGroup() {
         }
     }
     await db.collection('users').doc(currentUser.uid).update({ activeGroup: firebase.firestore.FieldValue.delete() });
+    saveGroupCodeLocally(null);
     stopGroupListener();
     currentGroup = null;
     isSupervisor = false;
@@ -120,38 +116,46 @@ async function leaveGroup() {
     renderGroupUI();
 }
 
-// ─── Load & Listen to Group — purely cloud-driven ────────────────────────
-// Uses a direct Firestore REST call to read users/{uid} so the SDK's broken
-// IndexedDB/memory cache is completely bypassed. This is the only reliable
-// way to get fresh data when Firestore persistence is disabled (memory-only).
+// ─── Load & Listen to Group ───────────────────────────────────────────────
+// Strategy: localStorage as write-through cache for the group code.
+// On boot: read instantly from localStorage (survives F5, blocked network, broken SDK cache).
+// Then verify/refresh from Firestore in the background.
+// On join/create/leave: always write to both localStorage AND Firestore.
+
+const LS_GROUP_KEY = 'tasky_active_group';
+
+function saveGroupCodeLocally(code) {
+    if (code) localStorage.setItem(LS_GROUP_KEY, code);
+    else       localStorage.removeItem(LS_GROUP_KEY);
+}
+
 async function loadActiveGroup() {
     if (!currentUser) return;
 
-    const code = await getActiveGroupFromServer();
-    if (!code) { currentGroup = null; renderGroupUI(); return; }
-    startGroupListener(code);
-}
+    // 1. Start immediately from localStorage (instant, zero network dependency)
+    const localCode = localStorage.getItem(LS_GROUP_KEY);
+    if (localCode) {
+        startGroupListener(localCode);
+    }
 
-async function getActiveGroupFromServer() {
+    // 2. Verify from Firestore in background — corrects if user left on another device
     try {
-        // Get a fresh ID token — always reflects current auth state
-        const token = await currentUser.getIdToken(/* forceRefresh= */ true);
-        const projectId = 'tasky-95785';
-        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${currentUser.uid}`;
-        const res = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) return null;
-        const doc = await res.json();
-        // Firestore REST returns fields as { fieldName: { stringValue: '...' } }
-        return doc.fields?.activeGroup?.stringValue || null;
-    } catch(e) {
-        console.warn('[collab] getActiveGroupFromServer failed:', e.message);
-        // Fallback to SDK (may return stale/empty but better than nothing)
-        try {
-            const snap = await db.collection('users').doc(currentUser.uid).get();
-            return snap.exists ? (snap.data().activeGroup || null) : null;
-        } catch(_) { return null; }
+        const snap = await db.collection('users').doc(currentUser.uid).get();
+        const serverCode = snap.exists ? (snap.data().activeGroup || null) : null;
+
+        if (serverCode !== localCode) {
+            // Server is authoritative — update local cache and restart listener
+            saveGroupCodeLocally(serverCode);
+            stopGroupListener();
+            if (serverCode) {
+                startGroupListener(serverCode);
+            } else {
+                currentGroup = null;
+                renderGroupUI();
+            }
+        }
+    } catch(_) {
+        // Network blocked or SDK error — localStorage value is our best source, already started
     }
 }
 
@@ -1386,9 +1390,11 @@ function setupCollabAuth() {
             stopGroupListener();
             stopNotifListener();
             stopTasksListener();
+            saveGroupCodeLocally(null);
             currentGroup    = null;
             isSupervisor    = false;
             currentHandle   = null;
+            localStorage.removeItem('tasky_handle');
             teamPanelMember = null;
             teamTasksCache  = {};
             if (_groupSyncTimer) { clearTimeout(_groupSyncTimer); _groupSyncTimer = null; }
