@@ -2433,3 +2433,23 @@ body.light-mode .ic-text { color: rgba(0,0,0,0.55); }
   white-space: nowrap;
 }
 body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
+
+        /* ─── Touch drag-and-drop ──────────────────────────────────────────────── */
+        /* Destination column glows when a touch drag is in progress */
+        .task-list.drop-zone-active {
+            border-radius: 12px;
+            outline: 2px dashed rgba(139,92,246,0.25);
+            outline-offset: -4px;
+            transition: outline-color 0.15s, background 0.15s;
+        }
+        .task-list.drop-zone-hover {
+            outline-color: rgba(139,92,246,0.7);
+            background: rgba(139,92,246,0.06);
+        }
+        body.light-mode .task-list.drop-zone-active {
+            outline-color: rgba(109,40,217,0.2);
+        }
+        body.light-mode .task-list.drop-zone-hover {
+            outline-color: rgba(109,40,217,0.5);
+            background: rgba(109,40,217,0.04);
+        }
