@@ -389,6 +389,26 @@
 }
 </style>
 <style>
+/* ── Assign modal: group selection ── */
+.assign-group-option {
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.assign-group-option.selected {
+  background: rgba(139,92,246,0.15) !important;
+  border-color: rgba(139,92,246,0.45) !important;
+}
+.assign-group-option.selected > div:last-child { color: #a78bfa !important; }
+.assign-textarea {
+  resize: vertical;
+  min-height: 72px;
+  font-family: inherit;
+}
+.assign-select {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 /* ── Dropdown: prevent clipping when logged in (extra items make it tall) ── */
 .dropdown-menu {
   max-height: calc(100vh - 60px);
