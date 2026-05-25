@@ -121,6 +121,27 @@
 
         // ─── Firebase Auth ─────────────────────────────────────────────────────────
         function setupFirebase() {
+            // Handle the redirect result FIRST — this resolves the sign-in that
+            // happened after signInWithRedirect returned from the Google OAuth page.
+            // Must run before onAuthStateChanged so the user object is already
+            // linked/upgraded by the time our state handler fires.
+            firebase.auth(app).getRedirectResult().then(result => {
+                if (result && result.user) {
+                    // Redirect completed — push local tasks to link any offline changes
+                    pushToCloud();
+                    showToast('☁️ Signed in & synced', () => {});
+                }
+            }).catch(err => {
+                // auth/credential-already-in-use: anon had data, Google account exists elsewhere.
+                // Fall back to a plain redirect (data on the Google account will be used on sync).
+                if (err.code === 'auth/credential-already-in-use' || err.code === 'auth/email-already-in-use') {
+                    const provider = new firebase.auth.GoogleAuthProvider();
+                    firebase.auth(app).signInWithRedirect(provider).catch(() => {});
+                } else if (err.code !== 'auth/no-auth-event' && err.code !== 'auth/null-user') {
+                    console.warn('Redirect result error:', err.code);
+                }
+            });
+
             firebase.auth(app).onAuthStateChanged(user => {
                 const prevUid = currentUser ? currentUser.uid : null;
                 currentUser = user;
@@ -146,26 +167,23 @@
             const dd = document.getElementById('dropdown');
             if (dd) dd.classList.remove('show');
 
-            // If currently anonymous, link the anon account to Google (preserves data)
+            // Use redirect flow — popups are blocked in Android WebView (Capacitor).
+            // On web browsers this is also reliable (no popup-blocker issues).
+            // getRedirectResult() at the top of setupFirebase() handles the return.
             if (currentUser && currentUser.isAnonymous) {
-                currentUser.linkWithPopup(provider)
-                    .then(result => {
-                        // Linked successfully — push local tasks to the new permanent account
-                        pushToCloud();
-                        showToast('☁️ Signed in & data linked', () => {});
-                    })
-                    .catch(err => {
-                        // Already has a Google account — fall back to normal sign in
-                        // (this replaces the anon session but syncFromCloud will handle merging)
-                        if (err.code === 'auth/credential-already-in-use' || err.code === 'auth/email-already-in-use') {
-                            firebase.auth(app).signInWithPopup(provider).catch(e => console.error('Sign-in error:', e));
-                        } else {
-                            console.error('Link error:', err);
-                        }
-                    });
+                // Link the anonymous account so locally-created tasks survive sign-in
+                currentUser.linkWithRedirect(provider).catch(err => {
+                    // If linking fails (account already exists), just do a plain redirect.
+                    // syncFromCloud will merge tasks on arrival.
+                    if (err.code === 'auth/credential-already-in-use' || err.code === 'auth/email-already-in-use') {
+                        firebase.auth(app).signInWithRedirect(provider).catch(() => {});
+                    } else {
+                        console.warn('Link redirect error:', err.code);
+                    }
+                });
             } else {
-                firebase.auth(app).signInWithPopup(provider).catch(err => {
-                    console.error('Sign-in error:', err);
+                firebase.auth(app).signInWithRedirect(provider).catch(err => {
+                    console.warn('Sign-in redirect error:', err.code);
                 });
             }
         }
@@ -1119,6 +1137,9 @@
             });
             card.addEventListener('dragend', () => { card.style.opacity = ''; });
 
+            // ── Touch drag (mobile / Capacitor) ──────────────────────────────
+            setupTouchDrag(card, task.id, column);
+
             return card;
         }
 
@@ -1137,7 +1158,7 @@
             }, 100);
         }
 
-        // ─── Drag & drop ──────────────────────────────────────────────────────────
+        // ─── Drag & drop (desktop HTML5) ──────────────────────────────────────────
         function allowDrop(e) { e.preventDefault(); }
 
         function drop(e) {
@@ -1150,6 +1171,138 @@
                 moveTaskWithUndo(data.fromColumn, toColumn, data.taskId);
                 updateDailySummary();
             }
+        }
+
+        // ─── Touch drag (mobile / Capacitor) ─────────────────────────────────────
+        // Long-press 400 ms to start drag, then drag to a column to drop.
+        // A ghost clone follows the finger. Column zones highlight on entry.
+        let _touchDrag = null;   // { taskId, fromColumn, ghost, scrollEl }
+
+        function setupTouchDrag(card, taskId, column) {
+            let pressTimer = null;
+            let dragStarted = false;
+            let startX = 0, startY = 0;
+
+            card.addEventListener('touchstart', (e) => {
+                // Don't hijack taps on buttons / badges
+                if (e.target.closest('button, .priority-badge, input')) return;
+                const t = e.touches[0];
+                startX = t.clientX; startY = t.clientY;
+                dragStarted = false;
+                pressTimer = setTimeout(() => {
+                    dragStarted = true;
+                    _startTouchDrag(card, taskId, column, t.clientX, t.clientY);
+                }, 400);
+            }, { passive: true });
+
+            card.addEventListener('touchmove', (e) => {
+                if (!dragStarted && pressTimer) {
+                    // Cancel long-press if finger moved more than 8px (it's a scroll)
+                    const t = e.touches[0];
+                    if (Math.abs(t.clientX - startX) > 8 || Math.abs(t.clientY - startY) > 8) {
+                        clearTimeout(pressTimer); pressTimer = null;
+                    }
+                }
+                if (!dragStarted || !_touchDrag) return;
+                e.preventDefault();
+                _moveTouchDrag(e.touches[0].clientX, e.touches[0].clientY);
+            }, { passive: false });
+
+            card.addEventListener('touchend', (e) => {
+                clearTimeout(pressTimer); pressTimer = null;
+                if (!dragStarted || !_touchDrag) return;
+                e.preventDefault();
+                const t = e.changedTouches[0];
+                _endTouchDrag(t.clientX, t.clientY);
+                dragStarted = false;
+            }, { passive: false });
+
+            card.addEventListener('touchcancel', () => {
+                clearTimeout(pressTimer); pressTimer = null;
+                if (_touchDrag) _cancelTouchDrag();
+                dragStarted = false;
+            }, { passive: true });
+        }
+
+        function _startTouchDrag(card, taskId, column, x, y) {
+            const ghost = card.cloneNode(true);
+            ghost.id = 'touch-drag-ghost';
+            const rect = card.getBoundingClientRect();
+            Object.assign(ghost.style, {
+                position:      'fixed',
+                left:          rect.left + 'px',
+                top:           rect.top  + 'px',
+                width:         rect.width + 'px',
+                opacity:       '0.75',
+                pointerEvents: 'none',
+                zIndex:        '9999',
+                transform:     'scale(1.03)',
+                transition:    'transform 0.15s',
+                boxShadow:     '0 12px 40px rgba(0,0,0,0.5)',
+                borderRadius:  '14px',
+            });
+            document.body.appendChild(ghost);
+            card.style.opacity = '0.3';
+
+            // Highlight potential drop zones
+            document.querySelectorAll('.task-list').forEach(el => {
+                el.classList.add('drop-zone-active');
+            });
+
+            _touchDrag = { taskId, fromColumn: column, ghost, card,
+                           offsetX: x - rect.left, offsetY: y - rect.top };
+
+            // Haptic feedback if available
+            if (navigator.vibrate) navigator.vibrate(30);
+        }
+
+        function _moveTouchDrag(x, y) {
+            if (!_touchDrag) return;
+            const { ghost, offsetX, offsetY } = _touchDrag;
+            ghost.style.left = (x - offsetX) + 'px';
+            ghost.style.top  = (y - offsetY) + 'px';
+
+            // Highlight the column the ghost is over
+            document.querySelectorAll('.task-list').forEach(el => {
+                const r = el.getBoundingClientRect();
+                const over = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+                el.classList.toggle('drop-zone-hover', over);
+            });
+        }
+
+        function _endTouchDrag(x, y) {
+            if (!_touchDrag) return;
+            const { taskId, fromColumn, ghost, card } = _touchDrag;
+
+            ghost.remove();
+            card.style.opacity = '';
+            document.querySelectorAll('.task-list').forEach(el => {
+                el.classList.remove('drop-zone-active', 'drop-zone-hover');
+            });
+
+            // Find which column list the finger lifted over
+            const target = document.elementFromPoint(x, y);
+            const listEl = target && target.closest('.task-list');
+            if (listEl) {
+                const toColumn = listEl.id.replace('-list', '');
+                if (toColumn && toColumn !== fromColumn) {
+                    moveTaskWithUndo(fromColumn, toColumn, taskId);
+                    updateDailySummary();
+                    if (navigator.vibrate) navigator.vibrate(15);
+                }
+            }
+
+            _touchDrag = null;
+        }
+
+        function _cancelTouchDrag() {
+            if (!_touchDrag) return;
+            _touchDrag.ghost.remove();
+            _touchDrag.card.style.opacity = '';
+            document.querySelectorAll('.task-list').forEach(el => {
+                el.classList.remove('drop-zone-active', 'drop-zone-hover');
+            });
+            _touchDrag = null;
         }
 
         // ─── Menu ─────────────────────────────────────────────────────────────────
