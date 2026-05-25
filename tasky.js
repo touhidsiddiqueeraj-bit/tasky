@@ -947,7 +947,9 @@
                 <div class="drag-handle">⋮⋮</div>
                 <div class="task-header">
                     <span class="task-number">#${task.number}</span>
-                    <span class="task-text">${escapeHtml(task.text)}</span>
+                    <span class="task-text" title="Double-click to edit">${escapeHtml(task.text)}</span>
+                    <input class="task-edit-input" type="text" value="${escapeHtml(task.text)}"
+                        maxlength="200" style="display:none;" aria-label="Edit task text">
                 </div>
                 <div class="task-meta">
                     <div class="task-left">
@@ -957,6 +959,7 @@
                         ${task.dueDate ? `<span class="due-date ${isOverdue ? 'overdue' : ''}">📅 ${dateDisplay}</span>` : ''}
                     </div>
                     <div class="task-hover-controls">
+                        <button class="edit-btn" title="Edit task text (double-click)">✏️</button>
                         <button class="date-btn" title="Set due date">
                             📅 ${task.dueDate ? 'Change' : 'Date'}
                         </button>
@@ -973,6 +976,75 @@
             card.querySelector('.priority-badge').addEventListener('click', (e) => {
                 e.stopPropagation();
                 cyclePriority(column, task.id);
+            });
+
+            // ── Inline edit ──────────────────────────────────────────────────────
+            const taskTextEl  = card.querySelector('.task-text');
+            const editInput   = card.querySelector('.task-edit-input');
+            const editBtn     = card.querySelector('.edit-btn');
+
+            function startEditing() {
+                taskTextEl.style.display = 'none';
+                editInput.style.display  = 'block';
+                editInput.value          = task.text;
+                editInput.focus();
+                editInput.select();
+                card.classList.add('editing');
+                editBtn.textContent = '✓';
+                editBtn.title = 'Save (Enter)';
+            }
+
+            function commitEdit() {
+                const newText = editInput.value.trim();
+                card.classList.remove('editing');
+                editInput.style.display  = 'none';
+                taskTextEl.style.display = '';
+                editBtn.textContent = '✏️';
+                editBtn.title = 'Edit task text (double-click)';
+                if (newText && newText !== task.text) {
+                    const t = tasks[column].find(t => t.id === task.id);
+                    if (t) {
+                        t.text = newText;
+                        task.text = newText;          // keep local ref in sync
+                        taskTextEl.textContent = newText;
+                        saveAll();
+                    }
+                }
+            }
+
+            function cancelEdit() {
+                card.classList.remove('editing');
+                editInput.style.display  = 'none';
+                taskTextEl.style.display = '';
+                editBtn.textContent = '✏️';
+                editBtn.title = 'Edit task text (double-click)';
+            }
+
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (card.classList.contains('editing')) {
+                    commitEdit();
+                } else {
+                    startEditing();
+                }
+            });
+
+            taskTextEl.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                startEditing();
+            });
+
+            editInput.addEventListener('keydown', (e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter')  { e.preventDefault(); commitEdit(); }
+                if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+            });
+
+            editInput.addEventListener('blur', () => {
+                // Small delay so click on ✓ button fires before blur
+                setTimeout(() => {
+                    if (card.classList.contains('editing')) commitEdit();
+                }, 150);
             });
 
             card.querySelector('.date-btn').addEventListener('click', (e) => {
