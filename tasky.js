@@ -130,11 +130,11 @@
                         syncFromCloud(!!prevUid);
                     }
                 } else {
-                    tasks = { todo: [], working: [], done: [] };
-                    taskCounter = 0;
-                    renderAllColumns();
-                    updateDailySummary();
-                    deselectTask();
+                    // No user at all — sign in anonymously to preserve data
+                    firebase.auth(app).signInAnonymously().catch(err => {
+                        console.warn('Anonymous sign-in failed:', err);
+                        // Fallback: keep using localStorage only
+                    });
                 }
 
                 updateAuthUI();
@@ -143,15 +143,38 @@
 
         function signInWithGoogle() {
             const provider = new firebase.auth.GoogleAuthProvider();
-            firebase.auth(app).signInWithPopup(provider).catch(err => {
-                console.error('Sign-in error:', err);
-            });
             const dd = document.getElementById('dropdown');
             if (dd) dd.classList.remove('show');
+
+            // If currently anonymous, link the anon account to Google (preserves data)
+            if (currentUser && currentUser.isAnonymous) {
+                currentUser.linkWithPopup(provider)
+                    .then(result => {
+                        // Linked successfully — push local tasks to the new permanent account
+                        pushToCloud();
+                        showToast('☁️ Signed in & data linked', () => {});
+                    })
+                    .catch(err => {
+                        // Already has a Google account — fall back to normal sign in
+                        // (this replaces the anon session but syncFromCloud will handle merging)
+                        if (err.code === 'auth/credential-already-in-use' || err.code === 'auth/email-already-in-use') {
+                            firebase.auth(app).signInWithPopup(provider).catch(e => console.error('Sign-in error:', e));
+                        } else {
+                            console.error('Link error:', err);
+                        }
+                    });
+            } else {
+                firebase.auth(app).signInWithPopup(provider).catch(err => {
+                    console.error('Sign-in error:', err);
+                });
+            }
         }
 
         function signOut() {
-            firebase.auth(app).signOut().catch(() => {});
+            // Sign out then immediately sign back in anonymously so data is preserved
+            firebase.auth(app).signOut().then(() => {
+                firebase.auth(app).signInAnonymously().catch(() => {});
+            }).catch(() => {});
             const dd = document.getElementById('dropdown');
             if (dd) dd.classList.remove('show');
         }
@@ -164,26 +187,39 @@
             const email      = document.getElementById('user-email');
             const syncEl     = document.getElementById('sync-status');
 
-            if (currentUser) {
+            if (currentUser && !currentUser.isAnonymous) {
+                // Signed in with a real account (Google etc.)
                 if (authBtn)    authBtn.style.display    = 'none';
                 if (signoutBtn) signoutBtn.style.display = 'flex';
                 if (userInfo)   userInfo.style.display   = 'flex';
                 if (avatar)     avatar.textContent = currentUser.email ? currentUser.email[0].toUpperCase() : '?';
                 if (email)      email.textContent  = currentUser.email || '';
                 setSyncStatus('synced');
+            } else if (currentUser && currentUser.isAnonymous) {
+                // Anonymous — show Sign In button, hide signout/user info, show quiet sync indicator
+                if (authBtn)    authBtn.style.display    = 'flex';
+                if (signoutBtn) signoutBtn.style.display = 'none';
+                if (userInfo)   userInfo.style.display   = 'none';
+                // Show a subtle "local" sync status so user knows data is being saved
+                if (syncEl) {
+                    syncEl.classList.remove('synced', 'syncing', 'offline');
+                    syncEl.classList.add('visible', 'synced');
+                    syncEl.textContent = '☁️ Auto-saved';
+                }
             } else {
+                // No user (should only briefly happen before anon auth kicks in)
                 if (authBtn)    authBtn.style.display    = 'flex';
                 if (signoutBtn) signoutBtn.style.display = 'none';
                 if (userInfo)   userInfo.style.display   = 'none';
                 if (syncEl)     syncEl.classList.remove('visible');
             }
-        }
-
         function setSyncStatus(state) {
             const el = document.getElementById('sync-status');
             if (!el) return;
             el.classList.remove('synced', 'syncing', 'offline', 'visible');
             if (!currentUser) return;
+            // For anonymous users, only show if explicitly set (updateAuthUI handles anon label)
+            if (currentUser.isAnonymous && state !== 'syncing') return;
             el.classList.add('visible', state);
             const labels = { synced: '☁️ Synced', syncing: '☁️ Syncing…', offline: '☁️ Offline' };
             el.textContent = labels[state] || '';
