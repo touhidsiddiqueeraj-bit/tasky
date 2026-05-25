@@ -81,27 +81,6 @@
             appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
         });
         db = firebase.firestore(app);
-        try {
-            db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED, merge: true });
-        } catch(_) {}
-
-        // Delete any stale Firestore IndexedDB left by an older/newer SDK version.
-        // This runs once and is a no-op if the databases are already clean.
-        // We do NOT call enablePersistence() — it's deprecated and the stale IDB
-        // causes failed-precondition errors. Cloud sync works fine without it.
-        (async () => {
-            try {
-                const dbs = await indexedDB.databases();
-                await Promise.all(
-                    dbs
-                        .filter(d => d.name && d.name.toLowerCase().includes('firestore'))
-                        .map(d => new Promise(res => {
-                            const r = indexedDB.deleteDatabase(d.name);
-                            r.onsuccess = r.onerror = res;
-                        }))
-                );
-            } catch(_) {}
-        })();
 
         renderAllColumns();
         updateDailySummary();
@@ -226,7 +205,7 @@
                     tasks: JSON.parse(JSON.stringify(tasks)),
                     taskCounter: taskCounter,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }).then(() => setSyncStatus('synced')).catch(() => setSyncStatus('offline'));
+                }, { merge: true }).then(() => setSyncStatus('synced')).catch(() => setSyncStatus('offline'));
             }, 500);
         }
 
