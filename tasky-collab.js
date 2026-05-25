@@ -16,13 +16,28 @@ async function ensureHandle() {
     if (!currentUser) return null;
     if (currentHandle) return currentHandle;
 
-    // Try to load from Firestore first
-    const ref = db.collection('users').doc(currentUser.uid);
-    const snap = await ref.get();
-    if (snap.exists && snap.data().handle) {
-        currentHandle = snap.data().handle;
-        return currentHandle;
-    }
+    // Use REST to bypass the broken IndexedDB/memory cache
+    try {
+        const token = await currentUser.getIdToken(true);
+        const projectId = 'tasky-95785';
+        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${currentUser.uid}`;
+        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (res.ok) {
+            const doc = await res.json();
+            const handle = doc.fields?.handle?.stringValue || null;
+            if (handle) { currentHandle = handle; return currentHandle; }
+        }
+    } catch(_) {}
+
+    // Fallback to SDK
+    try {
+        const snap = await db.collection('users').doc(currentUser.uid).get();
+        if (snap.exists && snap.data().handle) {
+            currentHandle = snap.data().handle;
+            return currentHandle;
+        }
+    } catch(_) {}
+
     return null;
 }
 
@@ -106,17 +121,38 @@ async function leaveGroup() {
 }
 
 // ─── Load & Listen to Group — purely cloud-driven ────────────────────────
-// Reads activeGroup from Firestore (never localStorage).
-// Called every time auth state confirms a signed-in user.
+// Uses a direct Firestore REST call to read users/{uid} so the SDK's broken
+// IndexedDB/memory cache is completely bypassed. This is the only reliable
+// way to get fresh data when Firestore persistence is disabled (memory-only).
 async function loadActiveGroup() {
     if (!currentUser) return;
 
-    // Always fetch fresh from Firestore — no cache, no localStorage
-    const userSnap = await db.collection('users').doc(currentUser.uid).get({ source: 'server' });
-    const code = userSnap.exists ? userSnap.data().activeGroup : null;
-
+    const code = await getActiveGroupFromServer();
     if (!code) { currentGroup = null; renderGroupUI(); return; }
     startGroupListener(code);
+}
+
+async function getActiveGroupFromServer() {
+    try {
+        // Get a fresh ID token — always reflects current auth state
+        const token = await currentUser.getIdToken(/* forceRefresh= */ true);
+        const projectId = 'tasky-95785';
+        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${currentUser.uid}`;
+        const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) return null;
+        const doc = await res.json();
+        // Firestore REST returns fields as { fieldName: { stringValue: '...' } }
+        return doc.fields?.activeGroup?.stringValue || null;
+    } catch(e) {
+        console.warn('[collab] getActiveGroupFromServer failed:', e.message);
+        // Fallback to SDK (may return stale/empty but better than nothing)
+        try {
+            const snap = await db.collection('users').doc(currentUser.uid).get();
+            return snap.exists ? (snap.data().activeGroup || null) : null;
+        } catch(_) { return null; }
+    }
 }
 
 function startGroupListener(code) {
