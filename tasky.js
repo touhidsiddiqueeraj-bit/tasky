@@ -81,40 +81,33 @@
             appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
         });
         db = firebase.firestore(app);
-        // Use the modern cache setting instead of the deprecated enablePersistence().
-        // Falls back to memory-only if IndexedDB is unavailable or has stale SDK data.
+        // Modern persistent cache setup — avoids the deprecated enableIndexedDbPersistence()
+        // and the double-settings warning. Falls back silently if IndexedDB is unavailable.
         try {
-            db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+            db.settings({
+                cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+                merge: true
+            });
             db.enablePersistence({ synchronizeTabs: false }).catch(err => {
-                if (err.code === 'failed-precondition' || err.code === 'unimplemented') {
-                    if (err.code === 'failed-precondition') {
-                        // 'failed-precondition' fires for two reasons:
-                        //   1. Another tab already has persistence open — reloading won't help, skip.
-                        //   2. Stale IndexedDB from old SDK — delete it and reload ONCE.
-                        //
-                        // We detect case 2 by checking if the IDB actually exists.
-                        // Guard: use localStorage+timestamp so the flag survives the reload
-                        // (sessionStorage is wiped on every reload, causing infinite loops).
-                        const GUARD_KEY = '_fs_reloaded_at';
-                        const last = parseInt(localStorage.getItem(GUARD_KEY) || '0', 10);
-                        const now  = Date.now();
-                        if (now - last > 15000) {   // not reloaded in last 15 s → try cleanup
-                            // Check if the stale DB actually exists before reloading
-                            const dbName = `firestore/[DEFAULT]/tasky-95785/(default)/main`;
-                            const check  = indexedDB.open(dbName);
-                            check.onsuccess = (e) => {
-                                e.target.result.close();
-                                // DB exists — delete it and reload once
-                                localStorage.setItem(GUARD_KEY, String(now));
-                                const del = indexedDB.deleteDatabase(dbName);
-                                del.onsuccess = () => location.reload();
-                                del.onerror   = () => {}; // if delete fails, just continue
-                            };
-                            check.onerror = () => {}; // DB doesn't exist — multi-tab case, ignore
-                        }
-                        // Guard active or multi-tab: fall through to memory-only mode silently.
+                if (err.code === 'failed-precondition') {
+                    // Stale IndexedDB from old SDK version — delete and reload once
+                    const GUARD_KEY = '_fs_reloaded_at';
+                    const last = parseInt(localStorage.getItem(GUARD_KEY) || '0', 10);
+                    const now  = Date.now();
+                    if (now - last > 15000) {
+                        const dbName = `firestore/[DEFAULT]/tasky-95785/(default)/main`;
+                        const check  = indexedDB.open(dbName);
+                        check.onsuccess = (e) => {
+                            e.target.result.close();
+                            localStorage.setItem(GUARD_KEY, String(now));
+                            const del = indexedDB.deleteDatabase(dbName);
+                            del.onsuccess = () => location.reload();
+                            del.onerror   = () => {};
+                        };
+                        check.onerror = () => {};
                     }
                 }
+                // unimplemented (Safari private) or guard active: memory-only, that's fine
             });
         } catch(_) {}
 
@@ -241,7 +234,7 @@
                     tasks: JSON.parse(JSON.stringify(tasks)),
                     taskCounter: taskCounter,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true }).then(() => setSyncStatus('synced')).catch(() => setSyncStatus('offline'));
+                }).then(() => setSyncStatus('synced')).catch(() => setSyncStatus('offline'));
             }, 500);
         }
 
