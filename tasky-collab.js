@@ -2193,7 +2193,7 @@ window.enableDueDateNotifications = async function() {
         // Fire a confirmation push so user sees it's working
         try {
             new Notification('Tasky Notifications Active', {
-                body: 'You'll be notified for new tasks, comments, and due dates.',
+                body: "You'll be notified for new tasks, comments, and due dates.",
                 icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">✅</text></svg>'
             });
         } catch(_) {}
