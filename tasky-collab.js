@@ -959,7 +959,7 @@ function makeDropdownItem(icon, text, onClick) {
 
 // ─── Collab Modal ─────────────────────────────────────────────────────────
 function openCollabModal(mode) {
-    if (!currentUser) {
+    if (!currentUser || currentUser.isAnonymous) {
         showTaskyToast('Sign in with Google first to use Collaborations.');
         return;
     }
@@ -1069,18 +1069,24 @@ function openAssignModal(preselectedHandle) {
         document.body.appendChild(modal);
     }
 
-    // Populate member dropdown
-    const memberSelect = modal.querySelector('#assign-member-select');
-    memberSelect.innerHTML = '<option value="">— Select member —</option>';
-    (currentGroup.members || []).forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m.handle;
-        opt.textContent = `@${m.handle}${m.uid === currentGroup.supervisorUid ? ' (Supervisor)' : ''}`;
-        memberSelect.appendChild(opt);
+    // Populate member dropdowns (both panes)
+    const memberSelects = [
+        modal.querySelector('#assign-member-select'),
+        modal.querySelector('#assign-group-member-select')
+    ];
+    memberSelects.forEach(sel => {
+        if (!sel) return;
+        sel.innerHTML = '<option value="">— Select member —</option>';
+        (currentGroup.members || []).forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.handle;
+            opt.textContent = `@${m.handle}${m.uid === currentGroup.supervisorUid ? ' (Supervisor)' : ''}`;
+            sel.appendChild(opt);
+        });
+        if (preselectedHandle) sel.value = preselectedHandle;
     });
-    if (preselectedHandle) memberSelect.value = preselectedHandle;
 
-    // Reset fields
+    // Reset single-task fields
     modal.querySelector('#assign-task-text').value = '';
     modal.querySelector('#assign-priority-select').value = 'medium';
     modal.querySelector('#assign-due-date').value = '';
@@ -1088,9 +1094,151 @@ function openAssignModal(preselectedHandle) {
     modal.querySelector('#assign-submit-btn').textContent = 'Assign Task';
     modal.querySelector('#assign-submit-btn').disabled = false;
 
+    // Reset group pane
+    modal.querySelector('#assign-group-due-date').value = '';
+    modal.querySelector('#assign-group-error').style.display = 'none';
+    modal.querySelector('#assign-group-preview').style.display = 'none';
+
+    // Switch to single-task tab by default
+    switchAssignMode('single');
+
+    // Populate group list
+    _populateAssignGroupList(modal);
+
     modal.classList.remove('hidden');
     modal.classList.add('visible');
     modal.querySelector('#assign-task-text').focus();
+}
+
+function switchAssignMode(mode) {
+    const modal = document.getElementById('assign-modal-overlay');
+    if (!modal) return;
+    const singlePane = modal.querySelector('#assign-pane-single');
+    const groupPane  = modal.querySelector('#assign-pane-group');
+    const tabSingle  = modal.querySelector('#assign-tab-single');
+    const tabGroup   = modal.querySelector('#assign-tab-group');
+    if (mode === 'single') {
+        singlePane.style.display = '';
+        groupPane.style.display  = 'none';
+        tabSingle.classList.add('active');
+        tabGroup.classList.remove('active');
+        modal.querySelector('#assign-task-text').focus();
+    } else {
+        singlePane.style.display = 'none';
+        groupPane.style.display  = '';
+        tabSingle.classList.remove('active');
+        tabGroup.classList.add('active');
+    }
+}
+
+// Populate the group-selection list inside the assign modal
+function _populateAssignGroupList(modal) {
+    if (!modal) modal = document.getElementById('assign-modal-overlay');
+    if (!modal) return;
+    const groups    = typeof tgLoad === 'function' ? tgLoad() : [];
+    const emptyEl   = modal.querySelector('#assign-group-empty');
+    const contentEl = modal.querySelector('#assign-group-content');
+    const listEl    = modal.querySelector('#assign-group-list');
+    const submitBtn = modal.querySelector('#assign-group-submit-btn');
+
+    if (!groups.length) {
+        if (emptyEl)   emptyEl.style.display   = 'flex';
+        if (contentEl) contentEl.style.display = 'none';
+        return;
+    }
+    if (emptyEl)   emptyEl.style.display   = 'none';
+    if (contentEl) contentEl.style.display = '';
+
+    listEl.innerHTML = '';
+    let selectedGroupId = null;
+
+    const selectGroup = (id) => {
+        selectedGroupId = id;
+        // Highlight selected
+        listEl.querySelectorAll('.assign-group-option').forEach(el => {
+            el.classList.toggle('selected', el.dataset.id === id);
+        });
+        // Show preview of tasks
+        const g = groups.find(g => g.id === id);
+        const previewEl = modal.querySelector('#assign-group-preview');
+        const previewListEl = modal.querySelector('#assign-group-preview-list');
+        if (g && previewEl && previewListEl) {
+            previewListEl.innerHTML = g.tasks.map(t => {
+                const priIcon = t.priority === 'high' ? '🔴' : t.priority === 'medium' ? '🟡' : '🟢';
+                return `<div class="tg-subtask-row" style="pointer-events:none;">
+                    <span style="font-size:12px;">${priIcon}</span>
+                    <input class="tg-input" style="flex:1;padding:5px 8px;font-size:12px;border:none;background:transparent;" value="${escHtml(t.text)}" readonly>
+                    <span style="font-size:11px;color:rgba(255,255,255,0.35);flex-shrink:0;">${t.priority}</span>
+                </div>`;
+            }).join('');
+            previewEl.style.display = '';
+        }
+        if (submitBtn) submitBtn.disabled = false;
+    };
+
+    groups.forEach(g => {
+        const colLabel = g.column === 'working' ? 'Working On' : 'To Do';
+        const div = document.createElement('div');
+        div.className = 'assign-group-option tg-group-card';
+        div.dataset.id = g.id;
+        div.style.cursor = 'pointer';
+        div.innerHTML = `
+            <div class="tg-group-card-main">
+                <div class="tg-group-name">${escHtml(g.name)}</div>
+                <div class="tg-group-meta">
+                    <span class="tg-group-col-badge ${g.column === 'working' ? 'working' : 'todo'}">${colLabel}</span>
+                    <span class="tg-group-task-count">${g.tasks.length} task${g.tasks.length !== 1 ? 's' : ''}</span>
+                </div>
+            </div>
+            <div style="flex-shrink:0;color:rgba(255,255,255,0.25);font-size:18px;">○</div>
+        `;
+        div.addEventListener('click', () => selectGroup(g.id));
+        listEl.appendChild(div);
+    });
+
+    // Store selected id accessor
+    listEl._getSelectedId = () => selectedGroupId;
+}
+
+async function handleAssignGroupSubmit() {
+    const modal   = document.getElementById('assign-modal-overlay');
+    if (!modal) return;
+    const listEl  = modal.querySelector('#assign-group-list');
+    const groupId = listEl ? listEl._getSelectedId() : null;
+    const handle  = modal.querySelector('#assign-group-member-select').value;
+    const dateVal = modal.querySelector('#assign-group-due-date').value;
+    const errEl   = modal.querySelector('#assign-group-error');
+    const btn     = modal.querySelector('#assign-group-submit-btn');
+
+    errEl.style.display = 'none';
+    if (!groupId) { errEl.textContent = 'Please select a task group.';   errEl.style.display = 'block'; return; }
+    if (!handle)  { errEl.textContent = 'Please select a team member.';  errEl.style.display = 'block'; return; }
+
+    const groups = typeof tgLoad === 'function' ? tgLoad() : [];
+    const group  = groups.find(g => g.id === groupId);
+    if (!group)   { errEl.textContent = 'Group not found.'; errEl.style.display = 'block'; return; }
+
+    btn.textContent = 'Assigning…'; btn.disabled = true;
+
+    let assigned = 0, skipped = 0;
+    for (const task of group.tasks) {
+        try {
+            await addCollabTask({
+                text:       task.text,
+                assignedTo: handle,
+                priority:   task.priority || 'medium',
+                dueDate:    dateVal || null
+            });
+            assigned++;
+        } catch(_) { skipped++; }
+    }
+
+    btn.textContent = 'Assign Group'; btn.disabled = false;
+    closeAssignModal();
+    const msg = skipped
+        ? `⊞ \"${group.name}\" assigned to @${handle} — ${assigned} sent, ${skipped} failed`
+        : `⊞ \"${group.name}\" — ${assigned} task${assigned !== 1 ? 's' : ''} assigned to @${handle}`;
+    showTaskyToast(msg);
 }
 
 function closeAssignModal() {
@@ -1108,40 +1256,81 @@ function buildAssignModal() {
     overlay.addEventListener('click', e => { if (e.target === overlay) closeAssignModal(); });
 
     overlay.innerHTML = `
-    <div class="tg-modal" style="width:min(460px,96vw);">
+    <div class="tg-modal" style="width:min(500px,96vw);">
         <div class="tg-header">
             <div class="tg-header-title">📋 Assign Task</div>
             <button class="tg-close-btn" onclick="closeAssignModal()">✕</button>
         </div>
-        <div class="tg-body" style="padding:24px;display:flex;flex-direction:column;gap:16px;">
-            <div>
-                <div class="tg-field-label">Task description</div>
-                <textarea id="assign-task-text" class="tg-input assign-textarea"
-                    placeholder="Describe the task…" rows="3" maxlength="300"></textarea>
-            </div>
-            <div>
-                <div class="tg-field-label">Assign to</div>
-                <select id="assign-member-select" class="tg-input assign-select"></select>
-            </div>
-            <div style="display:flex;gap:12px;">
-                <div style="flex:1;">
-                    <div class="tg-field-label">Priority</div>
-                    <select id="assign-priority-select" class="tg-input assign-select">
-                        <option value="high">🔴 High</option>
-                        <option value="medium" selected>🟡 Medium</option>
-                        <option value="low">🟢 Low</option>
-                    </select>
+        <!-- Mode tabs -->
+        <div class="tg-tabs" id="assign-mode-tabs">
+            <button class="tg-tab active" id="assign-tab-single" onclick="switchAssignMode('single')">Single Task</button>
+            <button class="tg-tab"        id="assign-tab-group"  onclick="switchAssignMode('group')">⊞ Use Group</button>
+        </div>
+        <div class="tg-body" style="padding:24px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;">
+
+            <!-- ── SINGLE TASK PANE ── -->
+            <div id="assign-pane-single">
+                <div>
+                    <div class="tg-field-label">Task description</div>
+                    <textarea id="assign-task-text" class="tg-input assign-textarea"
+                        placeholder="Describe the task…" rows="3" maxlength="300"></textarea>
                 </div>
-                <div style="flex:1;">
-                    <div class="tg-field-label">Due date (optional)</div>
-                    <input id="assign-due-date" class="tg-input" type="date">
+                <div style="margin-top:14px;">
+                    <div class="tg-field-label">Assign to</div>
+                    <select id="assign-member-select" class="tg-input assign-select"></select>
+                </div>
+                <div style="display:flex;gap:12px;margin-top:14px;">
+                    <div style="flex:1;">
+                        <div class="tg-field-label">Priority</div>
+                        <select id="assign-priority-select" class="tg-input assign-select">
+                            <option value="high">🔴 High</option>
+                            <option value="medium" selected>🟡 Medium</option>
+                            <option value="low">🟢 Low</option>
+                        </select>
+                    </div>
+                    <div style="flex:1;">
+                        <div class="tg-field-label">Due date (optional)</div>
+                        <input id="assign-due-date" class="tg-input" type="date">
+                    </div>
+                </div>
+                <div id="assign-error" style="color:#f87171;font-size:12px;display:none;margin-top:8px;"></div>
+                <button class="tg-save-btn" id="assign-submit-btn" style="margin-top:16px;">Assign Task</button>
+                <div style="font-size:11px;color:rgba(255,255,255,0.25);text-align:center;margin-top:8px;">
+                    Power users: type <code style="color:#a78bfa;">task to::handle priority::high date::20may</code> in the main input
                 </div>
             </div>
-            <div id="assign-error" style="color:#f87171;font-size:12px;display:none;"></div>
-            <button class="tg-save-btn" id="assign-submit-btn" style="margin-top:4px;">Assign Task</button>
-            <div style="font-size:11px;color:rgba(255,255,255,0.25);text-align:center;margin-top:-8px;">
-                Power users: type <code style="color:#a78bfa;">task to::handle priority::high date::20may</code> in the main input
+
+            <!-- ── GROUP ASSIGN PANE ── -->
+            <div id="assign-pane-group" style="display:none;">
+                <div id="assign-group-empty" style="display:none;flex-direction:column;align-items:center;gap:12px;padding:24px 0;color:rgba(255,255,255,0.3);text-align:center;">
+                    <div style="font-size:36px;">⊞</div>
+                    <div style="font-size:13px;line-height:1.6;">No task groups yet.<br>Create groups from <strong style="color:#a78bfa;">Tasky ▼ → Task Groups</strong>.</div>
+                </div>
+                <div id="assign-group-content">
+                    <div>
+                        <div class="tg-field-label">Select group</div>
+                        <div id="assign-group-list" style="display:flex;flex-direction:column;gap:8px;margin-top:8px;max-height:220px;overflow-y:auto;"></div>
+                    </div>
+                    <div style="margin-top:16px;">
+                        <div class="tg-field-label">Assign all tasks to</div>
+                        <select id="assign-group-member-select" class="tg-input assign-select"></select>
+                    </div>
+                    <div style="margin-top:14px;">
+                        <div class="tg-field-label">Due date for all tasks (optional)</div>
+                        <input id="assign-group-due-date" class="tg-input" type="date">
+                    </div>
+                    <div id="assign-group-preview" style="display:none;margin-top:14px;">
+                        <div class="tg-field-label">Tasks that will be assigned</div>
+                        <div id="assign-group-preview-list" style="display:flex;flex-direction:column;gap:5px;margin-top:8px;max-height:150px;overflow-y:auto;"></div>
+                    </div>
+                    <div id="assign-group-error" style="color:#f87171;font-size:12px;display:none;margin-top:8px;"></div>
+                    <button class="tg-save-btn" id="assign-group-submit-btn" style="margin-top:16px;" disabled>Assign Group</button>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:8px;">
+                        Each task in the group will be assigned individually. Duplicate tasks (already on member's board) are skipped.
+                    </div>
+                </div>
             </div>
+
         </div>
     </div>`;
 
@@ -1149,6 +1338,7 @@ function buildAssignModal() {
     overlay.querySelector('#assign-task-text').addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAssignModalSubmit(); }
     });
+    overlay.querySelector('#assign-group-submit-btn').addEventListener('click', handleAssignGroupSubmit);
     return overlay;
 }
 
@@ -1374,7 +1564,8 @@ function escHtml(str) {
 // ─── Hook into Firebase auth flow ─────────────────────────────────────────
 function setupCollabAuth() {
     firebase.auth(app).onAuthStateChanged(async user => {
-        if (user) {
+        if (user && !user.isAnonymous) {
+            // Fully signed-in user
             await ensureHandle();
             await loadActiveGroup();   // reads activeGroup from Firestore server, starts listener
             startNotifListener();
@@ -1386,7 +1577,22 @@ function setupCollabAuth() {
 
             // Pull in tasks assigned to us while we were offline
             await syncGroupTasksToBoard();
+        } else if (user && user.isAnonymous) {
+            // Anonymous user — collab requires Google sign-in, so teardown collab state
+            stopGroupListener();
+            stopNotifListener();
+            stopTasksListener();
+            saveGroupCodeLocally(null);
+            currentGroup    = null;
+            isSupervisor    = false;
+            currentHandle   = null;
+            localStorage.removeItem('tasky_handle');
+            teamPanelMember = null;
+            teamTasksCache  = {};
+            if (_groupSyncTimer) { clearTimeout(_groupSyncTimer); _groupSyncTimer = null; }
+            renderGroupUI();
         } else {
+            // No user at all (transient state before anon auth)
             stopGroupListener();
             stopNotifListener();
             stopTasksListener();
