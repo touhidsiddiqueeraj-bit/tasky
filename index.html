@@ -951,12 +951,12 @@ body.light-mode .dd-coach-step-counter { color: rgba(0,0,0,0.35); }
 <!-- ═══════════════════════════════════════════════
      DROPDOWN COACH MARKS (first-open onboarding)
      ═══════════════════════════════════════════════ -->
-<div id="dd-coach-backdrop" class="dd-coach-backdrop" onclick="dismissDdCoach()" aria-hidden="true"></div>
+<div id="dd-coach-backdrop" class="dd-coach-backdrop" aria-hidden="true"></div>
 <div id="dd-coach-container" class="dd-coach-container" aria-live="polite"></div>
 <div id="dd-coach-nav" class="dd-coach-nav">
-  <button class="dd-coach-skip" id="dd-coach-skip-btn" onclick="dismissDdCoach()">Skip</button>
+  <button class="dd-coach-skip" id="dd-coach-skip-btn" onclick="event.stopPropagation();dismissDdCoach()">Skip</button>
   <span class="dd-coach-step-counter" id="dd-coach-step-counter"></span>
-  <button class="dd-coach-next" id="dd-coach-next-btn" onclick="ddCoachNext()">Next →</button>
+  <button class="dd-coach-next" id="dd-coach-next-btn" onclick="event.stopPropagation();ddCoachNext()">Next →</button>
 </div>
 
 <!-- Toast container -->
@@ -993,7 +993,7 @@ body.light-mode .dd-coach-step-counter { color: rgba(0,0,0,0.35); }
       <span>❓</span>
       <span>How to Use</span>
     </button>
-    <button class="dropdown-item" onclick="enableDueDateNotifications()" id="notif-btn">
+    <button class="dropdown-item" onclick="(window.enableDueDateNotifications||function(){_safeEnableNotifs();})()" id="notif-btn">
       <span>🔔</span>
       <span>Enable Notifications</span>
     </button>
@@ -1655,7 +1655,23 @@ const DD_COACH_STEPS = [
 
 // Step-by-step coach: shows one callout at a time, user clicks Next or Skip
 let _ddCoachStep = 0;
+let _ddCoachActive = false;
 let _ddCoachVisibleSteps = []; // indices into DD_COACH_STEPS that have live targets
+
+// Prevent tasky.js global click handler from closing dropdown during coach
+(function _guardDropdownDuringCoach() {
+  // We intercept document clicks at capture phase to stop propagation
+  // when coach is active and the click is on coach UI elements
+  document.addEventListener('click', function(e) {
+    if (!_ddCoachActive) return;
+    const nav = document.getElementById('dd-coach-nav');
+    const container = document.getElementById('dd-coach-container');
+    // If click is on nav or callout container, stop it reaching tasky.js listener
+    if ((nav && nav.contains(e.target)) || (container && container.contains(e.target))) {
+      e.stopImmediatePropagation();
+    }
+  }, true); // capture phase runs before tasky.js bubble-phase listener
+})();
 
 function showDdCoach() {
   if (localStorage.getItem(DD_COACH_KEY)) return;
@@ -1691,6 +1707,9 @@ function _initDdCoach() {
   _ddCoachVisibleSteps = _resolveDdCoachTargets();
   if (_ddCoachVisibleSteps.length === 0) return;
   _ddCoachStep = 0;
+  _ddCoachActive = true;
+  // Elevate dropdown once for the entire session
+  dropdown.style.zIndex = '205';
   _showDdCoachStep();
 }
 
@@ -1703,7 +1722,7 @@ function _showDdCoachStep() {
   if (!backdrop || !container || !nav) return;
 
   const dropdown = document.getElementById('dropdown');
-  if (!dropdown || !dropdown.classList.contains('show')) { dismissDdCoach(); return; }
+  if (!dropdown) { dismissDdCoach(); return; }
 
   // Re-resolve so positions are fresh
   _ddCoachVisibleSteps = _resolveDdCoachTargets();
@@ -1750,7 +1769,6 @@ function _showDdCoachStep() {
   backdrop.classList.add('visible');
   container.classList.add('visible');
   nav.classList.add('visible');
-  dropdown.style.zIndex = '205';
 }
 
 function ddCoachNext() {
@@ -1764,6 +1782,7 @@ function ddCoachNext() {
 
 function dismissDdCoach() {
   localStorage.setItem(DD_COACH_KEY, '1');
+  _ddCoachActive = false;
   const backdrop  = document.getElementById('dd-coach-backdrop');
   const container = document.getElementById('dd-coach-container');
   const nav       = document.getElementById('dd-coach-nav');
@@ -1793,6 +1812,31 @@ function _patchToggleMenuForCoach() {
       };
     }
   }, 50);
+}
+
+/* ─── Notification safe shim ─────────────────────────────────────────── */
+// Fallback used if tasky-collab.js hasn't run yet (should not happen in practice)
+async function _safeEnableNotifs() {
+  if (!('Notification' in window)) {
+    showTaskyToast('⚠️ This browser does not support notifications.');
+    return;
+  }
+  let perm = Notification.permission;
+  if (perm === 'default') {
+    perm = await Notification.requestPermission();
+  }
+  if (perm === 'granted') {
+    showTaskyToast('🔔 Notifications enabled!');
+    // Fire a test notification
+    try {
+      new Notification('Tasky Notifications', {
+        body: 'You'll be notified for new tasks and due dates.',
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">✅</text></svg>'
+      });
+    } catch(_) {}
+  } else if (perm === 'denied') {
+    showTaskyToast('⚠️ Notifications blocked. Allow them in browser settings → Site Settings.');
+  }
 }
 
 /* ============================================================
