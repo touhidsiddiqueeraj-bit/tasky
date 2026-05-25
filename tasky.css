@@ -944,7 +944,33 @@
             opacity: 1;
         }
 
-        .date-btn, .move-btn, .delete-btn {
+        /* Always show controls while editing */
+        .task-card.editing .task-hover-controls {
+            opacity: 1;
+        }
+
+        /* Inline edit input */
+        .task-edit-input {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.4;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.45);
+            border-radius: 7px;
+            padding: 2px 8px;
+            color: inherit;
+            font-family: inherit;
+            outline: none;
+            min-width: 0;
+        }
+
+        body.light-mode .task-edit-input {
+            background: rgba(139, 92, 246, 0.07);
+            border-color: rgba(139, 92, 246, 0.4);
+            color: #1a1040;
+        }
+
+        .date-btn, .move-btn, .delete-btn, .edit-btn {
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.12);
             color: rgba(255, 255, 255, 0.6);
@@ -964,7 +990,8 @@
 
         body.light-mode .date-btn,
         body.light-mode .move-btn,
-        body.light-mode .delete-btn {
+        body.light-mode .delete-btn,
+        body.light-mode .edit-btn {
             background: rgba(0, 0, 0, 0.04);
             border: 1px solid rgba(0, 0, 0, 0.1);
             color: rgba(0, 0, 0, 0.5);
@@ -991,6 +1018,30 @@
             background: rgba(239, 68, 68, 0.25);
             color: #ef4444;
             border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .edit-btn {
+            width: 26px;
+            padding: 0;
+            font-size: 13px;
+        }
+
+        .edit-btn:hover {
+            background: rgba(139, 92, 246, 0.2);
+            color: #a78bfa;
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        /* When in editing mode, ✓ button turns green */
+        .task-card.editing .edit-btn {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .task-card.editing .edit-btn:hover {
+            background: rgba(16, 185, 129, 0.35);
+            color: #6ee7b7;
         }
 
         .clear-done-btn {
