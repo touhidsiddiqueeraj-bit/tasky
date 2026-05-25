@@ -105,38 +105,43 @@ async function leaveGroup() {
     renderGroupUI();
 }
 
-// ─── Load & Listen to Group ───────────────────────────────────────────────
+// ─── Load & Listen to Group — purely cloud-driven ────────────────────────
+// Reads activeGroup from Firestore (never localStorage).
+// Called every time auth state confirms a signed-in user.
 async function loadActiveGroup() {
     if (!currentUser) return;
-    const userSnap = await db.collection('users').doc(currentUser.uid).get();
-    const code = userSnap.exists ? userSnap.data().activeGroup : null;
-    if (!code) { currentGroup = null; renderGroupUI(); return; }
 
+    // Always fetch fresh from Firestore — no cache, no localStorage
+    const userSnap = await db.collection('users').doc(currentUser.uid).get({ source: 'server' });
+    const code = userSnap.exists ? userSnap.data().activeGroup : null;
+
+    if (!code) { currentGroup = null; renderGroupUI(); return; }
     startGroupListener(code);
 }
 
 function startGroupListener(code) {
     stopGroupListener();
-    let firstSnapshot = true;
-    groupListener = db.collection('groups').doc(code).onSnapshot(snap => {
-        if (!snap.exists) { currentGroup = null; isSupervisor = false; stopTasksListener(); renderGroupUI(); return; }
+
+    // onSnapshot gives us real-time updates AND the initial value straight
+    // from the server (source:'server' on the initial event is implicit).
+    groupListener = db.collection('groups').doc(code).onSnapshot({ includeMetadataChanges: false }, async snap => {
+        if (!snap.exists) {
+            currentGroup = null;
+            isSupervisor = false;
+            stopTasksListener();
+            renderGroupUI();
+            return;
+        }
+
         currentGroup = { ...snap.data(), code };
         isSupervisor = currentGroup.supervisorUid === currentUser.uid;
         renderGroupUI();
+
         if (isSupervisor) {
             startTasksListener(code);
         } else {
             stopTasksListener();
-            // On first snapshot: push member's tasks now that currentGroup is set.
-            // Also flushes any pending push that fired during syncFromCloud before
-            // currentGroup was available (the cold-refresh race condition).
-            if (firstSnapshot || groupPushPending) {
-                firstSnapshot    = false;
-                groupPushPending = false;
-                pushGroupTasksNow();
-            }
         }
-        if (isSupervisor) firstSnapshot = false;
     });
 }
 
@@ -405,7 +410,7 @@ async function syncGroupTasksToBoard() {
         });
 
         if (changed) {
-            saveAll();        // saves locally + calls pushToCloud → pushGroupTasks
+            saveAll();        // saves locally + calls pushToCloud → scheduleGroupSync
             renderAllColumns();
         }
     } catch(_) {}
@@ -435,36 +440,38 @@ function stopNotifListener() {
     if (notifListener) { notifListener(); notifListener = null; }
 }
 
-// ─── Collab saveAll: writes tasks to group doc too if in a group ──────────
+// ─── Sync member tasks to group subcollection ─────────────────────────────
+// Completely decoupled from pushToCloud / localStorage.
+// Writes directly to Firestore whenever tasks change.
+// Uses a short debounce to batch rapid changes (dragging, etc).
+let _groupSyncTimer = null;
+
+function scheduleGroupSync() {
+    if (!currentGroup || !currentUser || isSupervisor) return;
+    if (_groupSyncTimer) clearTimeout(_groupSyncTimer);
+    _groupSyncTimer = setTimeout(writeGroupTasks, 800);
+}
+
+async function writeGroupTasks() {
+    if (!currentGroup || !currentUser || isSupervisor) return;
+    try {
+        await db.collection('groups').doc(currentGroup.code)
+            .collection('tasks').doc(currentUser.uid).set({
+                tasks: JSON.parse(JSON.stringify(tasks)),
+                handle: currentHandle,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+    } catch(e) {
+        console.warn('[collab] writeGroupTasks failed:', e.message);
+    }
+}
+
+// Hook into pushToCloud to also trigger a group sync.
+// pushToCloud itself handles users/{uid} — we handle groups/{code}/tasks/{uid}.
 const _origPushToCloud = pushToCloud;
 pushToCloud = function() {
     _origPushToCloud();
-    pushGroupTasks();   // always call — it will retry if currentGroup isn't ready yet
-}
-
-let groupPushTimeout  = null;
-let groupPushPending  = false;  // set when pushGroupTasks fired before currentGroup was ready
-
-function pushGroupTasks() {
-    if (groupPushTimeout) clearTimeout(groupPushTimeout);
-    groupPushTimeout = setTimeout(async () => {
-        if (!currentUser) return;
-        if (!currentGroup) {
-            // currentGroup not loaded yet (cold refresh race) — mark pending so
-            // startGroupListener's onSnapshot will flush it once the group arrives
-            groupPushPending = true;
-            return;
-        }
-        groupPushPending = false;
-        try {
-            await db.collection('groups').doc(currentGroup.code)
-                .collection('tasks').doc(currentUser.uid).set({
-                    tasks: JSON.parse(JSON.stringify(tasks)),
-                    handle: currentHandle,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-        } catch(_) {}
-    }, 600);
+    scheduleGroupSync();
 }
 
 // ─── Team Panel Data (supervisor) ─────────────────────────────────────────
@@ -1325,56 +1332,38 @@ function escHtml(str) {
 }
 
 // ─── Hook into Firebase auth flow ─────────────────────────────────────────
-// tasky.js registers its own onAuthStateChanged that calls syncFromCloud().
-// We register a second listener. The problem is both listeners fire at the
-// same time — syncFromCloud finishes before loadActiveGroup resolves, so
-// pushGroupTasks() finds currentGroup===null and bails.
-//
-// Fix: after loading the group, explicitly push tasks to the group subcollection
-// (regardless of whether syncFromCloud already ran) so Firestore always has a
-// fresh copy. Also do a syncGroupTasksToBoard pass to pull in any assigned tasks.
 function setupCollabAuth() {
     firebase.auth(app).onAuthStateChanged(async user => {
         if (user) {
             await ensureHandle();
-            await loadActiveGroup();   // sets currentGroup
+            await loadActiveGroup();   // reads activeGroup from Firestore server, starts listener
             startNotifListener();
 
-            // At this point currentGroup is set. Explicitly push the member's
-            // current task state to the group subcollection — this corrects for
-            // the race where pushGroupTasks() fired during syncFromCloud() before
-            // currentGroup was available (e.g. on Ctrl+Shift+R / cache-cleared refresh).
-            if (currentGroup && currentUser) {
-                await pushGroupTasksNow();
-            }
+            // currentGroup is now set (or null if not in a collaboration).
+            // Immediately write member's current tasks to the group subcollection
+            // so the supervisor sees fresh data — bypasses any caching.
+            await writeGroupTasks();
 
-            // Pull in any tasks assigned to us while offline
+            // Pull in tasks assigned to us while we were offline
             await syncGroupTasksToBoard();
         } else {
             stopGroupListener();
             stopNotifListener();
             stopTasksListener();
-            currentGroup  = null;
-            isSupervisor  = false;
-            currentHandle = null;
+            currentGroup    = null;
+            isSupervisor    = false;
+            currentHandle   = null;
             teamPanelMember = null;
             teamTasksCache  = {};
+            if (_groupSyncTimer) { clearTimeout(_groupSyncTimer); _groupSyncTimer = null; }
             renderGroupUI();
         }
     });
 }
 
-// Immediate (non-debounced) version of pushGroupTasks for use on boot
+// Immediate (non-debounced) version used on boot only
 async function pushGroupTasksNow() {
-    if (!currentGroup || !currentUser) return;
-    try {
-        await db.collection('groups').doc(currentGroup.code)
-            .collection('tasks').doc(currentUser.uid).set({
-                tasks: JSON.parse(JSON.stringify(tasks)),
-                handle: currentHandle,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-    } catch(_) {}
+    await writeGroupTasks();
 }
 
 // ─── STATE exposure (tasky.js accesses these globals) ─────────────────────
