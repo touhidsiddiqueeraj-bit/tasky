@@ -2368,3 +2368,46 @@ body.light-mode .tcp-input:focus { border-color: rgba(109,40,217,0.4); backgroun
 }
 .tcp-send:hover { filter: brightness(1.1); }
 .tcp-send:disabled { opacity: 0.5; cursor: default; }
+
+/* ─── Inline comment strip (shown below task card) ───────────────────────── */
+.ic-strip {
+  padding: 6px 10px 4px;
+  border-top: 1px solid rgba(139,92,246,0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+body.light-mode .ic-strip { border-top-color: rgba(109,40,217,0.1); }
+
+.ic-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  flex-wrap: wrap;
+}
+
+.ic-author {
+  font-weight: 700;
+  color: #a78bfa;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+body.light-mode .ic-author { color: #7c3aed; }
+
+.ic-text {
+  color: rgba(255,255,255,0.65);
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+body.light-mode .ic-text { color: rgba(0,0,0,0.55); }
+
+.ic-ts {
+  font-size: 10px;
+  color: rgba(255,255,255,0.28);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
