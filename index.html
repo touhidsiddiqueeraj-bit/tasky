@@ -505,7 +505,56 @@ body.light-mode .dd-callout-desc { color: rgba(0,0,0,0.5); }
 .dd-callout-desc strong { color: #a78bfa; font-weight: 600; }
 body.light-mode .dd-callout-desc strong { color: #7c3aed; }
 
-/* Dismiss button */
+/* Coach nav buttons (Next / Skip / Got it) */
+.dd-coach-nav {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 215;
+  pointer-events: all;
+  display: none;
+  gap: 10px;
+  align-items: center;
+  animation: dd-callout-pop .3s .15s both;
+}
+.dd-coach-nav.visible { display: flex; }
+.dd-coach-skip {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.55);
+  border-radius: 22px;
+  padding: 11px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .2s;
+}
+body.light-mode .dd-coach-skip { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.15); color: rgba(0,0,0,0.45); }
+.dd-coach-skip:hover { background: rgba(255,255,255,0.14); }
+.dd-coach-next {
+  background: linear-gradient(135deg,#8B5CF6,#6d28d9);
+  color: #fff;
+  border: none;
+  border-radius: 22px;
+  padding: 11px 28px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: .04em;
+  box-shadow: 0 4px 20px rgba(139,92,246,0.45);
+  white-space: nowrap;
+  transition: filter .15s;
+}
+.dd-coach-next:hover { filter: brightness(1.1); }
+.dd-coach-step-counter {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  white-space: nowrap;
+}
+body.light-mode .dd-coach-step-counter { color: rgba(0,0,0,0.35); }
+/* Dismiss button kept for compat */
 .dd-coach-dismiss {
   position: fixed;
   bottom: 28px;
@@ -525,6 +574,7 @@ body.light-mode .dd-callout-desc strong { color: #7c3aed; }
   box-shadow: 0 4px 20px rgba(139,92,246,0.45);
   animation: dd-callout-pop .3s .15s both;
   white-space: nowrap;
+  display: none;
 }
 .dd-coach-dismiss:hover { filter: brightness(1.1); transform: translateX(-50%) translateY(-1px); }
 
@@ -903,6 +953,11 @@ body.light-mode .dd-callout-desc strong { color: #7c3aed; }
      ═══════════════════════════════════════════════ -->
 <div id="dd-coach-backdrop" class="dd-coach-backdrop" onclick="dismissDdCoach()" aria-hidden="true"></div>
 <div id="dd-coach-container" class="dd-coach-container" aria-live="polite"></div>
+<div id="dd-coach-nav" class="dd-coach-nav">
+  <button class="dd-coach-skip" id="dd-coach-skip-btn" onclick="dismissDdCoach()">Skip</button>
+  <span class="dd-coach-step-counter" id="dd-coach-step-counter"></span>
+  <button class="dd-coach-next" id="dd-coach-next-btn" onclick="ddCoachNext()">Next →</button>
+</div>
 
 <!-- Toast container -->
 <div class="toast-container" id="toast-container"></div>
@@ -937,6 +992,10 @@ body.light-mode .dd-callout-desc strong { color: #7c3aed; }
     <button class="dropdown-item" onclick="showOnboarding()">
       <span>❓</span>
       <span>How to Use</span>
+    </button>
+    <button class="dropdown-item" onclick="enableDueDateNotifications()" id="notif-btn">
+      <span>🔔</span>
+      <span>Enable Notifications</span>
     </button>
     <button class="dropdown-item" onclick="resetAllData()" style="color:#ef4444;">
       <span>🗑️</span>
@@ -1594,100 +1653,124 @@ const DD_COACH_STEPS = [
   }
 ];
 
+// Step-by-step coach: shows one callout at a time, user clicks Next or Skip
+let _ddCoachStep = 0;
+let _ddCoachVisibleSteps = []; // indices into DD_COACH_STEPS that have live targets
+
 function showDdCoach() {
   if (localStorage.getItem(DD_COACH_KEY)) return;
-  // Small delay so dropdown is fully rendered and positioned
-  setTimeout(_renderDdCoach, 80);
+  setTimeout(_initDdCoach, 80);
 }
 
-function _renderDdCoach() {
-  const backdrop  = document.getElementById('dd-coach-backdrop');
-  const container = document.getElementById('dd-coach-container');
-  if (!backdrop || !container) return;
-
-  container.innerHTML = '';
-
+function _resolveDdCoachTargets() {
   const dropdown = document.getElementById('dropdown');
-  if (!dropdown || !dropdown.classList.contains('show')) return;
-
-  const isMobile = window.innerWidth <= 768;
-
-  // Build callouts for each step that has a visible target
-  let rendered = 0;
+  if (!dropdown) return [];
+  const resolved = [];
   DD_COACH_STEPS.forEach((step, i) => {
-    // Try primary selector, then fallback by text content
     let target = dropdown.querySelector(step.selector);
     if (!target && step.fallbackText) {
-      const all = dropdown.querySelectorAll('button, .dropdown-item');
-      for (const el of all) {
+      for (const el of dropdown.querySelectorAll('button, .dropdown-item')) {
         if (el.textContent.includes(step.fallbackText)) { target = el; break; }
       }
     }
-    // For collaboration: find the collab create/join button injected by collab.js
     if (!target) {
       const all = dropdown.querySelectorAll('button.dropdown-item.collab-dd-item');
       if (all.length > 0) target = all[0];
     }
-
-    if (!target) return;
-    const rect = target.getBoundingClientRect();
-    if (rect.width === 0) return; // hidden
-
-    const callout = document.createElement('div');
-    callout.className = 'dd-callout';
-    callout.style.animationDelay = `${i * 0.06}s`;
-    callout.innerHTML = `
-      <div class="dd-callout-icon">${step.icon}</div>
-      <div class="dd-callout-body">
-        <div class="dd-callout-title">${step.title}</div>
-        <div class="dd-callout-desc">${step.desc}</div>
-      </div>`;
-
-    if (!isMobile) {
-      // Position to the right of the dropdown item
-      const dropRect = dropdown.getBoundingClientRect();
-      const top = rect.top + (rect.height / 2) - 22; // center vertically on item
-      const left = dropRect.right + 14;
-      callout.style.top  = Math.max(8, Math.min(top, window.innerHeight - 160)) + 'px';
-      callout.style.left = left + 'px';
-    } else {
-      // Position below the dropdown item on mobile
-      const top  = rect.bottom + 8;
-      const left = Math.max(8, Math.min(rect.left, window.innerWidth - 216));
-      callout.style.top  = top + 'px';
-      callout.style.left = left + 'px';
-      // Shift arrow to point at item center
-      const arrowLeft = (rect.left + rect.width / 2) - left - 6;
-      callout.style.setProperty('--arrow-left', arrowLeft + 'px');
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      if (rect.width > 0) resolved.push({ step, target, rect });
     }
-
-    container.appendChild(callout);
-    rendered++;
   });
+  return resolved;
+}
 
-  if (rendered === 0) return; // nothing to show (e.g. no collab buttons yet)
+function _initDdCoach() {
+  const dropdown = document.getElementById('dropdown');
+  if (!dropdown || !dropdown.classList.contains('show')) return;
+  _ddCoachVisibleSteps = _resolveDdCoachTargets();
+  if (_ddCoachVisibleSteps.length === 0) return;
+  _ddCoachStep = 0;
+  _showDdCoachStep();
+}
 
-  // Dismiss button
-  const dismissBtn = document.createElement('button');
-  dismissBtn.className = 'dd-coach-dismiss';
-  dismissBtn.textContent = 'Got it →';
-  dismissBtn.onclick = dismissDdCoach;
-  container.appendChild(dismissBtn);
+function _showDdCoachStep() {
+  const backdrop  = document.getElementById('dd-coach-backdrop');
+  const container = document.getElementById('dd-coach-container');
+  const nav       = document.getElementById('dd-coach-nav');
+  const nextBtn   = document.getElementById('dd-coach-next-btn');
+  const counter   = document.getElementById('dd-coach-step-counter');
+  if (!backdrop || !container || !nav) return;
+
+  const dropdown = document.getElementById('dropdown');
+  if (!dropdown || !dropdown.classList.contains('show')) { dismissDdCoach(); return; }
+
+  // Re-resolve so positions are fresh
+  _ddCoachVisibleSteps = _resolveDdCoachTargets();
+  if (_ddCoachVisibleSteps.length === 0) { dismissDdCoach(); return; }
+  if (_ddCoachStep >= _ddCoachVisibleSteps.length) { dismissDdCoach(); return; }
+
+  const { step, target } = _ddCoachVisibleSteps[_ddCoachStep];
+  const rect = target.getBoundingClientRect();
+  const isMobile = window.innerWidth <= 768;
+  const total = _ddCoachVisibleSteps.length;
+  const isLast = _ddCoachStep === total - 1;
+
+  container.innerHTML = '';
+
+  const callout = document.createElement('div');
+  callout.className = 'dd-callout';
+  callout.innerHTML = `
+    <div class="dd-callout-icon">${step.icon}</div>
+    <div class="dd-callout-body">
+      <div class="dd-callout-title">${step.title}</div>
+      <div class="dd-callout-desc">${step.desc}</div>
+    </div>`;
+
+  if (!isMobile) {
+    const dropRect = dropdown.getBoundingClientRect();
+    const top = rect.top + (rect.height / 2) - 22;
+    const left = dropRect.right + 14;
+    callout.style.top  = Math.max(8, Math.min(top, window.innerHeight - 160)) + 'px';
+    callout.style.left = left + 'px';
+  } else {
+    const top  = rect.bottom + 8;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - 216));
+    callout.style.top  = top + 'px';
+    callout.style.left = left + 'px';
+    const arrowLeft = (rect.left + rect.width / 2) - left - 6;
+    callout.style.setProperty('--arrow-left', arrowLeft + 'px');
+  }
+
+  container.appendChild(callout);
+
+  counter.textContent = `${_ddCoachStep + 1} of ${total}`;
+  nextBtn.textContent = isLast ? 'Got it ✓' : 'Next →';
 
   backdrop.classList.add('visible');
   container.classList.add('visible');
-
-  // Ensure dropdown stays on top of backdrop
+  nav.classList.add('visible');
   dropdown.style.zIndex = '205';
+}
+
+function ddCoachNext() {
+  _ddCoachStep++;
+  if (_ddCoachStep >= _ddCoachVisibleSteps.length) {
+    dismissDdCoach();
+  } else {
+    _showDdCoachStep();
+  }
 }
 
 function dismissDdCoach() {
   localStorage.setItem(DD_COACH_KEY, '1');
   const backdrop  = document.getElementById('dd-coach-backdrop');
   const container = document.getElementById('dd-coach-container');
+  const nav       = document.getElementById('dd-coach-nav');
   const dropdown  = document.getElementById('dropdown');
   if (backdrop)  backdrop.classList.remove('visible');
   if (container) container.classList.remove('visible');
+  if (nav)       nav.classList.remove('visible');
   if (dropdown)  dropdown.style.zIndex = '';
 }
 
