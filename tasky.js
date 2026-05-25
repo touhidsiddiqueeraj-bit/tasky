@@ -241,7 +241,7 @@
                     tasks: JSON.parse(JSON.stringify(tasks)),
                     taskCounter: taskCounter,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }).then(() => setSyncStatus('synced')).catch(() => setSyncStatus('offline'));
+                }, { merge: true }).then(() => setSyncStatus('synced')).catch(() => setSyncStatus('offline'));
             }, 500);
         }
 
