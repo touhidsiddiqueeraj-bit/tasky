@@ -915,18 +915,24 @@ async function renderCollabSummary() {
 
 // ─── Dropdown collab items ────────────────────────────────────────────────
 function renderCollabDropdownItems() {
-    // Remove old collab items
+    // Always wipe stale items first
     document.querySelectorAll('.collab-dd-item').forEach(el => el.remove());
 
     const dropdown = document.getElementById('dropdown');
     if (!dropdown) return;
 
+    // Only show collab items for real (non-anonymous) signed-in users.
+    // Anonymous users and the brief pre-auth window get nothing.
+    const isRealUser = currentUser && !currentUser.isAnonymous;
+    if (!isRealUser) return;
+
+    // Divider above the collab items
     const divider = document.createElement('div');
     divider.className = 'dropdown-divider collab-dd-item';
     dropdown.insertBefore(divider, dropdown.firstChild);
 
     if (!currentGroup) {
-        // Show Create Group + Join Group
+        // Not in a collaboration yet — offer Create / Join
         const createBtn = makeDropdownItem('👥', 'Create Collaboration', () => openCollabModal('create'));
         const joinBtn   = makeDropdownItem('🔗', 'Join Collaboration',   () => openCollabModal('join'));
         createBtn.classList.add('collab-dd-item');
@@ -934,10 +940,10 @@ function renderCollabDropdownItems() {
         dropdown.insertBefore(joinBtn,   dropdown.firstChild);
         dropdown.insertBefore(createBtn, dropdown.firstChild);
     } else {
-        // Show group info + Leave
+        // Already in a collaboration — show group info + Leave
         const infoBtn  = makeDropdownItem('👥', `${currentGroup.name} (${currentGroup.code})`, () => openCollabModal('info'));
         const leaveBtn = makeDropdownItem('🚪', 'Leave Collaboration', () => leaveGroup());
-        infoBtn.style.color = '#a78bfa';
+        infoBtn.style.color  = '#a78bfa';
         leaveBtn.style.color = '#ef4444';
         infoBtn.classList.add('collab-dd-item');
         leaveBtn.classList.add('collab-dd-item');
@@ -1562,51 +1568,76 @@ function escHtml(str) {
 }
 
 // ─── Hook into Firebase auth flow ─────────────────────────────────────────
-function setupCollabAuth() {
-    firebase.auth(app).onAuthStateChanged(async user => {
-        if (user && !user.isAnonymous) {
-            // Fully signed-in user
-            await ensureHandle();
-            await loadActiveGroup();   // reads activeGroup from Firestore server, starts listener
-            startNotifListener();
+// We piggyback on tasky.js's updateAuthUI (which fires AFTER currentUser is
+// set) instead of registering a second onAuthStateChanged listener. That second
+// listener was the root cause of the race: both listeners fired independently,
+// so collab state was sometimes resolved before currentUser was updated and
+// vice-versa, causing buttons to flicker or appear in the wrong state.
+//
+// Strategy:
+//   • Real Google user  → load group, start listeners, render collab UI
+//   • Anonymous / null  → tear down collab state, re-render (buttons hidden)
+//   • We debounce rapid back-to-back calls (e.g. anon→google transition) with
+//     a short timeout so only the final stable state triggers full setup.
 
-            // currentGroup is now set (or null if not in a collaboration).
-            // Immediately write member's current tasks to the group subcollection
-            // so the supervisor sees fresh data — bypasses any caching.
-            await writeGroupTasks();
+let _collabAuthTimer = null;
+let _collabLastUid   = null;
 
-            // Pull in tasks assigned to us while we were offline
-            await syncGroupTasksToBoard();
-        } else if (user && user.isAnonymous) {
-            // Anonymous user — collab requires Google sign-in, so teardown collab state
-            stopGroupListener();
-            stopNotifListener();
-            stopTasksListener();
-            saveGroupCodeLocally(null);
-            currentGroup    = null;
-            isSupervisor    = false;
-            currentHandle   = null;
-            localStorage.removeItem('tasky_handle');
-            teamPanelMember = null;
-            teamTasksCache  = {};
-            if (_groupSyncTimer) { clearTimeout(_groupSyncTimer); _groupSyncTimer = null; }
+async function _handleAuthChange() {
+    const user = currentUser;   // tasky.js's global — always up-to-date here
+
+    if (user && !user.isAnonymous) {
+        // ── Real user ────────────────────────────────────────────────────
+        if (user.uid === _collabLastUid) return;  // same user, nothing to do
+        _collabLastUid = user.uid;
+
+        await ensureHandle();
+        await loadActiveGroup();       // reads from localStorage instantly, verifies from Firestore
+        startNotifListener();
+        await writeGroupTasks();       // push current local tasks so supervisor sees fresh data
+        await syncGroupTasksToBoard(); // pull tasks assigned while offline
+        // renderGroupUI is called inside loadActiveGroup → startGroupListener → onSnapshot
+        // but call it once more here to guarantee the dropdown reflects the resolved state
+        renderGroupUI();
+    } else {
+        // ── Anonymous or signed-out ───────────────────────────────────────
+        if (_collabLastUid === null) {
+            // Transient pre-auth state AND no prior session — just update dropdown
             renderGroupUI();
-        } else {
-            // No user at all (transient state before anon auth)
-            stopGroupListener();
-            stopNotifListener();
-            stopTasksListener();
-            saveGroupCodeLocally(null);
-            currentGroup    = null;
-            isSupervisor    = false;
-            currentHandle   = null;
-            localStorage.removeItem('tasky_handle');
-            teamPanelMember = null;
-            teamTasksCache  = {};
-            if (_groupSyncTimer) { clearTimeout(_groupSyncTimer); _groupSyncTimer = null; }
-            renderGroupUI();
+            return;
         }
-    });
+        _collabLastUid = null;
+        stopGroupListener();
+        stopNotifListener();
+        stopTasksListener();
+        saveGroupCodeLocally(null);
+        currentGroup    = null;
+        isSupervisor    = false;
+        currentHandle   = null;
+        localStorage.removeItem('tasky_handle');
+        teamPanelMember = null;
+        teamTasksCache  = {};
+        if (_groupSyncTimer) { clearTimeout(_groupSyncTimer); _groupSyncTimer = null; }
+        renderGroupUI();
+    }
+}
+
+function setupCollabAuth() {
+    // Patch tasky.js's updateAuthUI so we run right after it resolves currentUser.
+    // updateAuthUI is a global function defined in tasky.js's scope; we wrap it here.
+    const _origUpdateAuthUI = window.updateAuthUI || function(){};
+    window.updateAuthUI = function() {
+        _origUpdateAuthUI();
+        // Debounce: during the anon→Google transition Firebase fires two rapid
+        // state changes (signed-out briefly, then signed-in). Wait 80 ms so we
+        // only act on the final stable state.
+        if (_collabAuthTimer) clearTimeout(_collabAuthTimer);
+        _collabAuthTimer = setTimeout(_handleAuthChange, 80);
+    };
+
+    // Also run immediately in case updateAuthUI already fired before we patched it.
+    if (_collabAuthTimer) clearTimeout(_collabAuthTimer);
+    _collabAuthTimer = setTimeout(_handleAuthChange, 80);
 }
 
 // Immediate (non-debounced) version used on boot only
