@@ -1669,11 +1669,21 @@ renderGroupUI = function() {
 // ─── In-memory fallback for solo (non-collab) activity ──────────────────
 const _soloActivity = {};   // { [taskId]: [ entry, … ] }
 
-// ─── Firestore ref helper ────────────────────────────────────────────────
-function commentsDocRef(taskId) {
-    if (!currentGroup || !db) return null;
+// ─── Firestore ref helper ─────────────────────────────────────────────────
+// Comments are stored inside each user's OWN tasks doc (which they can write)
+// under a top-level 'comments' field: { [taskId]: [ entry, ... ] }
+// This avoids needing extra Firestore rules.
+function _myTasksDocRef() {
+    if (!currentGroup || !currentUser || !db) return null;
     return db.collection('groups').doc(currentGroup.code)
-             .collection('comments').doc(String(taskId));
+             .collection('tasks').doc(currentUser.uid);
+}
+
+// For reading comments on a task, we read from ALL members' task docs.
+// commentsDocRef is kept as a compat shim but is no longer the write path.
+function commentsDocRef(taskId) {
+    // Legacy path — no longer used for writes; kept for any stale references.
+    return null;
 }
 
 // ─── Log an activity event (called by move/priority/assign hooks) ────────
@@ -1687,16 +1697,13 @@ async function logActivity(taskId, msg) {
         authorUid: currentUser ? currentUser.uid : null
     };
 
-    const ref = commentsDocRef(taskId);
+    const ref = _myTasksDocRef();
     if (ref) {
         try {
-            await ref.set({
-                taskId: String(taskId),
-                entries: firebase.firestore.FieldValue.arrayUnion(entry)
-            }, { merge: true });
+            const key = `comments_${String(taskId).replace(/[^a-z0-9]/gi,'_')}`;
+            await ref.set({ [key]: firebase.firestore.FieldValue.arrayUnion(entry) }, { merge: true });
         } catch(_) {}
     } else {
-        // Solo fallback
         if (!_soloActivity[taskId]) _soloActivity[taskId] = [];
         _soloActivity[taskId].push(entry);
     }
@@ -1714,14 +1721,12 @@ async function addComment(taskId, text, taskText) {
         authorUid: currentUser ? currentUser.uid : null
     };
 
-    const ref = commentsDocRef(taskId);
+    const ref = _myTasksDocRef();
     if (ref) {
-        await ref.set({
-            taskId: String(taskId),
-            taskText: taskText || '',
-            entries: firebase.firestore.FieldValue.arrayUnion(entry)
-        }, { merge: true });
-
+        const key = `comments_${String(taskId).replace(/[^a-z0-9]/gi,'_')}`;
+        await ref.set({ [key]: firebase.firestore.FieldValue.arrayUnion(entry) }, { merge: true });
+        // Re-render if panel open (live listener below handles it too)
+        _refreshOpenCommentPanel(taskId);
         // Ping the supervisor if the commenter is a member (not supervisor)
         if (!isSupervisor && currentGroup) {
             _pingCommentNotification(taskId, taskText, text.trim());
@@ -1729,7 +1734,6 @@ async function addComment(taskId, text, taskText) {
     } else {
         if (!_soloActivity[taskId]) _soloActivity[taskId] = [];
         _soloActivity[taskId].push(entry);
-        // Re-render feed if panel is open
         _refreshOpenCommentPanel(taskId);
     }
 }
@@ -1756,9 +1760,8 @@ async function _pingCommentNotification(taskId, taskText, commentText) {
 
 // ─── Delete a comment (own comment only) ────────────────────────────────
 async function deleteComment(taskId, commentId) {
-    const ref = commentsDocRef(taskId);
+    const ref = _myTasksDocRef();
     if (!ref) {
-        // Solo fallback
         if (_soloActivity[taskId]) {
             _soloActivity[taskId] = _soloActivity[taskId].filter(e => e.id !== commentId);
         }
@@ -1766,25 +1769,38 @@ async function deleteComment(taskId, commentId) {
         return;
     }
     try {
+        const key = `comments_${String(taskId).replace(/[^a-z0-9]/gi,'_')}`;
         const snap = await ref.get();
         if (!snap.exists) return;
-        const entries = (snap.data().entries || []).filter(e => e.id !== commentId);
-        await ref.update({ entries });
+        const entries = (snap.data()[key] || []).filter(e => e.id !== commentId);
+        await ref.update({ [key]: entries });
         _refreshOpenCommentPanel(taskId);
     } catch(_) {}
 }
 
 // ─── Load entries for a task ─────────────────────────────────────────────
+// Reads from ALL members' task docs and merges entries for this taskId.
+// Each member can only write their own doc but everyone can read group docs.
 async function loadCommentEntries(taskId) {
-    const ref = commentsDocRef(taskId);
-    if (ref) {
-        try {
-            const snap = await ref.get();
-            if (snap.exists) return snap.data().entries || [];
-        } catch(_) {}
-        return [];
-    }
-    return _soloActivity[taskId] || [];
+    if (!currentGroup || !db) return _soloActivity[taskId] || [];
+    const key = `comments_${String(taskId).replace(/[^a-z0-9]/gi,'_')}`;
+    const allEntries = [];
+    try {
+        // Read all members' task docs
+        const memberUids = (currentGroup.members || []).map(m => m.uid);
+        const promises = memberUids.map(uid =>
+            db.collection('groups').doc(currentGroup.code)
+              .collection('tasks').doc(uid).get()
+        );
+        const snaps = await Promise.all(promises);
+        snaps.forEach(snap => {
+            if (snap.exists && snap.data()[key]) {
+                allEntries.push(...snap.data()[key]);
+            }
+        });
+    } catch(_) {}
+    // Sort by ts
+    return allEntries.sort((a, b) => a.ts > b.ts ? 1 : -1);
 }
 
 // ─── Live listener for the open comments panel ───────────────────────────
@@ -1799,11 +1815,13 @@ function _stopCommentsListener() {
 function _startCommentsListener(taskId) {
     _stopCommentsListener();
     _commentsOpenTaskId = taskId;
-    const ref = commentsDocRef(taskId);
+    const ref = _myTasksDocRef();
     if (!ref) return;
-    _commentsUnsubscribe = ref.onSnapshot(snap => {
-        if (!snap.exists) return;
-        _renderCommentFeed(taskId, snap.data().entries || []);
+    const key = `comments_${String(taskId).replace(/[^a-z0-9]/gi,'_')}`;
+    // Listen on own doc; on any change reload all entries (to catch other members too)
+    _commentsUnsubscribe = ref.onSnapshot(async () => {
+        const entries = await loadCommentEntries(taskId);
+        _renderCommentFeed(taskId, entries);
     });
 }
 
@@ -1975,19 +1993,26 @@ createTaskCard = function(task, column) {
         openComments(task.id, task.text, column);
     });
 
-    // Badge: update count from Firestore once if in collab
+    // Badge: load comment count from all member docs (async, non-blocking)
     if (currentGroup) {
-        const ref = commentsDocRef(task.id);
-        if (ref) {
-            ref.get().then(snap => {
-                if (snap.exists) {
-                    const count = (snap.data().entries || []).filter(e => e.type === 'comment').length;
-                    if (count > 0) {
-                        commentBtn.innerHTML = `💬<span class="comment-count">${count}</span>`;
-                    }
+        const key = `comments_${String(task.id).replace(/[^a-z0-9]/gi,'_')}`;
+        const memberUids = (currentGroup.members || []).map(m => m.uid);
+        Promise.all(
+            memberUids.map(uid =>
+                db.collection('groups').doc(currentGroup.code)
+                  .collection('tasks').doc(uid).get()
+            )
+        ).then(snaps => {
+            let count = 0;
+            snaps.forEach(snap => {
+                if (snap.exists && snap.data()[key]) {
+                    count += snap.data()[key].filter(e => e.type === 'comment').length;
                 }
-            }).catch(() => {});
-        }
+            });
+            if (count > 0) {
+                commentBtn.innerHTML = `💬<span class="comment-count">${count}</span>`;
+            }
+        }).catch(() => {});
     }
 
     const hoverControls = card.querySelector('.task-hover-controls');
@@ -2025,33 +2050,15 @@ startNotifListener = function() {
     _origStartNotifListener();
 };
 
-// Extend the notification snapshot to also fire browser push
-// We do this by wrapping the global notifListener startup.
-// Instead of patching the Firestore snapshot (too deep), we intercept
-// showTaskyToast — when a collab assignment comes in, we also fire push.
-const _origShowTaskyToast = showTaskyToast;
-window.showTaskyToast = function(msg) {
-    _origShowTaskyToast(msg);
-    // If it looks like a new task assignment notification, fire push
-    if (msg.startsWith('📋 New task from @') && 'Notification' in window && Notification.permission === 'granted') {
-        try {
-            new Notification('Tasky — New Task Assigned', {
-                body: msg.replace('📋 ', ''),
-                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">✅</text></svg>',
-                requireInteraction: true
-            });
-        } catch(_) {}
-    }
-    // Comment ping for supervisor
-    if (msg.includes('commented on') && 'Notification' in window && Notification.permission === 'granted') {
-        try {
-            new Notification('Tasky — New Comment', {
-                body: msg,
-                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">💬</text></svg>',
-            });
-        } catch(_) {}
-    }
-};
+// showTaskyToast bridge — collab.js loads before the inline HTML <script> that
+// defines showTaskyToast, so we cannot capture it at parse time. We hook it
+// lazily once the DOM is fully loaded.
+function _collabToast(msg) {
+    if (typeof showTaskyToast === 'function') showTaskyToast(msg);
+    else if (typeof showToast === 'function') showToast(msg, () => {});
+}
+// NOTE: the _startExtendedNotifListener below calls _collabToast directly,
+// so no module-level capture of showTaskyToast is needed here.
 
 // Extend startNotifListener's Firestore snapshot to also handle comment pings
 // and fire a browser notification. We replace the core logic by patching
@@ -2074,7 +2081,7 @@ function _startExtendedNotifListener() {
                 if (n.type === 'comment') {
                     // Supervisor receives comment ping
                     const msg = `💬 @${n.fromHandle} commented on "${n.taskText}": ${n.commentText}`;
-                    showTaskyToast(msg);
+                    _collabToast(msg);
                     // Browser push
                     if ('Notification' in window && Notification.permission === 'granted') {
                         try {
@@ -2091,7 +2098,7 @@ function _startExtendedNotifListener() {
                 } else {
                     // Default: task assignment ping
                     const msg = `📋 New task from @${n.fromHandle}: "${n.taskText}"`;
-                    showTaskyToast(msg);
+                    _collabToast(msg);
                     if ('Notification' in window && Notification.permission === 'granted') {
                         try {
                             new Notification('Tasky — New Task Assigned', {
@@ -2167,7 +2174,7 @@ window.setDueDate = function(col, taskId, date) {
     if (date) {
         requestNotifPermission().then(ok => {
             if (ok) {
-                showTaskyToast('🔔 Due-date reminders enabled');
+                _collabToast('🔔 Due-date reminders enabled');
                 checkDueDateNotifications();
             }
         });
@@ -2176,12 +2183,25 @@ window.setDueDate = function(col, taskId, date) {
 
 // Enable manually from dropdown
 window.enableDueDateNotifications = async function() {
+    if (!('Notification' in window)) {
+        _collabToast('⚠️ This browser does not support notifications.');
+        return;
+    }
     const ok = await requestNotifPermission();
     if (ok) {
-        showTaskyToast('🔔 Notifications enabled! Reminders for due tasks and new assignments.');
+        _collabToast('🔔 Notifications enabled!');
+        // Fire a confirmation push so user sees it's working
+        try {
+            new Notification('Tasky Notifications Active', {
+                body: 'You'll be notified for new tasks, comments, and due dates.',
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">✅</text></svg>'
+            });
+        } catch(_) {}
         checkDueDateNotifications();
+    } else if (Notification.permission === 'denied') {
+        _collabToast('⚠️ Notifications blocked. Go to browser Site Settings to allow them.');
     } else {
-        showTaskyToast('⚠️ Permission denied — check your browser notification settings.');
+        _collabToast('⚠️ Notification permission not granted.');
     }
 };
 
