@@ -943,41 +943,41 @@ async function renderCollabSummary() {
 }
 
 // ─── Dropdown collab items ────────────────────────────────────────────────
-// Uses static HTML buttons (always in the DOM); just shows/hides them.
-// This avoids the dynamic insertion race that caused buttons to disappear.
 function renderCollabDropdownItems() {
+    // Always wipe stale items first
+    document.querySelectorAll('.collab-dd-item').forEach(el => el.remove());
+
+    const dropdown = document.getElementById('dropdown');
+    if (!dropdown) return;
+
+    // Only show collab items for real (non-anonymous) signed-in users.
+    // Anonymous users and the brief pre-auth window get nothing.
     const isRealUser = currentUser && !currentUser.isAnonymous;
+    if (!isRealUser) return;
 
-    const createBtn  = document.getElementById('collab-create-dd-btn');
-    const joinBtn    = document.getElementById('collab-join-dd-btn');
-    const infoBtn    = document.getElementById('collab-info-dd-btn');
-    const leaveBtn   = document.getElementById('collab-leave-dd-btn');
-    const divider    = document.getElementById('collab-dd-divider');
-
-    if (!createBtn) return; // HTML not updated yet
-
-    if (!isRealUser) {
-        // Signed out — hide everything
-        [createBtn, joinBtn, infoBtn, leaveBtn, divider].forEach(el => el.style.display = 'none');
-        return;
-    }
-
-    // Signed in — show the right set
-    divider.style.display = '';
+    // Divider above the collab items
+    const divider = document.createElement('div');
+    divider.className = 'dropdown-divider collab-dd-item';
+    dropdown.insertBefore(divider, dropdown.firstChild);
 
     if (!currentGroup) {
-        createBtn.style.display = '';
-        joinBtn.style.display   = '';
-        infoBtn.style.display   = 'none';
-        leaveBtn.style.display  = 'none';
+        // Not in a collaboration yet — offer Create / Join
+        const createBtn = makeDropdownItem('👥', 'Create Collaboration', () => openCollabModal('create'));
+        const joinBtn   = makeDropdownItem('🔗', 'Join Collaboration',   () => openCollabModal('join'));
+        createBtn.classList.add('collab-dd-item');
+        joinBtn.classList.add('collab-dd-item');
+        dropdown.insertBefore(joinBtn,   dropdown.firstChild);
+        dropdown.insertBefore(createBtn, dropdown.firstChild);
     } else {
-        createBtn.style.display = 'none';
-        joinBtn.style.display   = 'none';
-        infoBtn.style.display   = '';
-        leaveBtn.style.display  = '';
-        const infoText = document.getElementById('collab-info-dd-text');
-        if (infoText) infoText.textContent = `${currentGroup.name} (${currentGroup.code})`;
+        // Already in a collaboration — show group info + Leave
+        const infoBtn  = makeDropdownItem('👥', `${currentGroup.name} (${currentGroup.code})`, () => openCollabModal('info'));
+        const leaveBtn = makeDropdownItem('🚪', 'Leave Collaboration', () => leaveGroup());
         infoBtn.style.color  = '#a78bfa';
+        leaveBtn.style.color = '#ef4444';
+        infoBtn.classList.add('collab-dd-item');
+        leaveBtn.classList.add('collab-dd-item');
+        dropdown.insertBefore(leaveBtn, dropdown.firstChild);
+        dropdown.insertBefore(infoBtn,  dropdown.firstChild);
     }
 }
 
@@ -1031,7 +1031,7 @@ function buildCollabModal() {
         <div class="tg-body" style="padding:0;">
             <!-- Handle setup pane -->
             <div id="collab-pane-handle" class="collab-pane" style="display:none;padding:28px;">
-                <p class="collab-pane-desc">Choose a short username so teammates can assign tasks to you. You can't change this later.</p>
+                <p class="collab-pane-desc" id="collab-handle-desc">Choose a short username so teammates can identify you.</p>
                 <div class="tg-field-label" style="margin-top:16px;">Your username (3–16 chars, letters/numbers)</div>
                 <input class="tg-input" id="collab-handle-input" type="text" placeholder="e.g. jon, sara, dev01" maxlength="16">
                 <div id="collab-handle-error" style="color:#f87171;font-size:12px;margin-top:6px;display:none;"></div>
@@ -1048,6 +1048,10 @@ function buildCollabModal() {
                 <div style="display:flex;gap:10px;margin-top:16px;">
                     <button class="tg-save-btn" id="collab-create-btn">Create Collaboration</button>
                 </div>
+                <div id="collab-create-username-row" style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:12px;color:rgba(255,255,255,0.35);">Your username: <strong id="collab-create-handle-display" style="color:rgba(255,255,255,0.6);"></strong></span>
+                    <button class="tg-icon-btn" onclick="showCollabModalPane('change')" style="font-size:11px;padding:4px 10px;">✏️ Change</button>
+                </div>
             </div>
             <!-- Join pane -->
             <div id="collab-pane-join" class="collab-pane" style="display:none;padding:28px;">
@@ -1058,6 +1062,10 @@ function buildCollabModal() {
                 <div id="collab-join-error" style="color:#f87171;font-size:12px;margin-top:6px;display:none;"></div>
                 <div style="display:flex;gap:10px;margin-top:16px;">
                     <button class="tg-save-btn" id="collab-join-btn">Join Collaboration</button>
+                </div>
+                <div id="collab-join-username-row" style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:12px;color:rgba(255,255,255,0.35);">Your username: <strong id="collab-join-handle-display" style="color:rgba(255,255,255,0.6);"></strong></span>
+                    <button class="tg-icon-btn" onclick="showCollabModalPane('change')" style="font-size:11px;padding:4px 10px;">✏️ Change</button>
                 </div>
             </div>
             <!-- Success pane -->
@@ -1401,12 +1409,30 @@ async function showCollabModalPane(mode) {
     document.querySelectorAll('.collab-pane').forEach(p => p.style.display = 'none');
     const title = document.getElementById('collab-modal-title');
 
-    // If no handle yet, go to handle pane first
+    // 'change' mode: explicitly editing an existing handle
+    if (mode === 'change') {
+        const handleInput = document.getElementById('collab-handle-input');
+        const handlePane  = document.getElementById('collab-pane-handle');
+        const handleDesc  = document.getElementById('collab-handle-desc');
+        if (handleInput) handleInput.value = currentHandle || '';
+        if (handlePane)  handlePane.dataset.nextMode = currentGroup ? 'info' : 'create';
+        if (handleDesc)  handleDesc.textContent = currentHandle
+            ? `Your current username is @${currentHandle}. Enter a new one below.`
+            : 'Choose a short username so teammates can identify you.';
+        handlePane.style.display = 'block';
+        if (title) title.textContent = '✏️ Change Username';
+        handleInput.focus();
+        return;
+    }
+
+    // If no handle yet, redirect to handle pane first
     const handle = await ensureHandle();
     if (!handle && mode !== 'info') {
+        const handleInput = document.getElementById('collab-handle-input');
+        if (handleInput) handleInput.value = '';
         document.getElementById('collab-pane-handle').style.display = 'block';
         if (title) title.textContent = '👤 Set Username';
-        document.getElementById('collab-handle-input').focus();
+        handleInput.focus();
         // Store intended mode
         document.getElementById('collab-pane-handle').dataset.nextMode = mode;
         return;
@@ -1416,10 +1442,14 @@ async function showCollabModalPane(mode) {
         document.getElementById('collab-pane-create').style.display = 'block';
         if (title) title.textContent = '👥 Create Collaboration';
         document.getElementById('collab-group-name-input').focus();
+        const cd = document.getElementById('collab-create-handle-display');
+        if (cd) cd.textContent = currentHandle ? '@' + currentHandle : '(not set)';
     } else if (mode === 'join') {
         document.getElementById('collab-pane-join').style.display = 'block';
         if (title) title.textContent = '🔗 Join Collaboration';
         document.getElementById('collab-join-code-input').focus();
+        const jd = document.getElementById('collab-join-handle-display');
+        if (jd) jd.textContent = currentHandle ? '@' + currentHandle : '(not set)';
     } else if (mode === 'info') {
         document.getElementById('collab-pane-info').style.display = 'block';
         if (title) title.textContent = '👥 Collaboration Info';
@@ -1461,6 +1491,13 @@ function renderGroupInfoPane() {
                 Supports: <code style="color:#c4b5fd;">to::</code> <code style="color:#c4b5fd;">priority::</code> <code style="color:#c4b5fd;">date::</code>
             </div>
         </div>` : ''}
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
+            <div class="tg-field-label">Your Username</div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:8px;">
+                <span style="font-size:15px;font-weight:700;color:#e2d9ff;">@${escHtml(currentHandle || '—')}</span>
+                <button class="tg-icon-btn" onclick="showCollabModalPane('change')" style="font-size:12px;">✏️ Change</button>
+            </div>
+        </div>
     `;
 }
 
@@ -1487,9 +1524,10 @@ async function handleSaveHandle() {
     const btn = document.getElementById('collab-handle-save-btn');
     btn.textContent = 'Saving…'; btn.disabled = true;
 
-    // Check uniqueness
+    // Check uniqueness — exclude own document so a user can "re-save" their handle
     const existing = await db.collection('users').where('handle', '==', handle).get();
-    if (!existing.empty) {
+    const takenByOther = existing.docs.some(doc => doc.id !== currentUser.uid);
+    if (takenByOther) {
         errEl.textContent = 'Username taken. Try another.';
         errEl.style.display = 'block';
         btn.textContent = 'Save Username'; btn.disabled = false;
