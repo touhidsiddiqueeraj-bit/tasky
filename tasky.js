@@ -145,6 +145,7 @@
             firebase.auth(app).onAuthStateChanged(user => {
                 const prevUid = currentUser ? currentUser.uid : null;
                 currentUser = user;
+                window.currentUser = user; // expose for tasky-collab.js
 
                 if (user) {
                     if (user.uid !== prevUid) {
@@ -159,6 +160,9 @@
                 }
 
                 updateAuthUI();
+                // Fire a simple event so tasky-collab.js can react without
+                // needing to patch updateAuthUI (which is a local function here).
+                window.dispatchEvent(new CustomEvent('tasky:authchange', { detail: { user } }));
             });
         }
 
