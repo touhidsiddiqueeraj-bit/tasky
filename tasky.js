@@ -1440,16 +1440,23 @@
         }
 
 // ─── Expose globals for tasky-collab.js ───────────────────────────────────
-// Script-level `let` declarations are NOT on window in modern browsers.
-// tasky-collab.js uses these as free variables, so we must expose them.
-window.db             = db;
-window.addTask        = addTask;
-window.saveAll        = saveAll;
-window.showToast      = showToast;
+// Script-level `let`/`function` declarations are NOT on window in modern
+// browsers. tasky-collab.js captures these into _orig* constants at parse
+// time, so every symbol must be on window before that script evaluates.
+window.db               = db;
+window.addTask          = addTask;
+window.addTaskToTodo    = addTaskToTodo;
+window.saveAll          = saveAll;
+window.showToast        = showToast;
 window.renderAllColumns = renderAllColumns;
+window.pushToCloud      = pushToCloud;
+window.createTaskCard   = createTaskCard;
+window.moveTask         = moveTask;
+window.setPriority      = setPriority;
+window.setDueDate       = setDueDate;
 
-// tasks is a mutable object reference — expose a getter/setter so collab.js
-// always sees the live value (tasky.js reassigns `tasks` on reset/sync).
+// tasks is a mutable object reference — use a getter/setter so collab.js
+// always sees the live value when tasky.js reassigns `tasks` on reset/sync.
 Object.defineProperty(window, 'tasks', {
     get: function() { return tasks; },
     set: function(v) { tasks = v; },
