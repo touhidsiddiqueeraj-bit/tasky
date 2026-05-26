@@ -1058,7 +1058,7 @@ function buildCollabModal() {
                 <button class="tg-save-btn" onclick="closeCollabModal()" style="margin-top:16px;">Done</button>
             </div>
             <!-- Info pane -->
-            <div id="collab-pane-info" class="collab-pane" style="display:none;padding:28px;">
+            <div id="collab-pane-info" class="collab-pane" style="display:none;padding:28px;overflow-y:auto;max-height:72vh;">
                 <div id="collab-info-content"></div>
             </div>
         </div>
@@ -1478,32 +1478,40 @@ function renderGroupInfoPane() {
                 `).join('')}
             </div>
         </div>
+
+        <!-- ── Share Live Board — prominent card, right after members ── -->
+        <div style="margin-top:18px;background:linear-gradient(135deg,rgba(139,92,246,0.12),rgba(99,60,220,0.08));
+            border:1px solid rgba(139,92,246,0.3);border-radius:14px;padding:16px 18px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="font-size:16px;">📤</span>
+                <span style="font-size:13px;font-weight:700;color:#c4b5fd;letter-spacing:.04em;text-transform:uppercase;">Share Live Board</span>
+            </div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5;margin-bottom:12px;">
+                Send your client a read-only link — live task view, no login needed.
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="tg-save-btn" style="padding:10px 20px;font-size:13px;margin:0;" onclick="copyShareableBoardLink()">🔗 Copy Share Link</button>
+                <button class="tg-icon-btn" style="font-size:12px;" onclick="openShareableBoard()">👁️ Preview</button>
+            </div>
+            <div id="collab-share-link-preview" style="margin-top:10px;font-size:11px;font-family:monospace;
+                color:rgba(255,255,255,0.35);word-break:break-all;display:none;background:rgba(0,0,0,0.25);
+                border-radius:8px;padding:8px 10px;"></div>
+        </div>
+
         ${isSupervisor ? `
-        <div style="margin-top:20px;">
+        <div style="margin-top:16px;">
             <div class="tg-field-label">Supervisor Tip</div>
             <div style="font-size:13px;color:rgba(255,255,255,0.45);line-height:1.6;margin-top:6px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:10px;padding:12px;">
                 Assign tasks with: <code style="color:#c4b5fd;">fix auth to::jon priority::high date::20may</code><br>
                 Supports: <code style="color:#c4b5fd;">to::</code> <code style="color:#c4b5fd;">priority::</code> <code style="color:#c4b5fd;">date::</code>
             </div>
         </div>` : ''}
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);">
             <div class="tg-field-label">Your Username</div>
             <div style="display:flex;align-items:center;gap:12px;margin-top:8px;">
                 <span style="font-size:15px;font-weight:700;color:#e2d9ff;">@${escHtml(currentHandle || '—')}</span>
                 <button class="tg-icon-btn" onclick="showCollabModalPane('change')" style="font-size:12px;">✏️ Change</button>
             </div>
-        </div>
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
-            <div class="tg-field-label">📤 Share Live Board with Client</div>
-            <div style="font-size:12px;color:rgba(255,255,255,0.4);line-height:1.55;margin:6px 0 10px;">
-                Send this read-only link to your client. They see a live view of all tasks — no login needed. Updates in real-time.
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                <button class="tg-save-btn" style="padding:10px 18px;font-size:13px;" onclick="copyShareableBoardLink()">🔗 Copy Share Link</button>
-                <button class="tg-icon-btn" style="font-size:12px;" onclick="openShareableBoard()">👁️ Preview</button>
-            </div>
-            <div id="collab-share-link-preview" style="margin-top:10px;font-size:11px;font-family:monospace;
-                color:rgba(255,255,255,0.35);word-break:break-all;display:none;"></div>
         </div>
     `;
 }
