@@ -81,6 +81,7 @@
             appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
         });
         db = firebase.firestore(app);
+        window.db = db; // expose for tasky-collab.js
 
         renderAllColumns();
         updateDailySummary();
@@ -1437,3 +1438,20 @@
             document.getElementById('dropdown').classList.remove('show');
             showToast('All data reset', () => {});
         }
+
+// ─── Expose globals for tasky-collab.js ───────────────────────────────────
+// Script-level `let` declarations are NOT on window in modern browsers.
+// tasky-collab.js uses these as free variables, so we must expose them.
+window.db             = db;
+window.addTask        = addTask;
+window.saveAll        = saveAll;
+window.showToast      = showToast;
+window.renderAllColumns = renderAllColumns;
+
+// tasks is a mutable object reference — expose a getter/setter so collab.js
+// always sees the live value (tasky.js reassigns `tasks` on reset/sync).
+Object.defineProperty(window, 'tasks', {
+    get: function() { return tasks; },
+    set: function(v) { tasks = v; },
+    configurable: true
+});
