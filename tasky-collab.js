@@ -944,60 +944,34 @@ async function renderCollabSummary() {
 
 // ─── Dropdown collab items ────────────────────────────────────────────────
 function renderCollabDropdownItems() {
-    // Always wipe stale items first
-    document.querySelectorAll('.collab-dd-item').forEach(el => el.remove());
-
-    const dropdown = document.getElementById('dropdown');
-    if (!dropdown) return;
-
-    // Only show collab items for real (non-anonymous) signed-in users.
-    // Anonymous users and the brief pre-auth window get nothing.
-    const isRealUser = currentUser && !currentUser.isAnonymous;
-    if (!isRealUser) return;
-
-    // Divider above the collab items
-    const divider = document.createElement('div');
-    divider.className = 'dropdown-divider collab-dd-item';
-    dropdown.insertBefore(divider, dropdown.firstChild);
+    // The static buttons live in index.html; we just show/hide them here.
+    const createBtn  = document.getElementById('collab-create-dd-btn');
+    const joinBtn    = document.getElementById('collab-join-dd-btn');
+    const infoBtn    = document.getElementById('collab-info-dd-btn');
+    const leaveBtn   = document.getElementById('collab-leave-dd-btn');
+    const divider    = document.getElementById('collab-dd-divider');
+    if (!createBtn) return; // HTML not ready yet
 
     if (!currentGroup) {
-        // Not in a collaboration yet — offer Create / Join
-        const createBtn = makeDropdownItem('👥', 'Create Collaboration', () => openCollabModal('create'));
-        const joinBtn   = makeDropdownItem('🔗', 'Join Collaboration',   () => openCollabModal('join'));
-        createBtn.classList.add('collab-dd-item');
-        joinBtn.classList.add('collab-dd-item');
-        dropdown.insertBefore(joinBtn,   dropdown.firstChild);
-        dropdown.insertBefore(createBtn, dropdown.firstChild);
+        // Not in a collab — show Create / Join
+        createBtn.style.display = '';
+        joinBtn.style.display   = '';
+        infoBtn.style.display   = 'none';
+        leaveBtn.style.display  = 'none';
     } else {
-        // Already in a collaboration — show group info + Leave
-        const infoBtn  = makeDropdownItem('👥', `${currentGroup.name} (${currentGroup.code})`, () => openCollabModal('info'));
-        const leaveBtn = makeDropdownItem('🚪', 'Leave Collaboration', () => leaveGroup());
-        infoBtn.style.color  = '#a78bfa';
-        leaveBtn.style.color = '#ef4444';
-        infoBtn.classList.add('collab-dd-item');
-        leaveBtn.classList.add('collab-dd-item');
-        dropdown.insertBefore(leaveBtn, dropdown.firstChild);
-        dropdown.insertBefore(infoBtn,  dropdown.firstChild);
+        // In a collab — show Info / Leave, hide Create / Join
+        createBtn.style.display = 'none';
+        joinBtn.style.display   = 'none';
+        infoBtn.style.display   = '';
+        leaveBtn.style.display  = '';
+        const infoText = document.getElementById('collab-info-dd-text');
+        if (infoText) infoText.textContent = `${currentGroup.name} (${currentGroup.code})`;
     }
-}
-
-function makeDropdownItem(icon, text, onClick) {
-    const btn = document.createElement('button');
-    btn.className = 'dropdown-item';
-    btn.innerHTML = `<span>${icon}</span><span>${text}</span>`;
-    btn.addEventListener('click', () => {
-        document.getElementById('dropdown').classList.remove('show');
-        onClick();
-    });
-    return btn;
+    if (divider) divider.style.display = '';
 }
 
 // ─── Collab Modal ─────────────────────────────────────────────────────────
 function openCollabModal(mode) {
-    if (!currentUser || currentUser.isAnonymous) {
-        showTaskyToast('Sign in with Google first to use Collaborations.');
-        return;
-    }
     let modal = document.getElementById('collab-modal-overlay');
     if (!modal) {
         modal = buildCollabModal();
@@ -1409,6 +1383,27 @@ async function showCollabModalPane(mode) {
     document.querySelectorAll('.collab-pane').forEach(p => p.style.display = 'none');
     const title = document.getElementById('collab-modal-title');
 
+    // If not signed in and trying to create/join, show sign-in prompt
+    const isRealUser = currentUser && !currentUser.isAnonymous;
+    if (!isRealUser && mode !== 'info' && mode !== 'change') {
+        const pane = document.getElementById('collab-pane-handle') || document.querySelector('.collab-pane');
+        if (pane) {
+            pane.style.display = 'block';
+            pane.innerHTML = `
+                <div style="text-align:center;padding:16px 0;">
+                    <div style="font-size:42px;margin-bottom:14px;">☁️</div>
+                    <div style="font-size:16px;font-weight:700;color:#e2d9ff;margin-bottom:8px;">Sign in to use Collaborations</div>
+                    <div style="font-size:13px;color:rgba(255,255,255,0.5);line-height:1.6;margin-bottom:20px;">
+                        Collaborations use Google sign-in to sync tasks in real-time across your team. It's free.
+                    </div>
+                    <button class="tg-save-btn" onclick="closeCollabModal();signInWithGoogle();">Sign in with Google</button>
+                </div>
+            `;
+        }
+        if (title) title.textContent = '👥 Collaborations';
+        return;
+    }
+
     // 'change' mode: explicitly editing an existing handle
     if (mode === 'change') {
         const handleInput = document.getElementById('collab-handle-input');
@@ -1498,6 +1493,18 @@ function renderGroupInfoPane() {
                 <button class="tg-icon-btn" onclick="showCollabModalPane('change')" style="font-size:12px;">✏️ Change</button>
             </div>
         </div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
+            <div class="tg-field-label">📤 Share Live Board with Client</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.4);line-height:1.55;margin:6px 0 10px;">
+                Send this read-only link to your client. They see a live view of all tasks — no login needed. Updates in real-time.
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="tg-save-btn" style="padding:10px 18px;font-size:13px;" onclick="copyShareableBoardLink()">🔗 Copy Share Link</button>
+                <button class="tg-icon-btn" style="font-size:12px;" onclick="openShareableBoard()">👁️ Preview</button>
+            </div>
+            <div id="collab-share-link-preview" style="margin-top:10px;font-size:11px;font-family:monospace;
+                color:rgba(255,255,255,0.35);word-break:break-all;display:none;"></div>
+        </div>
     `;
 }
 
@@ -1506,6 +1513,316 @@ function copyGroupCode() {
         document.getElementById('collab-share-code')?.textContent;
     if (!code) return;
     navigator.clipboard.writeText(code).then(() => showTaskyToast('📋 Code copied!')).catch(() => {});
+}
+
+// ─── Shareable Read-Only Board ─────────────────────────────────────────────
+function _buildShareUrl(code) {
+    const base = window.location.href.split('?')[0].split('#')[0];
+    return `${base}?view=${code}`;
+}
+
+function copyShareableBoardLink() {
+    if (!currentGroup) return;
+    const url = _buildShareUrl(currentGroup.code);
+    // Show preview
+    const preview = document.getElementById('collab-share-link-preview');
+    if (preview) { preview.textContent = url; preview.style.display = 'block'; }
+    navigator.clipboard.writeText(url)
+        .then(() => showTaskyToast('🔗 Share link copied! Send it to your client.'))
+        .catch(() => { showTaskyToast('🔗 Link: ' + url); });
+}
+
+function openShareableBoard() {
+    if (!currentGroup) return;
+    window.open(_buildShareUrl(currentGroup.code), '_blank');
+}
+
+// ─── Read-only view mode (?view=CODE) ─────────────────────────────────────
+// Activated when URL contains ?view=GROUPCODE
+// Shows a clean live-updating board for clients — no auth, no editing.
+
+(function initReadOnlyMode() {
+    const params = new URLSearchParams(window.location.search);
+    const viewCode = params.get('view');
+    if (!viewCode) return;
+
+    // Wait for Firebase to be ready, then boot read-only mode
+    function _bootReadOnly() {
+        if (typeof db === 'undefined') { setTimeout(_bootReadOnly, 100); return; }
+        _mountReadOnlyBoard(viewCode.toUpperCase());
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _bootReadOnly);
+    } else {
+        _bootReadOnly();
+    }
+})();
+
+async function _mountReadOnlyBoard(code) {
+    // Hide the normal app UI entirely
+    document.querySelector('.top-menu')?.remove();
+    document.querySelector('.container')?.remove();
+    document.querySelector('.floating-input-container')?.remove();
+    document.querySelector('.shortcuts-hint')?.remove();
+    document.querySelector('.mobile-add-btn')?.remove();
+    document.querySelector('.mobile-mic-btn')?.remove();
+    document.querySelector('.sync-status')?.remove();
+    document.querySelector('.task-selector')?.remove();
+    document.querySelector('.voice-overlay')?.remove();
+    document.querySelectorAll('.onboarding-overlay').forEach(e => e.remove());
+
+    // Build the read-only shell
+    const shell = document.createElement('div');
+    shell.id = 'ro-shell';
+    shell.innerHTML = `
+        <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #09080f; font-family: 'Inter', system-ui, sans-serif; color: #e2d9ff; min-height: 100vh; }
+        #ro-shell { display: flex; flex-direction: column; min-height: 100vh; }
+        .ro-topbar {
+            background: linear-gradient(90deg, #13101e 0%, #0e0c17 100%);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding: 14px 24px;
+            display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+        }
+        .ro-brand { display: flex; align-items: center; gap: 10px; }
+        .ro-brand-logo { font-size: 22px; }
+        .ro-brand-name { font-size: 16px; font-weight: 800; color: #e2d9ff; }
+        .ro-group-name { font-size: 14px; color: #a78bfa; font-weight: 600; }
+        .ro-badge {
+            display: flex; align-items: center; gap: 6px;
+            background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3);
+            border-radius: 20px; padding: 5px 12px; font-size: 12px; color: #6ee7b7; font-weight: 600;
+        }
+        .ro-badge-dot {
+            width: 7px; height: 7px; border-radius: 50%; background: #10b981;
+            animation: ro-pulse 1.8s ease-in-out infinite;
+        }
+        @keyframes ro-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.7)} }
+        .ro-updated { font-size: 11px; color: rgba(255,255,255,0.3); }
+        .ro-board {
+            flex: 1; display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px; padding: 24px; align-items: start;
+            max-width: 1200px; margin: 0 auto; width: 100%;
+        }
+        @media (max-width: 700px) { .ro-board { grid-template-columns: 1fr; padding: 14px; gap: 14px; } }
+        .ro-col { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 18px; overflow: hidden; }
+        .ro-col-header {
+            padding: 14px 18px 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .ro-col-title { font-size: 14px; font-weight: 700; }
+        .ro-col-count {
+            font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.08);
+            border-radius: 10px; padding: 2px 9px; color: rgba(255,255,255,0.5);
+        }
+        .ro-col-todo    .ro-col-header { border-top: 3px solid #8B5CF6; }
+        .ro-col-working .ro-col-header { border-top: 3px solid #F59E0B; }
+        .ro-col-done    .ro-col-header { border-top: 3px solid #10B981; }
+        .ro-tasks { padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
+        .ro-task {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px; padding: 12px 14px;
+        }
+        .ro-task-text { font-size: 13.5px; color: #e2d9ff; line-height: 1.45; margin-bottom: 6px; }
+        .ro-task-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .ro-priority {
+            font-size: 10px; font-weight: 700; border-radius: 6px; padding: 2px 7px; letter-spacing: .04em;
+        }
+        .ro-priority.high   { background: rgba(239,68,68,.2); color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+        .ro-priority.medium { background: rgba(245,158,11,.2); color: #fcd34d; border: 1px solid rgba(245,158,11,.3); }
+        .ro-priority.low    { background: rgba(16,185,129,.2); color: #6ee7b7; border: 1px solid rgba(16,185,129,.3); }
+        .ro-due { font-size: 11px; color: rgba(255,255,255,0.4); }
+        .ro-due.overdue { color: #f87171; }
+        .ro-assignee { font-size: 11px; color: #a78bfa; }
+        .ro-task-num { font-size: 10px; color: rgba(255,255,255,0.2); margin-left: auto; }
+        .ro-empty { font-size: 12px; color: rgba(255,255,255,0.2); text-align: center; padding: 20px 0; }
+        .ro-footer {
+            text-align: center; padding: 20px;
+            font-size: 12px; color: rgba(255,255,255,0.2);
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .ro-members {
+            display: flex; flex-wrap: wrap; gap: 6px; padding: 14px 24px 0;
+            max-width: 1200px; margin: 0 auto; width: 100%;
+        }
+        .ro-member-chip {
+            display: flex; align-items: center; gap: 5px;
+            background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2);
+            border-radius: 20px; padding: 3px 10px 3px 5px; font-size: 12px; color: #c4b5fd;
+        }
+        .ro-member-avatar {
+            width: 20px; height: 20px; border-radius: 50%; background: rgba(139,92,246,0.4);
+            display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff;
+        }
+        .ro-section-label {
+            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+            color: rgba(255,255,255,0.25); padding: 0 24px; max-width: 1200px; margin: 14px auto 0; width: 100%;
+        }
+        .ro-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 12px; padding: 60px; }
+        .ro-spinner { width: 36px; height: 36px; border: 3px solid rgba(139,92,246,0.2); border-top-color: #8B5CF6; border-radius: 50%; animation: spin .7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .ro-error { text-align: center; padding: 60px 24px; color: rgba(255,255,255,0.4); }
+        .ro-error-icon { font-size: 48px; margin-bottom: 12px; }
+        .ro-error-msg { font-size: 15px; color: #fca5a5; font-weight: 600; margin-bottom: 8px; }
+        </style>
+        <div class="ro-topbar">
+            <div class="ro-brand">
+                <span class="ro-brand-logo">✅</span>
+                <div>
+                    <div class="ro-brand-name">Tasky — Live Board</div>
+                    <div class="ro-group-name" id="ro-group-name">Loading…</div>
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <span class="ro-updated" id="ro-updated"></span>
+                <div class="ro-badge">
+                    <div class="ro-badge-dot"></div>
+                    Live
+                </div>
+            </div>
+        </div>
+        <div id="ro-members-row"></div>
+        <div id="ro-board-area">
+            <div class="ro-loading">
+                <div class="ro-spinner"></div>
+                <div style="color:rgba(255,255,255,0.35);font-size:13px;">Loading workspace…</div>
+            </div>
+        </div>
+        <div class="ro-footer">Read-only view · Updates live · Powered by Tasky</div>
+    `;
+    document.body.appendChild(shell);
+    document.title = 'Tasky — Live Board';
+
+    // Listen to the group doc
+    let groupData = null;
+    let memberTasksCache = {};
+
+    const groupUnsub = db.collection('groups').doc(code).onSnapshot(snap => {
+        if (!snap.exists) {
+            document.getElementById('ro-board-area').innerHTML = `
+                <div class="ro-error">
+                    <div class="ro-error-icon">🔍</div>
+                    <div class="ro-error-msg">Board not found</div>
+                    <div>The collaboration code <strong>${code}</strong> doesn't exist or has been deleted.</div>
+                </div>`;
+            document.getElementById('ro-group-name').textContent = 'Not found';
+            return;
+        }
+        groupData = snap.data();
+        document.getElementById('ro-group-name').textContent = groupData.name || code;
+        document.title = `${groupData.name || 'Board'} — Tasky Live`;
+        _renderROMembers(groupData);
+
+        // Listen to all member tasks
+        _listenROTasks(code, groupData);
+    }, err => {
+        document.getElementById('ro-board-area').innerHTML = `
+            <div class="ro-error">
+                <div class="ro-error-icon">⚠️</div>
+                <div class="ro-error-msg">Could not load board</div>
+                <div>Check your connection or try refreshing.</div>
+            </div>`;
+    });
+
+    let tasksUnsub = null;
+    function _listenROTasks(code, group) {
+        if (tasksUnsub) tasksUnsub();
+        tasksUnsub = db.collection('groups').doc(code).collection('tasks')
+            .onSnapshot(snap => {
+                snap.docChanges().forEach(change => {
+                    if (change.type === 'removed') {
+                        delete memberTasksCache[change.doc.id];
+                    } else {
+                        const d = change.doc.data();
+                        const member = (group.members || []).find(m => m.uid === change.doc.id);
+                        memberTasksCache[change.doc.id] = {
+                            tasks: d.tasks || { todo: [], working: [], done: [] },
+                            handle: d.handle || (member ? member.handle : change.doc.id)
+                        };
+                    }
+                });
+                _renderROBoard(group, memberTasksCache);
+            });
+    }
+
+    function _renderROMembers(group) {
+        const row = document.getElementById('ro-members-row');
+        if (!row) return;
+        const members = group.members || [];
+        if (!members.length) { row.innerHTML = ''; return; }
+        row.innerHTML = `
+            <div class="ro-section-label">Team Members</div>
+            <div class="ro-members">
+                ${members.map(m => `
+                    <div class="ro-member-chip">
+                        <div class="ro-member-avatar">${m.handle[0].toUpperCase()}</div>
+                        @${escHtml(m.handle)}
+                        ${m.uid === group.supervisorUid ? ' 👑' : ''}
+                    </div>
+                `).join('')}
+            </div>`;
+    }
+
+    function _renderROBoard(group, cache) {
+        // Merge all tasks across members
+        const merged = { todo: [], working: [], done: [] };
+        (group.members || []).forEach(m => {
+            const d = cache[m.uid] || { tasks: { todo: [], working: [], done: [] } };
+            ['todo','working','done'].forEach(col => {
+                (d.tasks[col] || []).forEach(t => {
+                    if (!merged[col].some(x => x.id === t.id)) {
+                        merged[col].push({ ...t, _handle: m.handle });
+                    }
+                });
+            });
+        });
+
+        const now = new Date();
+        function taskHTML(t) {
+            const isOverdue = t.dueDate && new Date(t.dueDate) < now;
+            const dueLabel = t.dueDate ? new Date(t.dueDate).toLocaleDateString('en-US', { month:'short', day:'numeric' }) : '';
+            return `
+                <div class="ro-task">
+                    <div class="ro-task-text">${escHtml(t.text)}</div>
+                    <div class="ro-task-meta">
+                        ${t.priority ? `<span class="ro-priority ${t.priority}">${t.priority}</span>` : ''}
+                        ${dueLabel ? `<span class="ro-due ${isOverdue ? 'overdue' : ''}">📅 ${dueLabel}${isOverdue ? ' · Overdue' : ''}</span>` : ''}
+                        ${t.assignedTo ? `<span class="ro-assignee">→ @${escHtml(t.assignedTo)}</span>` : ''}
+                        ${t.number ? `<span class="ro-task-num">#${t.number}</span>` : ''}
+                    </div>
+                </div>`;
+        }
+
+        const cols = [
+            { key:'todo',    label:'📝 To Do',      cls:'ro-col-todo' },
+            { key:'working', label:'⚡ Working On',  cls:'ro-col-working' },
+            { key:'done',    label:'✅ Done',         cls:'ro-col-done' },
+        ];
+
+        const board = document.getElementById('ro-board-area');
+        board.innerHTML = `
+            <div class="ro-board">
+                ${cols.map(c => `
+                    <div class="ro-col ${c.cls}">
+                        <div class="ro-col-header">
+                            <span class="ro-col-title">${c.label}</span>
+                            <span class="ro-col-count">${merged[c.key].length}</span>
+                        </div>
+                        <div class="ro-tasks">
+                            ${merged[c.key].length
+                                ? merged[c.key].map(taskHTML).join('')
+                                : `<div class="ro-empty">No tasks</div>`}
+                        </div>
+                    </div>`).join('')}
+            </div>`;
+
+        const upd = document.getElementById('ro-updated');
+        if (upd) upd.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
+    }
 }
 
 // ─── Handle button handlers ───────────────────────────────────────────────
@@ -1675,7 +1992,7 @@ async function _handleAuthChange() {
         teamPanelMember = null;
         teamTasksCache  = {};
         if (_groupSyncTimer) { clearTimeout(_groupSyncTimer); _groupSyncTimer = null; }
-        renderGroupUI();
+        renderGroupUI(); // always render — now shows collab buttons even when signed out
     }
 }
 
@@ -1704,6 +2021,11 @@ window.STATE = {
 // Use window 'load' (not DOMContentLoaded) so tasky.js has fully run and
 // Firebase 'app' + 'db' globals are guaranteed to exist before we touch them.
 setupCollabAuth(); // run immediately — auth events fire before window 'load'
+
+// Show collab dropdown buttons immediately on DOM ready (before auth resolves)
+document.addEventListener('DOMContentLoaded', () => {
+    renderCollabDropdownItems();
+});
 
 // ─── Floating input assignment hint visibility ─────────────────────────────
 function updateAssignHintVisibility() {
