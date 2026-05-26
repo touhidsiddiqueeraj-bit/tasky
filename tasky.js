@@ -152,11 +152,8 @@
                         syncFromCloud(!!prevUid);
                     }
                 } else {
-                    // No user at all — sign in anonymously to preserve data
-                    firebase.auth(app).signInAnonymously().catch(err => {
-                        console.warn('Anonymous sign-in failed:', err);
-                        // Fallback: keep using localStorage only
-                    });
+                    // No user — stay signed out and work from localStorage only.
+                    // (Anonymous auth is disabled in this Firebase project.)
                 }
 
                 updateAuthUI();
@@ -172,24 +169,10 @@
             if (dd) dd.classList.remove('show');
 
             // Use redirect flow — popups are blocked in Android WebView (Capacitor).
-            // On web browsers this is also reliable (no popup-blocker issues).
             // getRedirectResult() at the top of setupFirebase() handles the return.
-            if (currentUser && currentUser.isAnonymous) {
-                // Link the anonymous account so locally-created tasks survive sign-in
-                currentUser.linkWithRedirect(provider).catch(err => {
-                    // If linking fails (account already exists), just do a plain redirect.
-                    // syncFromCloud will merge tasks on arrival.
-                    if (err.code === 'auth/credential-already-in-use' || err.code === 'auth/email-already-in-use') {
-                        firebase.auth(app).signInWithRedirect(provider).catch(() => {});
-                    } else {
-                        console.warn('Link redirect error:', err.code);
-                    }
-                });
-            } else {
-                firebase.auth(app).signInWithRedirect(provider).catch(err => {
-                    console.warn('Sign-in redirect error:', err.code);
-                });
-            }
+            firebase.auth(app).signInWithRedirect(provider).catch(err => {
+                console.warn('Sign-in redirect error:', err.code);
+            });
         }
 
         function signOut() {
@@ -209,9 +192,7 @@
             localStorage.setItem('taskCounter_local', '0');
             renderAllColumns();
 
-            firebase.auth(app).signOut().then(() => {
-                firebase.auth(app).signInAnonymously().catch(() => {});
-            }).catch(() => {});
+            firebase.auth(app).signOut().catch(() => {});
 
             const dd = document.getElementById('dropdown');
             if (dd) dd.classList.remove('show');
