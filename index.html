@@ -803,12 +803,12 @@
     <span class="brand-chevron">▼</span>
   </button>
   <div class="dropdown-menu" id="dropdown">
-    <!-- Collab buttons — shown/hidden by tasky-collab.js after auth -->
-    <button class="dropdown-item collab-dd-item" id="collab-create-dd-btn" style="display:none;" onclick="openCollabModal('create')">
+    <!-- Collab buttons — always visible; auth check happens on click -->
+    <button class="dropdown-item collab-dd-item" id="collab-create-dd-btn" onclick="openCollabModal('create')">
       <span>👥</span>
       <span>Create Collaboration</span>
     </button>
-    <button class="dropdown-item collab-dd-item" id="collab-join-dd-btn" style="display:none;" onclick="openCollabModal('join')">
+    <button class="dropdown-item collab-dd-item" id="collab-join-dd-btn" onclick="openCollabModal('join')">
       <span>🔗</span>
       <span>Join Collaboration</span>
     </button>
@@ -820,7 +820,7 @@
       <span>🚪</span>
       <span>Leave Collaboration</span>
     </button>
-    <div class="dropdown-divider collab-dd-item" id="collab-dd-divider" style="display:none;"></div>
+    <div class="dropdown-divider collab-dd-item" id="collab-dd-divider"></div>
     <button class="dropdown-item" onclick="openTgModal()">
       <span>⊞</span>
       <span>Task Groups</span>
