@@ -81,7 +81,6 @@
             appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
         });
         db = firebase.firestore(app);
-        window.db = db; // expose for tasky-collab.js
 
         renderAllColumns();
         updateDailySummary();
@@ -122,27 +121,6 @@
 
         // ─── Firebase Auth ─────────────────────────────────────────────────────────
         function setupFirebase() {
-            // Handle the redirect result FIRST — this resolves the sign-in that
-            // happened after signInWithRedirect returned from the Google OAuth page.
-            // Must run before onAuthStateChanged so the user object is already
-            // linked/upgraded by the time our state handler fires.
-            firebase.auth(app).getRedirectResult().then(result => {
-                if (result && result.user) {
-                    // Redirect completed — push local tasks to link any offline changes
-                    pushToCloud();
-                    showToast('☁️ Signed in & synced', () => {});
-                }
-            }).catch(err => {
-                // auth/credential-already-in-use: anon had data, Google account exists elsewhere.
-                // Fall back to a plain redirect (data on the Google account will be used on sync).
-                if (err.code === 'auth/credential-already-in-use' || err.code === 'auth/email-already-in-use') {
-                    const provider = new firebase.auth.GoogleAuthProvider();
-                    firebase.auth(app).signInWithRedirect(provider).catch(() => {});
-                } else if (err.code !== 'auth/no-auth-event' && err.code !== 'auth/null-user') {
-                    console.warn('Redirect result error:', err.code);
-                }
-            });
-
             firebase.auth(app).onAuthStateChanged(user => {
                 const prevUid = currentUser ? currentUser.uid : null;
                 currentUser = user;
@@ -169,10 +147,22 @@
             const dd = document.getElementById('dropdown');
             if (dd) dd.classList.remove('show');
 
-            // Use redirect flow — popups are blocked in Android WebView (Capacitor).
-            // getRedirectResult() at the top of setupFirebase() handles the return.
-            firebase.auth(app).signInWithRedirect(provider).catch(err => {
-                console.warn('Sign-in redirect error:', err.code);
+            // Use popup flow — works on any domain (file://, localhost, custom hosts).
+            // signInWithRedirect requires the exact domain whitelisted in Firebase Console.
+            firebase.auth(app).signInWithPopup(provider).then(result => {
+                if (result && result.user) {
+                    pushToCloud();
+                    showToast('☁️ Signed in & synced', () => {});
+                }
+            }).catch(err => {
+                if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+                    // User closed popup — no action needed
+                } else if (err.code === 'auth/credential-already-in-use' || err.code === 'auth/email-already-in-use') {
+                    firebase.auth(app).signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(() => {});
+                } else {
+                    console.warn('Sign-in popup error:', err.code, err.message);
+                    showToast('⚠️ Sign-in failed. Check your connection.', () => {});
+                }
             });
         }
 
@@ -1438,27 +1428,3 @@
             document.getElementById('dropdown').classList.remove('show');
             showToast('All data reset', () => {});
         }
-
-// ─── Expose globals for tasky-collab.js ───────────────────────────────────
-// Script-level `let`/`function` declarations are NOT on window in modern
-// browsers. tasky-collab.js captures these into _orig* constants at parse
-// time, so every symbol must be on window before that script evaluates.
-window.db               = db;
-window.addTask          = addTask;
-window.addTaskToTodo    = addTaskToTodo;
-window.saveAll          = saveAll;
-window.showToast        = showToast;
-window.renderAllColumns = renderAllColumns;
-window.pushToCloud      = pushToCloud;
-window.createTaskCard   = createTaskCard;
-window.moveTask         = moveTask;
-window.setPriority      = setPriority;
-window.setDueDate       = setDueDate;
-
-// tasks is a mutable object reference — use a getter/setter so collab.js
-// always sees the live value when tasky.js reassigns `tasks` on reset/sync.
-Object.defineProperty(window, 'tasks', {
-    get: function() { return tasks; },
-    set: function(v) { tasks = v; },
-    configurable: true
-});
