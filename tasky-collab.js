@@ -26,7 +26,7 @@ async function ensureHandle() {
 
     // Fall back to Firestore SDK
     try {
-        const snap = await window.db.collection('users').doc(currentUser.uid).get();
+        const snap = await db.collection('users').doc(currentUser.uid).get();
         if (snap.exists && snap.data().handle) {
             currentHandle = snap.data().handle;
             localStorage.setItem('tasky_handle', currentHandle);
@@ -39,7 +39,7 @@ async function ensureHandle() {
 
 async function saveHandle(handle) {
     if (!currentUser) return;
-    await window.db.collection('users').doc(currentUser.uid).set({ handle, email: currentUser.email }, { merge: true });
+    await db.collection('users').doc(currentUser.uid).set({ handle, email: currentUser.email }, { merge: true });
     currentHandle = handle;
     localStorage.setItem('tasky_handle', handle);
 }
@@ -52,7 +52,7 @@ const FREE_MEMBER_LIMIT = 3;
 
 async function getUserPlan(uid) {
     try {
-        const snap = await window.db.collection('users').doc(uid).get();
+        const snap = await db.collection('users').doc(uid).get();
         return (snap.exists && snap.data().plan) || 'free';
     } catch(_) { return 'free'; }
 }
@@ -80,8 +80,8 @@ async function createGroup(groupName) {
         members: [{ uid: currentUser.uid, handle: currentHandle, email: currentUser.email }],
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-    await window.db.collection('groups').doc(code).set(groupData);
-    await window.db.collection('users').doc(currentUser.uid).set({ activeGroup: code, plan }, { merge: true });
+    await db.collection('groups').doc(code).set(groupData);
+    await db.collection('users').doc(currentUser.uid).set({ activeGroup: code, plan }, { merge: true });
     saveGroupCodeLocally(code);
     return code;
 }
@@ -89,7 +89,7 @@ async function createGroup(groupName) {
 // ─── Join Group ───────────────────────────────────────────────────────────
 async function joinGroup(code) {
     if (!currentUser || !currentHandle) return { ok: false, err: 'Not signed in' };
-    const ref = window.db.collection('groups').doc(code.toUpperCase().trim());
+    const ref = db.collection('groups').doc(code.toUpperCase().trim());
     const snap = await ref.get();
     if (!snap.exists) return { ok: false, err: 'Group not found. Check the code.' };
 
@@ -113,7 +113,7 @@ async function joinGroup(code) {
             })
         });
     }
-    await window.db.collection('users').doc(currentUser.uid).set({ activeGroup: code.toUpperCase() }, { merge: true });
+    await db.collection('users').doc(currentUser.uid).set({ activeGroup: code.toUpperCase() }, { merge: true });
     saveGroupCodeLocally(code.toUpperCase());
     return { ok: true };
 }
@@ -126,7 +126,7 @@ async function leaveGroup() {
         showTaskyToast('Transfer supervisor role before leaving.');
         return;
     }
-    const ref = window.db.collection('groups').doc(currentGroup.code);
+    const ref = db.collection('groups').doc(currentGroup.code);
     const snap = await ref.get();
     if (snap.exists) {
         const updated = (snap.data().members || []).filter(m => m.uid !== currentUser.uid);
@@ -136,7 +136,7 @@ async function leaveGroup() {
             await ref.update({ members: updated });
         }
     }
-    await window.db.collection('users').doc(currentUser.uid).update({ activeGroup: firebase.firestore.FieldValue.delete() });
+    await db.collection('users').doc(currentUser.uid).update({ activeGroup: firebase.firestore.FieldValue.delete() });
     saveGroupCodeLocally(null);
     stopGroupListener();
     currentGroup = null;
@@ -169,7 +169,7 @@ async function loadActiveGroup() {
 
     // 2. Verify from Firestore in background — corrects if user left on another device
     try {
-        const snap = await window.db.collection('users').doc(currentUser.uid).get();
+        const snap = await db.collection('users').doc(currentUser.uid).get();
         const serverCode = snap.exists ? (snap.data().activeGroup || null) : null;
 
         if (serverCode !== localCode) {
@@ -193,7 +193,7 @@ function startGroupListener(code) {
 
     // onSnapshot gives us real-time updates AND the initial value straight
     // from the server (source:'server' on the initial event is implicit).
-    groupListener = window.db.collection('groups').doc(code).onSnapshot({ includeMetadataChanges: false }, async snap => {
+    groupListener = db.collection('groups').doc(code).onSnapshot({ includeMetadataChanges: false }, async snap => {
         if (!snap.exists) {
             currentGroup = null;
             isSupervisor = false;
@@ -218,7 +218,7 @@ function startGroupListener(code) {
 // Fires whenever ANY member updates their tasks, refreshing the team panel.
 function startTasksListener(code) {
     if (tasksListener) return; // already listening
-    tasksListener = window.db.collection('groups').doc(code)
+    tasksListener = db.collection('groups').doc(code)
         .collection('tasks').onSnapshot(snap => {
             snap.docChanges().forEach(change => {
                 const uid = change.doc.id;
@@ -361,8 +361,8 @@ function parseNaturalDate(str) {
 
 // ─── Collab addTask override ──────────────────────────────────────────────
 // Wraps the original addTaskToTodo to handle assignment syntax
-const _origAddTaskToTodo = window.addTaskToTodo;
-window.addTaskToTodo = function(text) {
+const _origAddTaskToTodo = addTaskToTodo;
+addTaskToTodo = function(text) {
     // Only parse assignment syntax if in a group and is supervisor
     if (currentGroup && isSupervisor && text.includes('to::')) {
         const parsed = parseAssignedTask(text);
@@ -396,7 +396,7 @@ async function addCollabTask(parsed) {
 
     try {
         // Read the member's current task doc from Firestore
-        const memberDocRef = window.db.collection('groups').doc(currentGroup.code)
+        const memberDocRef = db.collection('groups').doc(currentGroup.code)
             .collection('tasks').doc(member.uid);
         const snap = await memberDocRef.get();
 
@@ -435,7 +435,7 @@ async function pushAssignmentNotification(task) {
     const member = currentGroup.members.find(m => m.handle === task.assignedTo);
     if (!member) return;
     try {
-        await window.db.collection('notifications').add({
+        await db.collection('notifications').add({
             toUid: member.uid,
             fromHandle: currentHandle,
             groupCode: currentGroup.code,
@@ -455,7 +455,7 @@ let notifListener = null;
 async function syncGroupTasksToBoard() {
     if (!currentUser || !currentGroup) return;
     try {
-        const snap = await window.db.collection('groups').doc(currentGroup.code)
+        const snap = await db.collection('groups').doc(currentGroup.code)
             .collection('tasks').doc(currentUser.uid).get();
         if (!snap.exists || !snap.data().tasks) return;
 
@@ -479,8 +479,8 @@ async function syncGroupTasksToBoard() {
         });
 
         if (changed) {
-            window.saveAll();        // saves locally + calls window.pushToCloud → scheduleGroupSync
-            window.renderAllColumns();
+            saveAll();        // saves locally + calls pushToCloud → scheduleGroupSync
+            renderAllColumns();
         }
     } catch(_) {}
 }
@@ -488,7 +488,7 @@ async function syncGroupTasksToBoard() {
 function startNotifListener() {
     if (!currentUser) return;
     stopNotifListener();
-    notifListener = window.db.collection('notifications')
+    notifListener = db.collection('notifications')
         .where('toUid', '==', currentUser.uid)
         .where('read', '==', false)
         .onSnapshot(snap => {
@@ -524,7 +524,7 @@ function scheduleGroupSync() {
 async function writeGroupTasks() {
     if (!currentGroup || !currentUser || isSupervisor) return;
     try {
-        await window.db.collection('groups').doc(currentGroup.code)
+        await db.collection('groups').doc(currentGroup.code)
             .collection('tasks').doc(currentUser.uid).set({
                 tasks: JSON.parse(JSON.stringify(tasks)),
                 handle: currentHandle,
@@ -537,8 +537,8 @@ async function writeGroupTasks() {
 
 // Hook into pushToCloud to also trigger a group sync.
 // pushToCloud itself handles users/{uid} — we handle groups/{code}/tasks/{uid}.
-const _origPushToCloud = window.pushToCloud;
-window.pushToCloud = function() {
+const _origPushToCloud = pushToCloud;
+pushToCloud = function() {
     _origPushToCloud();
     scheduleGroupSync();
 }
@@ -551,7 +551,7 @@ async function fetchAllMemberTasks() {
     teamTasksCache = {};
     const promises = currentGroup.members.map(async m => {
         try {
-            const snap = await window.db.collection('groups').doc(currentGroup.code)
+            const snap = await db.collection('groups').doc(currentGroup.code)
                 .collection('tasks').doc(m.uid).get();
             if (snap.exists) {
                 teamTasksCache[m.uid] = { ...snap.data(), handle: m.handle };
@@ -943,41 +943,41 @@ async function renderCollabSummary() {
 }
 
 // ─── Dropdown collab items ────────────────────────────────────────────────
+// Uses static HTML buttons (always in the DOM); just shows/hides them.
+// This avoids the dynamic insertion race that caused buttons to disappear.
 function renderCollabDropdownItems() {
-    // Always wipe stale items first
-    document.querySelectorAll('.collab-dd-item').forEach(el => el.remove());
-
-    const dropdown = document.getElementById('dropdown');
-    if (!dropdown) return;
-
-    // Only show collab items for real (non-anonymous) signed-in users.
-    // Anonymous users and the brief pre-auth window get nothing.
     const isRealUser = currentUser && !currentUser.isAnonymous;
-    if (!isRealUser) return;
 
-    // Divider above the collab items
-    const divider = document.createElement('div');
-    divider.className = 'dropdown-divider collab-dd-item';
-    dropdown.insertBefore(divider, dropdown.firstChild);
+    const createBtn  = document.getElementById('collab-create-dd-btn');
+    const joinBtn    = document.getElementById('collab-join-dd-btn');
+    const infoBtn    = document.getElementById('collab-info-dd-btn');
+    const leaveBtn   = document.getElementById('collab-leave-dd-btn');
+    const divider    = document.getElementById('collab-dd-divider');
+
+    if (!createBtn) return; // HTML not updated yet
+
+    if (!isRealUser) {
+        // Signed out — hide everything
+        [createBtn, joinBtn, infoBtn, leaveBtn, divider].forEach(el => el.style.display = 'none');
+        return;
+    }
+
+    // Signed in — show the right set
+    divider.style.display = '';
 
     if (!currentGroup) {
-        // Not in a collaboration yet — offer Create / Join
-        const createBtn = makeDropdownItem('👥', 'Create Collaboration', () => openCollabModal('create'));
-        const joinBtn   = makeDropdownItem('🔗', 'Join Collaboration',   () => openCollabModal('join'));
-        createBtn.classList.add('collab-dd-item');
-        joinBtn.classList.add('collab-dd-item');
-        dropdown.insertBefore(joinBtn,   dropdown.firstChild);
-        dropdown.insertBefore(createBtn, dropdown.firstChild);
+        createBtn.style.display = '';
+        joinBtn.style.display   = '';
+        infoBtn.style.display   = 'none';
+        leaveBtn.style.display  = 'none';
     } else {
-        // Already in a collaboration — show group info + Leave
-        const infoBtn  = makeDropdownItem('👥', `${currentGroup.name} (${currentGroup.code})`, () => openCollabModal('info'));
-        const leaveBtn = makeDropdownItem('🚪', 'Leave Collaboration', () => leaveGroup());
+        createBtn.style.display = 'none';
+        joinBtn.style.display   = 'none';
+        infoBtn.style.display   = '';
+        leaveBtn.style.display  = '';
+        const infoText = document.getElementById('collab-info-dd-text');
+        if (infoText) infoText.textContent = `${currentGroup.name} (${currentGroup.code})`;
         infoBtn.style.color  = '#a78bfa';
-        leaveBtn.style.color = '#ef4444';
-        infoBtn.classList.add('collab-dd-item');
-        leaveBtn.classList.add('collab-dd-item');
-        dropdown.insertBefore(leaveBtn, dropdown.firstChild);
-        dropdown.insertBefore(infoBtn,  dropdown.firstChild);
     }
 }
 
@@ -1488,7 +1488,7 @@ async function handleSaveHandle() {
     btn.textContent = 'Saving…'; btn.disabled = true;
 
     // Check uniqueness
-    const existing = await window.db.collection('users').where('handle', '==', handle).get();
+    const existing = await db.collection('users').where('handle', '==', handle).get();
     if (!existing.empty) {
         errEl.textContent = 'Username taken. Try another.';
         errEl.style.display = 'block';
@@ -1557,7 +1557,7 @@ async function handleJoinGroup() {
     startGroupListener(code);
     startNotifListener();
 
-    const snap = await window.db.collection('groups').doc(code).get();
+    const snap = await db.collection('groups').doc(code).get();
     const groupName = snap.exists ? snap.data().name : code;
 
     document.querySelectorAll('.collab-pane').forEach(p => p.style.display = 'none');
@@ -1572,8 +1572,8 @@ async function handleJoinGroup() {
 
 // ─── Task card: show assignment badge ────────────────────────────────────
 // Monkey-patch createTaskCard to show assignedTo/assignedBy info
-const _origCreateTaskCard = window.createTaskCard;
-window.createTaskCard = function(task, column) {
+const _origCreateTaskCard = createTaskCard;
+createTaskCard = function(task, column) {
     const card = _origCreateTaskCard(task, column);
     if (task.assignedTo || task.assignedBy) {
         const badge = document.createElement('div');
@@ -1716,8 +1716,8 @@ const _soloActivity = {};   // { [taskId]: [ entry, … ] }
 // under a top-level 'comments' field: { [taskId]: [ entry, ... ] }
 // This avoids needing extra Firestore rules.
 function _myTasksDocRef() {
-    if (!currentGroup || !currentUser || !window.db) return null;
-    return window.db.collection('groups').doc(currentGroup.code)
+    if (!currentGroup || !currentUser || !db) return null;
+    return db.collection('groups').doc(currentGroup.code)
              .collection('tasks').doc(currentUser.uid);
 }
 
@@ -1790,7 +1790,7 @@ async function _pingCommentNotification(taskId, taskText, commentText) {
     const supMember = currentGroup.members.find(m => m.uid === currentGroup.supervisorUid);
     if (!supMember || supMember.uid === currentUser.uid) return;
     try {
-        await window.db.collection('notifications').add({
+        await db.collection('notifications').add({
             toUid:       supMember.uid,
             fromHandle:  currentHandle,
             type:        'comment',
@@ -1830,14 +1830,14 @@ async function deleteComment(taskId, commentId) {
 // Reads from ALL members' task docs and merges entries for this taskId.
 // Each member can only write their own doc but everyone can read group docs.
 async function loadCommentEntries(taskId) {
-    if (!currentGroup || !window.db) return _soloActivity[taskId] || [];
+    if (!currentGroup || !db) return _soloActivity[taskId] || [];
     const key = `comments_${String(taskId).replace(/[^a-z0-9]/gi,'_')}`;
     const allEntries = [];
     try {
         // Read all members' task docs
         const memberUids = (currentGroup.members || []).map(m => m.uid);
         const promises = memberUids.map(uid =>
-            window.db.collection('groups').doc(currentGroup.code)
+            db.collection('groups').doc(currentGroup.code)
               .collection('tasks').doc(uid).get()
         );
         const snaps = await Promise.all(promises);
@@ -2049,8 +2049,8 @@ function _renderInlineComments(taskId, entries) {
 // ─── Wire comment button into task cards (monkey-patch createTaskCard) ────
 // This runs AFTER tasky-collab.js's own createTaskCard monkey-patch so all
 // patches stack correctly.
-const _commentPatchOrigCreateTaskCard = window.createTaskCard;
-window.createTaskCard = function(task, column) {
+const _commentPatchOrigCreateTaskCard = createTaskCard;
+createTaskCard = function(task, column) {
     const card = _commentPatchOrigCreateTaskCard(task, column);
 
     // Count cloud comments from cache if available; just show a 💬 icon
@@ -2076,7 +2076,7 @@ window.createTaskCard = function(task, column) {
         const memberUids = (currentGroup.members || []).map(m => m.uid);
         Promise.all(
             memberUids.map(uid =>
-                window.db.collection('groups').doc(currentGroup.code)
+                db.collection('groups').doc(currentGroup.code)
                   .collection('tasks').doc(uid).get()
             )
         ).then(snaps => {
@@ -2114,15 +2114,15 @@ window.createTaskCard = function(task, column) {
 // Wrap moveTask, setPriority, addTaskToTodo to log activity to Firestore.
 // These wrap AFTER tasky-collab.js has already wrapped them, so we stack on top.
 
-const _actLogOrigMoveTask = window.moveTask;
-window.moveTask = function(fromCol, toCol, taskId) {
+const _actLogOrigMoveTask = moveTask;
+moveTask = function(fromCol, toCol, taskId) {
     _actLogOrigMoveTask(fromCol, toCol, taskId);
     const names = { todo: 'To Do', working: 'Working On', done: 'Done' };
     logActivity(taskId, `Moved: ${names[fromCol]} → ${names[toCol]}`);
 };
 
-const _actLogOrigSetPriority = window.setPriority;
-window.setPriority = function(col, taskId, priority) {
+const _actLogOrigSetPriority = setPriority;
+setPriority = function(col, taskId, priority) {
     _actLogOrigSetPriority(col, taskId, priority);
     logActivity(taskId, `Priority → ${priority.charAt(0).toUpperCase() + priority.slice(1)}`);
 };
@@ -2141,7 +2141,7 @@ startNotifListener = function() {
 // lazily once the DOM is fully loaded.
 function _collabToast(msg) {
     if (typeof showTaskyToast === 'function') showTaskyToast(msg);
-    else if (typeof window.showToast === 'function') window.showToast(msg, () => {});
+    else if (typeof showToast === 'function') showToast(msg, () => {});
 }
 // NOTE: the _startExtendedNotifListener below calls _collabToast directly,
 // so no module-level capture of showTaskyToast is needed here.
@@ -2155,7 +2155,7 @@ function _startExtendedNotifListener() {
     if (!currentUser) return;
     _origStopNotifListener();
 
-    window.notifListener = window.db.collection('notifications')
+    window.notifListener = db.collection('notifications')
         .where('toUid', '==', currentUser.uid)
         .where('read', '==', false)
         .onSnapshot(snap => {
@@ -2254,7 +2254,7 @@ async function requestNotifPermission() {
 }
 
 // Ask on first due-date set
-const _actLogOrigSetDueDate = window.setDueDate;
+const _actLogOrigSetDueDate = setDueDate;
 window.setDueDate = function(col, taskId, date) {
     _actLogOrigSetDueDate(col, taskId, date);
     if (date) {
