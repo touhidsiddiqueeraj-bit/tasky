@@ -3,6 +3,12 @@
 //  Adds: groups, supervisor role, task assignment, team panel, member summary
 // ═══════════════════════════════════════════════════════════════════════════
 
+// currentUser is owned by tasky.js. It is exposed on window.currentUser after
+// each auth state change. _handleAuthChange copies it into the module-level
+// `currentUser` variable below so all collab functions always read a consistent,
+// up-to-date value without scattering window.currentUser across 30+ call sites.
+var currentUser = null;   // kept in sync by _handleAuthChange via tasky:authchange
+
 // ─── Collab State ─────────────────────────────────────────────────────────
 let currentGroup      = null;   // { code, name, supervisorUid, supervisorHandle, members[] }
 let currentHandle     = null;   // short username like "jon"
@@ -1609,7 +1615,9 @@ let _collabAuthTimer = null;
 let _collabLastUid   = null;
 
 async function _handleAuthChange() {
-    const user = currentUser;   // tasky.js's global — always up-to-date here
+    // Sync module-level currentUser from window before any collab logic runs
+    currentUser = window.currentUser || null;
+    const user = currentUser;
 
     if (user && !user.isAnonymous) {
         // ── Real user ────────────────────────────────────────────────────
@@ -1648,19 +1656,16 @@ async function _handleAuthChange() {
 }
 
 function setupCollabAuth() {
-    // Patch tasky.js's updateAuthUI so we run right after it resolves currentUser.
-    // updateAuthUI is a global function defined in tasky.js's scope; we wrap it here.
-    const _origUpdateAuthUI = window.updateAuthUI || function(){};
-    window.updateAuthUI = function() {
-        _origUpdateAuthUI();
-        // Debounce: during the anon→Google transition Firebase fires two rapid
-        // state changes (signed-out briefly, then signed-in). Wait 80 ms so we
-        // only act on the final stable state.
+    // Listen for the custom event tasky.js fires from onAuthStateChanged.
+    // This is reliable because tasky.js dispatches it AFTER setting window.currentUser,
+    // so we never read a stale value. The 80ms debounce collapses the rapid
+    // anon→Google double-fire into one call on the final stable state.
+    window.addEventListener('tasky:authchange', () => {
         if (_collabAuthTimer) clearTimeout(_collabAuthTimer);
         _collabAuthTimer = setTimeout(_handleAuthChange, 80);
-    };
+    });
 
-    // Also run immediately in case updateAuthUI already fired before we patched it.
+    // Run once immediately in case the event already fired before this script loaded.
     if (_collabAuthTimer) clearTimeout(_collabAuthTimer);
     _collabAuthTimer = setTimeout(_handleAuthChange, 80);
 }
