@@ -1610,7 +1610,6 @@ function escHtml(str) {
 //     a short timeout so only the final stable state triggers full setup.
 
 let _collabAuthTimer = null;
-let _collabLastUid   = null;
 
 async function _handleAuthChange() {
     // Sync module-level currentUser from window before any collab logic runs
@@ -1618,26 +1617,15 @@ async function _handleAuthChange() {
     const user = currentUser;
 
     if (user && !user.isAnonymous) {
-        // ── Real user ────────────────────────────────────────────────────
-        if (user.uid === _collabLastUid) return;  // same user, nothing to do
-        _collabLastUid = user.uid;
-
+        // ── Real user — always run full setup so the dropdown renders on every load
         await ensureHandle();
-        await loadActiveGroup();       // reads from localStorage instantly, verifies from Firestore
+        await loadActiveGroup();
         startNotifListener();
-        await writeGroupTasks();       // push current local tasks so supervisor sees fresh data
-        await syncGroupTasksToBoard(); // pull tasks assigned while offline
-        // renderGroupUI is called inside loadActiveGroup → startGroupListener → onSnapshot
-        // but call it once more here to guarantee the dropdown reflects the resolved state
+        await writeGroupTasks();
+        await syncGroupTasksToBoard();
         renderGroupUI();
     } else {
-        // ── Anonymous or signed-out ───────────────────────────────────────
-        if (_collabLastUid === null) {
-            // Transient pre-auth state AND no prior session — just update dropdown
-            renderGroupUI();
-            return;
-        }
-        _collabLastUid = null;
+        // ── Signed out — tear down collab state
         stopGroupListener();
         stopNotifListener();
         stopTasksListener();
@@ -1654,18 +1642,13 @@ async function _handleAuthChange() {
 }
 
 function setupCollabAuth() {
-    // Listen for the custom event tasky.js fires from onAuthStateChanged.
-    // This is reliable because tasky.js dispatches it AFTER setting window.currentUser,
-    // so we never read a stale value. The 80ms debounce collapses the rapid
-    // anon→Google double-fire into one call on the final stable state.
+    // tasky.js fires 'tasky:authchange' from onAuthStateChanged AFTER setting
+    // window.currentUser. The 80ms debounce collapses the double-fire that can
+    // happen during sign-in into one call on the final stable state.
     window.addEventListener('tasky:authchange', () => {
         if (_collabAuthTimer) clearTimeout(_collabAuthTimer);
         _collabAuthTimer = setTimeout(_handleAuthChange, 80);
     });
-
-    // Run once immediately in case the event already fired before this script loaded.
-    if (_collabAuthTimer) clearTimeout(_collabAuthTimer);
-    _collabAuthTimer = setTimeout(_handleAuthChange, 80);
 }
 
 // Immediate (non-debounced) version used on boot only
