@@ -3,11 +3,9 @@
 //  Adds: groups, supervisor role, task assignment, team panel, member summary
 // ═══════════════════════════════════════════════════════════════════════════
 
-// currentUser is owned by tasky.js. It is exposed on window.currentUser after
-// each auth state change. _handleAuthChange copies it into the module-level
-// `currentUser` variable below so all collab functions always read a consistent,
-// up-to-date value without scattering window.currentUser across 30+ call sites.
-var currentUser = null;   // kept in sync by _handleAuthChange via tasky:authchange
+// currentUser is declared by tasky.js at global scope (let currentUser).
+// tasky-collab.js shares that same global — no re-declaration here.
+// _handleAuthChange syncs it from window.currentUser before any collab logic runs.
 
 // ─── Collab State ─────────────────────────────────────────────────────────
 let currentGroup      = null;   // { code, name, supervisorUid, supervisorHandle, members[] }
