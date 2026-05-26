@@ -3,9 +3,26 @@
 //  Adds: groups, supervisor role, task assignment, team panel, member summary
 // ═══════════════════════════════════════════════════════════════════════════
 
-// currentUser is declared by tasky.js at global scope (let currentUser).
-// tasky-collab.js shares that same global — no re-declaration here.
-// _handleAuthChange syncs it from window.currentUser before any collab logic runs.
+// ─── tasky.js bridge ──────────────────────────────────────────────────────
+// tasky.js uses `let` for all declarations. Script-level `let` is NOT placed
+// on `window` in modern browsers, so bare names like `db` or `addTaskToTodo`
+// are undefined here unless we alias them. tasky.js exposes them via window.*
+// — we pull them into local `var` declarations so every reference below
+// resolves correctly, including the const _orig* captures at parse time.
+var db               = window.db;
+var addTaskToTodo    = window.addTaskToTodo;
+var pushToCloud      = window.pushToCloud;
+var createTaskCard   = window.createTaskCard;
+var moveTask         = window.moveTask;
+var setPriority      = window.setPriority;
+var setDueDate       = window.setDueDate;
+var addTask          = window.addTask;
+var saveAll          = window.saveAll;
+var showToast        = window.showToast;
+var renderAllColumns = window.renderAllColumns;
+// currentUser is reassigned by tasky.js on every auth change;
+// _handleAuthChange reads window.currentUser directly, so bare `currentUser`
+// starts as null here and collab code always re-reads it via _handleAuthChange.
 
 // ─── Collab State ─────────────────────────────────────────────────────────
 let currentGroup      = null;   // { code, name, supervisorUid, supervisorHandle, members[] }
