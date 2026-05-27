@@ -584,7 +584,8 @@ function renderGroupUI() {
         // Inject 4th column — Team
         const teamCol = buildTeamColumn();
         board.appendChild(teamCol);
-        renderTeamPanel();
+        // Fetch once on first load; after that the live listener keeps cache fresh
+        fetchAllMemberTasks().then(() => renderTeamPanel());
     }
 
     // Update collab summary bar
@@ -639,72 +640,59 @@ function buildTeamColumn() {
     return wrapper;
 }
 
-let _teamPanelRendering = false;
-
-async function renderTeamPanel() {
+function renderTeamPanel() {
     const list = document.getElementById('team-list');
     const countEl = document.getElementById('team-member-count');
     if (!list || !currentGroup) return;
 
-    // Guard against concurrent renders (Firestore listener + back button race)
-    if (_teamPanelRendering) return;
-    _teamPanelRendering = true;
+    if (countEl) countEl.textContent = currentGroup.members.length;
+    list.innerHTML = '';
 
-    try {
-        await fetchAllMemberTasks();
-
-        if (countEl) countEl.textContent = currentGroup.members.length;
-
-        list.innerHTML = '';
-
-        // If a member is being inspected
-        if (teamPanelMember) {
-            renderMemberDetail(list);
-            return;
-        }
-
-        // List all members
-        currentGroup.members.forEach(m => {
-            const data = teamTasksCache[m.uid] || { tasks: { todo: [], working: [], done: [] } };
-            const todoCount    = (data.tasks.todo    || []).length;
-            const workingCount = (data.tasks.working || []).length;
-            const doneCount    = (data.tasks.done    || []).length;
-            const isSup = m.uid === currentGroup.supervisorUid;
-
-            const card = document.createElement('div');
-            card.className = 'member-card';
-            card.innerHTML = `
-                <div class="member-avatar ${isSup ? 'supervisor' : ''}">${m.handle[0].toUpperCase()}</div>
-                <div class="member-info">
-                    <div class="member-name">@${m.handle} ${isSup ? '<span class="sup-tag">SUP</span>' : ''}</div>
-                    <div class="member-stats">
-                        <span class="stat-pill todo">${todoCount} todo</span>
-                        <span class="stat-pill working">${workingCount} working</span>
-                        <span class="stat-pill done">${doneCount} done</span>
-                    </div>
-                </div>
-                <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
-                    <button class="member-assign-btn" title="Assign task to @${m.handle}">+ Assign</button>
-                    <button class="member-inspect-btn" title="View tasks">View →</button>
-                </div>
-            `;
-            card.querySelector('.member-assign-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                openAssignModal(m.handle);
-            });
-            card.querySelector('.member-inspect-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                teamPanelMember = m.handle;
-                renderTeamPanel();
-            });
-            list.appendChild(card);
-        });
-
-        // Summary table at the bottom
-        renderTeamSummaryTable(list);
-    } finally {
-        _teamPanelRendering = false;
+    // If a member is being inspected
+    if (teamPanelMember) {
+        renderMemberDetail(list);
+        return;
     }
+
+    // List all members
+    currentGroup.members.forEach(m => {
+        const data = teamTasksCache[m.uid] || { tasks: { todo: [], working: [], done: [] } };
+        const todoCount    = (data.tasks.todo    || []).length;
+        const workingCount = (data.tasks.working || []).length;
+        const doneCount    = (data.tasks.done    || []).length;
+        const isSup = m.uid === currentGroup.supervisorUid;
+
+        const card = document.createElement('div');
+        card.className = 'member-card';
+        card.innerHTML = `
+            <div class="member-avatar ${isSup ? 'supervisor' : ''}">${m.handle[0].toUpperCase()}</div>
+            <div class="member-info">
+                <div class="member-name">@${m.handle} ${isSup ? '<span class="sup-tag">SUP</span>' : ''}</div>
+                <div class="member-stats">
+                    <span class="stat-pill todo">${todoCount} todo</span>
+                    <span class="stat-pill working">${workingCount} working</span>
+                    <span class="stat-pill done">${doneCount} done</span>
+                </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
+                <button class="member-assign-btn" title="Assign task to @${m.handle}">+ Assign</button>
+                <button class="member-inspect-btn" title="View tasks">View →</button>
+            </div>
+        `;
+        card.querySelector('.member-assign-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            openAssignModal(m.handle);
+        });
+        card.querySelector('.member-inspect-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            teamPanelMember = m.handle;
+            renderTeamPanel();
+        });
+        list.appendChild(card);
+    });
+
+    // Summary table at the bottom
+    renderTeamSummaryTable(list);
 }
 
 function renderTeamSummaryTable(list) {
@@ -855,7 +843,6 @@ function renderMemberDetail(list) {
     `;
     header.querySelector('#member-back-btn').addEventListener('click', () => {
         teamPanelMember = null;
-        _teamPanelRendering = false; // reset lock so back always works
         renderTeamPanel();
     });
     list.appendChild(header);
@@ -873,23 +860,35 @@ function renderMemberDetail(list) {
             taskCount++;
             const item = document.createElement('div');
             item.className = `member-task-item priority-${t.priority || 'medium'}`;
+            item.style.flexDirection = 'column';
+            item.style.alignItems = 'stretch';
             const isOverdue = t.dueDate && new Date(t.dueDate) < new Date() && col !== 'done';
             item.innerHTML = `
-                <span class="member-task-priority">${t.priority === 'high' ? '🔴' : t.priority === 'medium' ? '🟡' : '🟢'}</span>
-                <div class="member-task-body" style="flex:1;min-width:0;">
-                    <span class="member-task-text">${escHtml(t.text)}</span>
-                    ${t.dueDate ? `<span class="member-task-date ${isOverdue ? 'overdue' : ''}">📅 ${new Date(t.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>` : ''}
-                    ${t.assignedBy ? `<span class="member-task-assigned">from @${t.assignedBy}</span>` : ''}
+                <div style="display:flex;align-items:flex-start;gap:6px;">
+                    <span class="member-task-priority">${t.priority === 'high' ? '🔴' : t.priority === 'medium' ? '🟡' : '🟢'}</span>
+                    <div class="member-task-body" style="flex:1;min-width:0;">
+                        <span class="member-task-text">${escHtml(t.text)}</span>
+                        ${t.dueDate ? `<span class="member-task-date ${isOverdue ? 'overdue' : ''}">📅 ${new Date(t.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>` : ''}
+                        ${t.assignedBy ? `<span class="member-task-assigned">from @${t.assignedBy}</span>` : ''}
+                    </div>
+                    <button class="member-task-comment-btn" data-taskid="${t.id}"
+                        style="flex-shrink:0;background:none;border:1px solid rgba(255,255,255,0.12);border-radius:8px;
+                        color:rgba(255,255,255,0.45);font-size:13px;padding:4px 8px;cursor:pointer;white-space:nowrap;">💬</button>
                 </div>
-                <button class="member-task-comment-btn" title="Comments" data-taskid="${t.id}" data-tasktext="${escHtml(t.text)}" data-owneruid="${member.uid}"
-                    style="flex-shrink:0;background:none;border:1px solid rgba(255,255,255,0.12);border-radius:8px;
-                    color:rgba(255,255,255,0.45);font-size:13px;padding:4px 8px;cursor:pointer;white-space:nowrap;
-                    transition:all .15s;" title="View / add comments">💬</button>
+                <div class="ic-strip" id="inline-comments-${t.id}" style="display:none;margin-top:6px;margin-left:22px;"></div>
             `;
             item.querySelector('.member-task-comment-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
                 openComments(t.id, t.text, col, member.uid);
             });
+
+            // Load inline comment strip asynchronously
+            if (currentGroup && db) {
+                loadCommentEntries(t.id).then(entries => {
+                    _renderInlineComments(t.id, entries);
+                }).catch(() => {});
+            }
+
             list.appendChild(item);
         });
     });
@@ -2371,6 +2370,8 @@ function _startCommentsListener(taskId, ownerUid) {
 function _refreshOpenCommentPanel(taskId) {
     if (_commentsOpenTaskId !== taskId) return;
     if (_soloActivity[taskId]) _renderCommentFeed(taskId, _soloActivity[taskId]);
+    // Also refresh inline strip if it's visible in the team panel member detail
+    loadCommentEntries(taskId).then(entries => _renderInlineComments(taskId, entries)).catch(() => {});
 }
 
 // ─── Format timestamp ────────────────────────────────────────────────────
