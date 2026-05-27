@@ -516,13 +516,13 @@ function stopNotifListener() {
 let _groupSyncTimer = null;
 
 function scheduleGroupSync() {
-    if (!currentGroup || !currentUser || isSupervisor) return;
+    if (!currentGroup || !currentUser) return;
     if (_groupSyncTimer) clearTimeout(_groupSyncTimer);
     _groupSyncTimer = setTimeout(writeGroupTasks, 800);
 }
 
 async function writeGroupTasks() {
-    if (!currentGroup || !currentUser || isSupervisor) return;
+    if (!currentGroup || !currentUser) return;
     try {
         await db.collection('groups').doc(currentGroup.code)
             .collection('tasks').doc(currentUser.uid).set({
@@ -1460,11 +1460,26 @@ function renderGroupInfoPane() {
             <div class="tg-field-label">Collaboration Name</div>
             <div style="font-size:18px;font-weight:700;color:#e2d9ff;margin-top:4px;">${escHtml(currentGroup.name)}</div>
         </div>
-        <div style="margin-bottom:20px;">
-            <div class="tg-field-label">Your Code</div>
-            <div style="font-size:28px;font-weight:800;letter-spacing:.3em;color:#a78bfa;margin-top:4px;">${currentGroup.code}</div>
-            <button class="tg-icon-btn" onclick="copyGroupCode()" style="margin-top:8px;">📋 Copy Code</button>
+
+        <!-- ── Invite teammates card ── -->
+        <div style="margin-bottom:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.09);border-radius:14px;padding:16px 18px;">
+            <div class="tg-field-label" style="margin-bottom:10px;">Invite Teammates</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+                <div style="font-size:26px;font-weight:800;letter-spacing:.28em;color:#a78bfa;font-family:monospace;">${currentGroup.code}</div>
+                <button class="tg-icon-btn" style="font-size:12px;" onclick="copyGroupCode()">📋 Copy Code</button>
+            </div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:10px;">
+                Or send a one-click invite link — they'll land straight on the Join screen with the code pre-filled.
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="tg-save-btn" style="padding:10px 18px;font-size:13px;margin:0;" onclick="copyInviteLink()">🤝 Copy Invite Link</button>
+                <button class="tg-icon-btn" style="font-size:12px;" onclick="shareInviteLink()">↗️ Share…</button>
+            </div>
+            <div id="collab-invite-link-preview" style="margin-top:10px;font-size:11px;font-family:monospace;
+                color:rgba(255,255,255,0.35);word-break:break-all;display:none;background:rgba(0,0,0,0.2);
+                border-radius:8px;padding:8px 10px;"></div>
         </div>
+
         <div>
             <div class="tg-field-label">Members (${currentGroup.members.length}${currentGroup.supervisorPlan !== 'pro' ? ' / ' + FREE_MEMBER_LIMIT + ' free' : ''})</div>
             <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
@@ -1479,7 +1494,7 @@ function renderGroupInfoPane() {
             </div>
         </div>
 
-        <!-- ── Share Live Board — prominent card, right after members ── -->
+        <!-- ── Share Live Board — prominent card ── -->
         <div style="margin-top:18px;background:linear-gradient(135deg,rgba(139,92,246,0.12),rgba(99,60,220,0.08));
             border:1px solid rgba(139,92,246,0.3);border-radius:14px;padding:16px 18px;">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
@@ -1523,6 +1538,38 @@ function copyGroupCode() {
     navigator.clipboard.writeText(code).then(() => showTaskyToast('📋 Code copied!')).catch(() => {});
 }
 
+// ─── Invite Link ──────────────────────────────────────────────────────────
+// Format: yoursite.com/tasky/?join=GROUPCODE
+// When someone opens it, the Join modal pops with the code pre-filled.
+function _buildInviteUrl(code) {
+    const base = window.location.href.split('?')[0].split('#')[0];
+    return `${base}?join=${code}`;
+}
+
+function copyInviteLink() {
+    if (!currentGroup) return;
+    const url = _buildInviteUrl(currentGroup.code);
+    const preview = document.getElementById('collab-invite-link-preview');
+    if (preview) { preview.textContent = url; preview.style.display = 'block'; }
+    navigator.clipboard.writeText(url)
+        .then(() => showTaskyToast('🤝 Invite link copied! Send it to your teammate.'))
+        .catch(() => { showTaskyToast('🤝 Invite link: ' + url); });
+}
+
+function shareInviteLink() {
+    if (!currentGroup) return;
+    const url = _buildInviteUrl(currentGroup.code);
+    if (navigator.share) {
+        navigator.share({
+            title: `Join "${currentGroup.name}" on Tasky`,
+            text: `You've been invited to join the "${currentGroup.name}" collaboration on Tasky. Click to join:`,
+            url
+        }).catch(() => {});
+    } else {
+        copyInviteLink(); // fallback to copy on desktop
+    }
+}
+
 // ─── Shareable Read-Only Board ─────────────────────────────────────────────
 function _buildShareUrl(code) {
     const base = window.location.href.split('?')[0].split('#')[0];
@@ -1556,14 +1603,56 @@ function openShareableBoard() {
 
     // Wait for Firebase to be ready, then boot read-only mode
     function _bootReadOnly() {
-        if (typeof db === 'undefined') { setTimeout(_bootReadOnly, 100); return; }
-        _mountReadOnlyBoard(viewCode.toUpperCase());
+        if (typeof db === 'undefined' || typeof firebase === 'undefined') { setTimeout(_bootReadOnly, 100); return; }
+        // Sign in anonymously so Firestore rules can grant read access without a Google account.
+        // This works in incognito — anonymous auth creates a temporary session with no stored credentials.
+        const auth = firebase.auth();
+        if (auth.currentUser) {
+            _mountReadOnlyBoard(viewCode.toUpperCase());
+        } else {
+            auth.signInAnonymously()
+                .catch(() => {}) // if anon auth is disabled, try anyway — public rules may still allow it
+                .finally(() => _mountReadOnlyBoard(viewCode.toUpperCase()));
+        }
     }
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', _bootReadOnly);
     } else {
         _bootReadOnly();
+    }
+})();
+
+// ─── Invite link auto-join (?join=CODE) ───────────────────────────────────
+// When a teammate clicks an invite link, the Join modal opens automatically
+// with the code pre-filled. They still need to sign in and set a handle.
+(function initInviteMode() {
+    const params = new URLSearchParams(window.location.search);
+    const joinCode = params.get('join');
+    if (!joinCode) return;
+
+    // Clean the URL so refreshing doesn't re-trigger this
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, '', cleanUrl);
+
+    // Wait for the app to be ready, then open the join modal
+    function _openJoinModal() {
+        if (typeof openCollabModal !== 'function') { setTimeout(_openJoinModal, 150); return; }
+        openCollabModal('join');
+        // Pre-fill the code once the modal is open
+        setTimeout(() => {
+            const input = document.getElementById('collab-join-code-input');
+            if (input) {
+                input.value = joinCode.toUpperCase().trim();
+                input.dispatchEvent(new Event('input'));
+            }
+        }, 100);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => setTimeout(_openJoinModal, 600));
+    } else {
+        setTimeout(_openJoinModal, 600);
     }
 })();
 
@@ -1728,11 +1817,19 @@ async function _mountReadOnlyBoard(code) {
         // Listen to all member tasks
         _listenROTasks(code, groupData);
     }, err => {
+        const isPermission = err.code === 'permission-denied';
         document.getElementById('ro-board-area').innerHTML = `
             <div class="ro-error">
-                <div class="ro-error-icon">⚠️</div>
-                <div class="ro-error-msg">Could not load board</div>
-                <div>Check your connection or try refreshing.</div>
+                <div class="ro-error-icon">${isPermission ? '🔒' : '⚠️'}</div>
+                <div class="ro-error-msg">${isPermission ? 'Access denied' : 'Could not load board'}</div>
+                <div style="margin-bottom:8px;">${isPermission
+                    ? 'Firestore rules are blocking unauthenticated reads. Update your rules — see instructions below.'
+                    : 'Check your connection or try refreshing.'}</div>
+                ${isPermission ? `<div style="margin-top:16px;background:rgba(0,0,0,0.3);border-radius:10px;padding:14px 16px;text-align:left;font-size:12px;color:rgba(255,255,255,0.5);line-height:1.8;">
+                    In Firebase Console → Firestore → Rules, add:<br>
+                    <code style="color:#c4b5fd;font-size:11px;">match /groups/{code} { allow read: if true; }<br>
+match /groups/{code}/tasks/{uid} { allow read: if true; }</code>
+                </div>` : ''}
             </div>`;
     });
 
