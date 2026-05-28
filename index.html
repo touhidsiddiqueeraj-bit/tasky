@@ -1710,19 +1710,19 @@ body.light-mode {
 }
 
 #settings-panel {
-  position: fixed !important;
-  top: 0 !important; right: 0 !important;
-  width: min(360px, 100vw) !important;
-  height: 100vh !important;
+  position: fixed;
+  top: 0; right: 0;
+  width: min(360px, 100vw);
+  height: 100dvh;
   background: var(--st-bg);
   border-left: 1px solid var(--st-border);
-  z-index: 9999 !important;
-  display: flex !important;
-  flex-direction: column !important;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
   box-shadow: -12px 0 48px rgba(0,0,0,0.45);
-  overflow: hidden !important;
+  overflow: hidden;
 }
 #settings-panel.open { transform: translateX(0); }
 
@@ -1730,7 +1730,7 @@ body.light-mode {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 20px 16px;
   border-bottom: 1px solid var(--st-border);
-  flex-shrink: 0 !important;
+  flex-shrink: 0;
 }
 #settings-close-btn {
   background: none; border: none;
@@ -1742,9 +1742,9 @@ body.light-mode {
 #settings-close-btn:hover { background: var(--st-hover); color: var(--st-text); }
 
 #settings-body {
-  flex: 1 1 0 !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 16px 16px 32px;
