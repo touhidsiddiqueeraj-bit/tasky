@@ -19,24 +19,17 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="tasky.css">
 <style>
-/* ============================================================
-   ONBOARDING — SHARED BASE
-   ============================================================ */
+/* ═══════════════════════════════════════════════════════════
+   ONBOARDING — GLASSMORPHISM
+   ═══════════════════════════════════════════════════════════ */
 .onboarding-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: none;
-  align-items: center;
-  justify-content: center;
+  position: fixed; inset: 0; z-index: 9999;
+  display: none; align-items: center; justify-content: center;
   background: rgba(6,5,10,0.82);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
-.onboarding-overlay.visible {
-  display: flex;
-  animation: ob-fade-in 0.4s ease;
-}
+.onboarding-overlay.visible { display: flex; animation: ob-fade-in 0.4s ease; }
 @keyframes ob-fade-in { from{opacity:0} to{opacity:1} }
 .onboarding-overlay.hidden {
   animation: ob-fade-out 0.35s ease forwards;
@@ -44,140 +37,191 @@
 }
 @keyframes ob-fade-out { to{opacity:0} }
 
-.ob-desktop { display: none; }
-.ob-mobile  { display: none; }
-@media (max-width:700px) {
-  .ob-desktop { display:none; }
-  .ob-mobile  { display:none; }
-}
-
-/* ---------- Desktop card ---------- */
-.ob-desktop-card {
-  width: min(860px,94vw);
-  background: linear-gradient(145deg,#16131f 0%,#0e0c17 100%);
+/* ── Shared card (desktop modal + mobile sheet) ── */
+.ob-card {
+  background: rgba(20,20,40,0.88);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 24px;
   box-shadow: 0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(139,92,246,0.15);
   overflow: hidden;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
 }
-.ob-d-hero {
-  background: linear-gradient(135deg,#8B5CF6 0%,#6d28d9 40%,#1d1030 100%);
-  padding: 36px 48px 32px;
-  position: relative;
-  overflow: hidden;
+body.light-mode .ob-card {
+  background: rgba(255,255,255,0.9);
+  border-color: rgba(0,0,0,0.1);
+  box-shadow: 0 32px 80px rgba(0,0,0,0.15), 0 0 0 1px rgba(139,92,246,0.1);
 }
-.ob-d-hero::before {
-  content:'';position:absolute;inset:0;
-  background: radial-gradient(ellipse at 80% 50%,rgba(139,92,246,0.4) 0%,transparent 70%);
-}
-.ob-d-logo {
-  font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
-  color:rgba(255,255,255,0.55);margin-bottom:8px;position:relative;
-}
-.ob-d-headline {
-  font-size:clamp(24px,3vw,34px);font-weight:800;color:#fff;
-  line-height:1.15;position:relative;margin-bottom:8px;
-}
-.ob-d-tagline { font-size:14px;color:rgba(255,255,255,0.65);position:relative; }
-.ob-d-body {
-  padding:28px 48px 20px;overflow-y:auto;
-  display:grid;grid-template-columns:1fr 1fr;gap:14px;
-}
-.ob-d-step {
-  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);
-  border-radius:14px;padding:16px 18px;display:flex;gap:14px;align-items:flex-start;
-  transition:background .2s,border-color .2s;
-}
-.ob-d-step:hover { background:rgba(139,92,246,0.08);border-color:rgba(139,92,246,0.25); }
-.ob-d-step-icon { font-size:22px;line-height:1;flex-shrink:0;margin-top:2px; }
-.ob-d-step-text strong {
-  display:block;font-size:13.5px;font-weight:700;color:#e2d9ff;margin-bottom:5px;
-}
-.ob-d-step-text span { font-size:12.5px;color:rgba(255,255,255,0.5);line-height:1.55; }
-.ob-d-step-text kbd {
-  display:inline-block;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);
-  border-radius:5px;padding:1px 6px;font-size:11px;font-family:monospace;color:#c4b5fd;margin:0 1px;
-}
-.ob-d-step.ob-d-step-wide {
-  grid-column: 1 / -1;
-  background: rgba(139,92,246,0.07);
-  border-color: rgba(139,92,246,0.22);
-}
-.ob-d-step.ob-d-step-wide:hover { background:rgba(139,92,246,0.12); }
-.ob-d-footer {
-  padding:18px 48px 28px;display:flex;align-items:center;
-  justify-content:space-between;border-top:1px solid rgba(255,255,255,0.06);gap:16px;
-}
-.ob-d-hint { font-size:12px;color:rgba(255,255,255,0.3); }
-.ob-d-btn {
-  background:linear-gradient(135deg,#8B5CF6,#6d28d9);color:#fff;border:none;
-  border-radius:12px;padding:14px 36px;font-size:14px;font-weight:700;cursor:pointer;
-  letter-spacing:.04em;box-shadow:0 4px 20px rgba(139,92,246,0.45);
-  transition:transform .15s,box-shadow .15s,filter .15s;
-}
-.ob-d-btn:hover { transform:translateY(-2px);box-shadow:0 8px 28px rgba(139,92,246,0.55);filter:brightness(1.1); }
-.ob-d-btn:active { transform:translateY(0); }
 
-/* ---------- Mobile onboarding ---------- */
-.ob-mobile { flex-direction:column;align-items:stretch;justify-content:flex-end;padding:0; }
-.ob-m-sheet {
-  background:linear-gradient(170deg,#13101e 0%,#0c0a14 100%);
-  border-radius:28px 28px 0 0;border-top:1px solid rgba(255,255,255,0.1);
-  max-height:92vh;display:flex;flex-direction:column;overflow:hidden;
-  box-shadow:0 -20px 60px rgba(0,0,0,0.7);
+/* ── Desktop overlay ── */
+.ob-desktop .ob-card {
+  width: min(640px,94vw);
+  max-height: 90vh;
+}
+
+/* ── Mobile overlay ── */
+.ob-mobile {
+  flex-direction: column; align-items: stretch;
+  justify-content: flex-end; padding: 0;
+}
+.ob-mobile .ob-card {
+  border-radius: 28px 28px 0 0;
+  border-bottom: none;
+  max-height: 92vh;
+  width: 100%;
+  box-shadow: 0 -20px 60px rgba(0,0,0,0.7);
+}
+body.light-mode .ob-mobile .ob-card {
+  box-shadow: 0 -20px 60px rgba(0,0,0,0.15);
 }
 .ob-m-pill {
-  width:40px;height:4px;background:rgba(255,255,255,0.18);
-  border-radius:2px;margin:14px auto 0;flex-shrink:0;
+  width: 40px; height: 4px; background: rgba(255,255,255,0.18);
+  border-radius: 2px; margin: 14px auto 0; flex-shrink: 0;
 }
-.ob-m-viewport { overflow:hidden;flex:1;position:relative; }
-.ob-m-track { display:flex;height:100%;transition:transform .38s cubic-bezier(.4,0,.2,1); }
-.ob-m-slide {
-  min-width:100%;padding:28px 28px 12px;display:flex;flex-direction:column;
-  align-items:center;text-align:center;gap:14px;box-sizing:border-box;
+
+/* ── Slide area ── */
+.ob-slide-area { overflow: hidden; flex: 1; position: relative; }
+.ob-track {
+  display: flex; height: 100%;
+  transition: transform 0.38s cubic-bezier(0.4,0,0.2,1);
 }
-.ob-m-illus {
-  width:88px;height:88px;border-radius:28px;display:flex;align-items:center;
-  justify-content:center;font-size:38px;flex-shrink:0;box-shadow:0 8px 32px rgba(0,0,0,0.4);
+.ob-slide {
+  min-width: 100%; padding: 32px 36px 16px;
+  display: flex; flex-direction: column;
+  align-items: center; text-align: center;
+  gap: 14px; box-sizing: border-box;
 }
-.ob-m-illus.purple { background:linear-gradient(135deg,#7c3aed,#4c1d95); }
-.ob-m-illus.amber  { background:linear-gradient(135deg,#d97706,#92400e); }
-.ob-m-illus.green  { background:linear-gradient(135deg,#059669,#064e3b); }
-.ob-m-illus.blue   { background:linear-gradient(135deg,#0284c7,#0c4a6e); }
-.ob-m-illus.rose   { background:linear-gradient(135deg,#e11d48,#881337); }
-.ob-m-illus.violet { background:linear-gradient(135deg,#7c3aed,#2e1065); }
-.ob-m-slide h2 { font-size:21px;font-weight:800;color:#ede9fe;margin:0;line-height:1.25; }
-.ob-m-slide p  { font-size:14.5px;color:rgba(255,255,255,0.55);line-height:1.6;margin:0;max-width:320px; }
-.ob-m-slide .ob-m-tip {
-  background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.3);
-  border-radius:12px;padding:12px 16px;font-size:13px;color:#c4b5fd;
-  line-height:1.55;width:100%;box-sizing:border-box;text-align:left;
+@media (max-width: 700px) {
+  .ob-slide { padding: 28px 28px 12px; }
 }
-.ob-m-tip-label {
-  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#a78bfa;margin-bottom:4px;
+
+/* ── Illustration ── */
+.ob-illus {
+  width: 88px; height: 88px; border-radius: 28px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 38px; flex-shrink: 0;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
 }
-.ob-m-dots { display:flex;gap:7px;justify-content:center;padding:14px 0 4px;flex-shrink:0; }
-.ob-m-dot {
-  width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.2);
-  transition:background .3s,width .3s;cursor:pointer;
+.ob-illus.purple { background: linear-gradient(135deg,#7c3aed,#4c1d95); }
+.ob-illus.amber  { background: linear-gradient(135deg,#d97706,#92400e); }
+.ob-illus.green  { background: linear-gradient(135deg,#059669,#064e3b); }
+.ob-illus.blue   { background: linear-gradient(135deg,#0284c7,#0c4a6e); }
+.ob-illus.rose   { background: linear-gradient(135deg,#e11d48,#881337); }
+.ob-illus.violet { background: linear-gradient(135deg,#7c3aed,#2e1065); }
+
+/* ── Slide text ── */
+.ob-slide h2 {
+  font-size: 22px; font-weight: 800; color: #ede9fe;
+  margin: 0; line-height: 1.25;
 }
-.ob-m-dot.active { background:#8B5CF6;width:22px;border-radius:4px; }
-.ob-m-nav { display:flex;gap:12px;padding:16px 24px 28px;flex-shrink:0; }
-.ob-m-skip {
-  flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
-  color:rgba(255,255,255,0.5);border-radius:14px;padding:15px;font-size:14px;
-  font-weight:600;cursor:pointer;transition:background .2s;
+body.light-mode .ob-slide h2 { color: #1a1040; }
+@media (max-width: 700px) { .ob-slide h2 { font-size: 20px; } }
+.ob-slide p {
+  font-size: 14.5px; color: rgba(255,255,255,0.55);
+  line-height: 1.6; margin: 0; max-width: 420px;
 }
-.ob-m-skip:hover { background:rgba(255,255,255,0.1); }
-.ob-m-next {
-  flex:2;background:linear-gradient(135deg,#8B5CF6,#6d28d9);color:#fff;border:none;
-  border-radius:14px;padding:15px;font-size:14px;font-weight:700;cursor:pointer;
-  box-shadow:0 4px 18px rgba(139,92,246,0.4);transition:filter .15s,transform .15s;letter-spacing:.02em;
+body.light-mode .ob-slide p { color: rgba(0,0,0,0.55); }
+@media (max-width: 700px) { .ob-slide p { font-size: 14px; } }
+.ob-slide strong { color: #c4b5fd; }
+body.light-mode .ob-slide strong { color: #7c3aed; }
+
+/* ── Tip card ── */
+.ob-tip {
+  background: rgba(139,92,246,0.15);
+  border: 1px solid rgba(139,92,246,0.3);
+  border-radius: 12px; padding: 12px 16px;
+  font-size: 13px; color: #c4b5fd;
+  line-height: 1.55; width: 100%;
+  max-width: 420px; box-sizing: border-box; text-align: left;
 }
-.ob-m-next:active { transform:scale(0.97); }
+body.light-mode .ob-tip {
+  background: rgba(139,92,246,0.08);
+  border-color: rgba(139,92,246,0.2);
+  color: #6d28d9;
+}
+.ob-tip-label {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .1em;
+  color: #a78bfa; margin-bottom: 4px;
+}
+body.light-mode .ob-tip-label { color: #7c3aed; }
+.ob-slide kbd {
+  display: inline-block; background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 5px; padding: 1px 6px;
+  font-size: 11px; font-family: monospace;
+  color: #c4b5fd; margin: 0 1px;
+}
+body.light-mode .ob-slide kbd {
+  background: rgba(0,0,0,0.06);
+  border-color: rgba(0,0,0,0.15);
+  color: #6d28d9;
+}
+
+/* ── Navigation ── */
+.ob-nav {
+  display: flex; align-items: center;
+  justify-content: center; gap: 16px;
+  padding: 16px 36px 20px; flex-shrink: 0;
+}
+@media (max-width: 700px) { .ob-nav { padding: 14px 24px 24px; } }
+.ob-dots { display: flex; gap: 7px; justify-content: center; }
+.ob-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  transition: background .3s, width .3s; cursor: pointer;
+}
+body.light-mode .ob-dot { background: rgba(0,0,0,0.15); }
+.ob-dot.active { background: #8B5CF6; width: 22px; border-radius: 4px; }
+body.light-mode .ob-dot.active { background: #7c3aed; }
+
+.ob-btn {
+  border: none; border-radius: 12px;
+  padding: 12px 24px; font-size: 14px; font-weight: 700;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s, filter .15s, background .2s;
+  letter-spacing: .02em; white-space: nowrap;
+}
+.ob-btn:active { transform: scale(0.97); }
+.ob-btn-primary {
+  background: linear-gradient(135deg, #8B5CF6, #6d28d9);
+  color: #fff; box-shadow: 0 4px 18px rgba(139,92,246,0.4);
+}
+.ob-btn-primary:hover { filter: brightness(1.1); }
+.ob-btn-secondary {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6);
+}
+body.light-mode .ob-btn-secondary {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.1);
+  color: rgba(0,0,0,0.5);
+}
+.ob-btn-secondary:hover {
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.8);
+}
+body.light-mode .ob-btn-secondary:hover {
+  background: rgba(0,0,0,0.08);
+  color: rgba(0,0,0,0.7);
+}
+.ob-nav-back { opacity: 0; pointer-events: none; }
+.ob-nav-back.visible { opacity: 1; pointer-events: all; }
+
+.ob-skip {
+  background: none; border: none;
+  color: rgba(255,255,255,0.3); font-size: 12px;
+  cursor: pointer; padding: 0 36px 20px;
+  text-align: center; flex-shrink: 0;
+  transition: color .2s;
+}
+body.light-mode .ob-skip { color: rgba(0,0,0,0.3); }
+.ob-skip:hover { color: rgba(255,255,255,0.6); }
+body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
+@media (max-width: 700px) { .ob-skip { padding: 0 24px 18px; } }
 
 /* ============================================================
    TASK GROUPS MODAL
@@ -460,93 +504,96 @@
      DESKTOP ONBOARDING
      ═══════════════════════════════════════════════ -->
 <div class="onboarding-overlay ob-desktop" id="onboarding-desktop">
-  <div class="ob-desktop-card">
-    <div class="ob-d-hero">
-      <div class="ob-d-logo">
-        <svg width="16" height="16" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;margin-right:6px;"><rect x="1" y="2" width="20" height="5" rx="2.5" fill="rgba(255,255,255,0.7)"/><rect x="1" y="8.5" width="14" height="5" rx="2.5" fill="rgba(255,255,255,0.5)"/><rect x="1" y="15" width="10" height="5" rx="2.5" fill="rgba(255,255,255,0.35)"/></svg>Tasky
+  <div class="ob-card">
+    <div class="ob-slide-area">
+      <div class="ob-track" id="desk-track">
+
+        <div class="ob-slide">
+          <div class="ob-illus purple">✅</div>
+          <h2>Welcome to Tasky</h2>
+          <p>A three-column board — <strong>To Do</strong> · <strong>Working On</strong> · <strong>Done</strong> — built for speed. No sign-up needed, your data lives on your device. Every action has a keyboard shortcut.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">⌨️ Quick start</div>
+            Press any key to open the task input. Type and hit <kbd>Enter</kbd> to save.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus amber">⌨️</div>
+          <h2>Adding Tasks</h2>
+          <p>Press any letter or number to open the floating input. Type your task and hit <kbd>Enter</kbd> to save. Press <kbd>Esc</kbd> to cancel. Tasks always land in <strong>To Do</strong> first.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🎙️ Voice input</div>
+            Hold <kbd>Space</kbd> to dictate — release to save. Works in Chrome, Edge &amp; Brave.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus green">🎯</div>
+          <h2>Move &amp; Prioritize</h2>
+          <p>Click a task to select it, then press <kbd>←</kbd> <kbd>→</kbd> to move between columns. You can also drag and drop. Press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> for <strong>High</strong> / <strong>Medium</strong> / <strong>Low</strong> priority.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">💡 Pro tip</div>
+            Click the priority badge to cycle levels. Add due dates from the task popover.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus blue">📋</div>
+          <h2>Workspaces</h2>
+          <p>Keep different projects separate with <strong>Workspaces</strong>. Switch between them using the pill bar at the top. Each workspace has its own tasks, settings, and optional collaboration.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">➕ New workspace</div>
+            Click <strong>＋ New Workspace</strong> in the top bar to get started. The first workspace is always "Personal".
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus violet">⊞</div>
+          <h2>Task Groups</h2>
+          <p>Create reusable templates from <strong>Tasky ▼ → Task Groups</strong>. Add subtasks with priorities and choose <strong>To Do</strong> or <strong>Working On</strong>.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">⚡ Instant expand</div>
+            Start typing a group name — matching suggestions appear. Press <kbd>Enter</kbd> to expand the whole group onto the board instantly.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus rose">☁️</div>
+          <h2>Cloud Sync</h2>
+          <p>Sign in with Google via <strong>Tasky ▼ → ☁️ Sign in</strong> to sync data across devices. Works fully offline — changes queue locally and sync when you're back online.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🛡️ Your data</div>
+            Task Groups and Workspaces are preserved even after a data reset.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus purple">👥</div>
+          <h2>Team Collaboration</h2>
+          <p>Sign in, then go to <strong>Tasky ▼ → Create Collaboration</strong>. Share the 6-character code with teammates. As supervisor you get a <strong>Team</strong> column to assign tasks in real-time. Members see assigned tasks appear instantly.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">👤 Quick assign</div>
+            Type <code>task text to::handle priority::high date::20may</code> in the input for instant task assignment.
+          </div>
+        </div>
+
       </div>
-      <div class="ob-d-headline">Your keyboard-first<br>task tracker</div>
-      <div class="ob-d-tagline">Three columns. Zero friction. Here's all you need to know.</div>
     </div>
-    <div class="ob-d-body">
-
-      <div class="ob-d-step ob-d-step-wide">
-        <div class="ob-d-step-icon">⊞</div>
-        <div class="ob-d-step-text">
-          <strong>Task Groups — add a whole workflow in one keystroke</strong>
-          <span>Create reusable groups of tasks (e.g. "Sprint Setup", "Morning Routine") from <strong>Tasky ▼ → Task Groups</strong>. Each group has a column toggle (To Do / Working On) and a list of sub-tasks with priorities. When you start typing in the task input, matching group names appear as suggestions — press <kbd>↑</kbd><kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to expand the whole group onto the board instantly. Duplicate tasks are skipped automatically.</span>
-        </div>
+    <div class="ob-nav">
+      <button class="ob-btn ob-btn-secondary ob-nav-back" id="desk-back-btn" onclick="deskPrev()">← Back</button>
+      <div class="ob-dots" id="desk-dots">
+        <div class="ob-dot active" onclick="deskGoToSlide(0)"></div>
+        <div class="ob-dot" onclick="deskGoToSlide(1)"></div>
+        <div class="ob-dot" onclick="deskGoToSlide(2)"></div>
+        <div class="ob-dot" onclick="deskGoToSlide(3)"></div>
+        <div class="ob-dot" onclick="deskGoToSlide(4)"></div>
+        <div class="ob-dot" onclick="deskGoToSlide(5)"></div>
+        <div class="ob-dot" onclick="deskGoToSlide(6)"></div>
       </div>
-
-      <div class="ob-d-step">
-        <div class="ob-d-step-icon">⌨️</div>
-        <div class="ob-d-step-text">
-          <strong>Just start typing</strong>
-          <span>Press any letter or number key to open the task input. Hit <kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel. Tasks land in <em>To Do</em> automatically.</span>
-        </div>
-      </div>
-
-      <div class="ob-d-step">
-        <div class="ob-d-step-icon">↔️</div>
-        <div class="ob-d-step-text">
-          <strong>Move tasks between columns</strong>
-          <span>Click a task to select it, then press <kbd>←</kbd> or <kbd>→</kbd> to move it. Or drag and drop anywhere.</span>
-        </div>
-      </div>
-
-      <div class="ob-d-step">
-        <div class="ob-d-step-icon">🎯</div>
-        <div class="ob-d-step-text">
-          <strong>Priority &amp; due dates</strong>
-          <span>Select a task then press <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> for High / Medium / Low. Click the priority badge to cycle it. Add a due date from the task edit popover.</span>
-        </div>
-      </div>
-
-      <div class="ob-d-step">
-        <div class="ob-d-step-icon">🔢</div>
-        <div class="ob-d-step-text">
-          <strong>Jump to any task instantly</strong>
-          <span>Press <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd> to select by number, or <kbd>Alt</kbd>+<kbd>G</kbd> then type any number and <kbd>Enter</kbd>.</span>
-        </div>
-      </div>
-
-      <div class="ob-d-step">
-        <div class="ob-d-step-icon">🎙️</div>
-        <div class="ob-d-step-text">
-          <strong>Voice input</strong>
-          <span>Hold <kbd>Space</kbd> to dictate a task aloud. Release to save. Works in Chrome, Edge &amp; Brave.</span>
-        </div>
-      </div>
-
-      <div class="ob-d-step">
-        <div class="ob-d-step-icon">↩️</div>
-        <div class="ob-d-step-text">
-          <strong>Undo in 3 seconds</strong>
-          <span>Deleted or moved a task by accident? An undo toast appears immediately. <kbd>Del</kbd> key deletes the selected task.</span>
-        </div>
-      </div>
-
-      <div class="ob-d-step">
-        <div class="ob-d-step-icon">☁️</div>
-        <div class="ob-d-step-text">
-          <strong>Cloud sync (optional)</strong>
-          <span>Sign in with Google via <strong>Tasky ▼</strong> to sync across devices. Works offline — changes queue and sync when back online. Task Groups are preserved on data reset.</span>
-        </div>
-      </div>
-
-      <div class="ob-d-step ob-d-step-wide">
-        <div class="ob-d-step-icon">👥</div>
-        <div class="ob-d-step-text">
-          <strong>Team Collaboration — assign tasks to teammates in real-time</strong>
-          <span>Sign in and go to <strong>Tasky ▼ → Create Collaboration</strong> to start a team. Share the 6-character code with teammates so they can join. As supervisor you get a <em>Team</em> column — click <kbd>+ Assign</kbd> on any member card to assign them a task with priority and due date. Their board updates live. Members see assigned tasks appear automatically. Power users can type <kbd>task to::handle priority::high date::20may</kbd> directly in the input.</span>
-        </div>
-      </div>
-
+      <button class="ob-btn ob-btn-primary" id="desk-next-btn" onclick="deskNext()">Next →</button>
     </div>
-    <div class="ob-d-footer">
-      <span class="ob-d-hint">Reopen this guide any time: Tasky ▼ → How to Use</span>
-      <button class="ob-d-btn" onclick="dismissOnboarding()">Got It — Let's Go! →</button>
-    </div>
+    <button class="ob-skip" onclick="dismissOnboarding()">Skip tour</button>
   </div>
 </div>
 
@@ -554,85 +601,97 @@
      MOBILE ONBOARDING
      ═══════════════════════════════════════════════ -->
 <div class="onboarding-overlay ob-mobile" id="onboarding-mobile">
-  <div class="ob-m-sheet">
+  <div class="ob-card">
     <div class="ob-m-pill"></div>
-    <div class="ob-m-viewport" id="ob-m-viewport">
-      <div class="ob-m-track" id="ob-m-track">
+    <div class="ob-slide-area">
+      <div class="ob-track" id="mob-track">
 
-        <div class="ob-m-slide">
-          <div class="ob-m-illus purple">✅</div>
+        <div class="ob-slide">
+          <div class="ob-illus purple">✅</div>
           <h2>Welcome to Tasky</h2>
-          <p>A three-column task board that stays out of your way. No accounts needed to start — your data lives right on your phone.</p>
-          <div class="ob-m-tip">
-            <div class="ob-m-tip-label">What you get</div>
-            To Do · Working On · Done — drag or tap to move tasks between columns.
+          <p>A three-column board — <strong>To Do</strong> · <strong>Working On</strong> · <strong>Done</strong> — built for speed. No sign-up needed, your data stays on your device.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">⌨️ Quick start</div>
+            Press any key to open the task input. <kbd>Enter</kbd> saves, <kbd>Esc</kbd> cancels.
           </div>
         </div>
 
-        <div class="ob-m-slide">
-          <div class="ob-m-illus amber">＋</div>
-          <h2>Add tasks in one tap</h2>
-          <p>Tap the big <strong style="color:#fbbf24">＋ Add Task</strong> button at the bottom. Type your task and hit Save — done.</p>
-          <div class="ob-m-tip">
-            <div class="ob-m-tip-label">Pro tip</div>
-            Tap the 🎙️ mic button to dictate a task hands-free. Works in Chrome &amp; Edge.
+        <div class="ob-slide">
+          <div class="ob-illus amber">⌨️</div>
+          <h2>Adding Tasks</h2>
+          <p>Press any key to open the floating input. Type your task and hit <kbd>Enter</kbd> to save. Tasks land in <strong>To Do</strong> first.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🎙️ Voice input</div>
+            Hold <kbd>Space</kbd> to dictate tasks hands-free.
           </div>
         </div>
 
-        <div class="ob-m-slide">
-          <div class="ob-m-illus violet">⊞</div>
+        <div class="ob-slide">
+          <div class="ob-illus green">🎯</div>
+          <h2>Move &amp; Prioritize</h2>
+          <p>Select a task, then <kbd>←</kbd> <kbd>→</kbd> to move between columns. You can also drag and drop. <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> for priority levels.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">💡 Pro tip</div>
+            Tap the priority badge to cycle through levels. Add due dates from the task popover.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus blue">📋</div>
+          <h2>Workspaces</h2>
+          <p>Keep different projects separate with <strong>Workspaces</strong>. Switch between them using the pill bar at the top. Each workspace has its own tasks and settings.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">➕ New workspace</div>
+            Tap <strong>＋ New Workspace</strong> in the top bar. The first workspace is "Personal".
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus violet">⊞</div>
           <h2>Task Groups</h2>
-          <p>Create reusable task templates from <strong style="color:#c4b5fd">Tasky ▼ → Task Groups</strong>. Name a group, add tasks, choose To Do or Working On.</p>
-          <div class="ob-m-tip">
-            <div class="ob-m-tip-label">Instant expand</div>
-            Start typing a group name when adding a task — tap the suggestion to add all its tasks to the board at once!
+          <p>Create reusable templates from <strong>Tasky ▼ → Task Groups</strong>. Add subtasks, pick a column. Then type to expand them onto the board instantly.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">⚡ Instant expand</div>
+            Start typing a group name — tap the suggestion to add all its tasks at once.
           </div>
         </div>
 
-        <div class="ob-m-slide">
-          <div class="ob-m-illus green">🎯</div>
-          <h2>Tap to edit &amp; prioritise</h2>
-          <p>Tap any task to select it, then change its <strong style="color:#34d399">priority</strong>, add a <strong style="color:#34d399">due date</strong>, or move it to another column.</p>
-          <div class="ob-m-tip">
-            <div class="ob-m-tip-label">Priority colours</div>
-            🔴 High · 🟡 Medium · 🟢 Low — tap the badge to cycle through them.
+        <div class="ob-slide">
+          <div class="ob-illus rose">☁️</div>
+          <h2>Cloud Sync</h2>
+          <p>Sign in with Google via <strong>Tasky ▼ → ☁️ Sign in</strong> to sync data across devices. Works offline — changes queue and sync when you're back online.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🛡️ Your data</div>
+            Task Groups &amp; Workspaces survive data reset.
           </div>
         </div>
 
-        <div class="ob-m-slide">
-          <div class="ob-m-illus blue">↔️</div>
-          <h2>Drag, filter &amp; undo</h2>
-          <p>Long-press a task to drag it between columns. Use the coloured dots in column headers to filter by priority. Hit <strong style="color:#60a5fa">Undo</strong> within 3 seconds if you delete by mistake.</p>
-          <div class="ob-m-tip">
-            <div class="ob-m-tip-label">Cloud sync</div>
-            Sign in with Google from Tasky ▼ to sync across all your devices. Task Groups survive data resets.
-          </div>
-        </div>
-
-        <div class="ob-m-slide">
-          <div class="ob-m-illus rose">👥</div>
-          <h2>Team Collaboration</h2>
-          <p>Sign in and create a <strong style="color:#fb7185">Collaboration</strong> from Tasky ▼. Share the 6-character code with teammates. As supervisor, you get a live Team column to assign and track tasks.</p>
-          <div class="ob-m-tip">
-            <div class="ob-m-tip-label">Assigning tasks</div>
-            Tap <strong>+ Assign</strong> on a member card — pick priority, due date, and send. Their board updates in real-time automatically.
+        <div class="ob-slide">
+          <div class="ob-illus purple">👥</div>
+          <h2>Collaboration</h2>
+          <p>Sign in and go to <strong>Tasky ▼ → Create Collaboration</strong>. Share the 6-character code with teammates. The supervisor gets a <strong>Team</strong> column to assign tasks in real-time.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">👤 Quick assign</div>
+            Type <code>task to::handle priority::high date::20may</code> in the input for direct assignment.
           </div>
         </div>
 
       </div>
     </div>
-    <div class="ob-m-dots" id="ob-m-dots">
-      <div class="ob-m-dot active" onclick="goToSlide(0)"></div>
-      <div class="ob-m-dot" onclick="goToSlide(1)"></div>
-      <div class="ob-m-dot" onclick="goToSlide(2)"></div>
-      <div class="ob-m-dot" onclick="goToSlide(3)"></div>
-      <div class="ob-m-dot" onclick="goToSlide(4)"></div>
-      <div class="ob-m-dot" onclick="goToSlide(5)"></div>
+    <div class="ob-nav">
+      <button class="ob-btn ob-btn-secondary ob-nav-back" id="mob-back-btn" onclick="mobPrev()">← Back</button>
+      <div class="ob-dots" id="mob-dots">
+        <div class="ob-dot active" onclick="mobGoToSlide(0)"></div>
+        <div class="ob-dot" onclick="mobGoToSlide(1)"></div>
+        <div class="ob-dot" onclick="mobGoToSlide(2)"></div>
+        <div class="ob-dot" onclick="mobGoToSlide(3)"></div>
+        <div class="ob-dot" onclick="mobGoToSlide(4)"></div>
+        <div class="ob-dot" onclick="mobGoToSlide(5)"></div>
+        <div class="ob-dot" onclick="mobGoToSlide(6)"></div>
+      </div>
+      <button class="ob-btn ob-btn-primary" id="mob-next-btn" onclick="mobNext()">Next →</button>
     </div>
-    <div class="ob-m-nav">
-      <button class="ob-m-skip" onclick="dismissOnboarding()">Skip</button>
-      <button class="ob-m-next" id="ob-m-next-btn" onclick="mobileOnboardingNext()">Next →</button>
-    </div>
+    <button class="ob-skip" onclick="dismissOnboarding()">Skip tour</button>
   </div>
 </div>
 
@@ -983,74 +1042,115 @@
 /* ============================================================
    ONBOARDING
    ============================================================ */
-const STORAGE_KEY = 'tasky_onboarding_seen_v3';
+const STORAGE_KEY = 'tasky_onboarding_seen_v4';
 
 function isMobile() { return window.matchMedia('(max-width:700px)').matches; }
 
+/* ── Desktop slides ── */
+var deskSlide = 0;
+var DESK_TOTAL = 7;
+
+function deskGoToSlide(n) {
+  deskSlide = Math.max(0, Math.min(n, DESK_TOTAL - 1));
+  var track = document.getElementById('desk-track');
+  if (track) track.style.transform = 'translateX(-' + (deskSlide * 100) + '%)';
+  updateDeskNav();
+}
+
+function updateDeskNav() {
+  var dots = document.querySelectorAll('#desk-dots .ob-dot');
+  dots.forEach(function(d, i) { d.classList.toggle('active', i === deskSlide); });
+  var back = document.getElementById('desk-back-btn');
+  if (back) back.classList.toggle('visible', deskSlide > 0);
+  var next = document.getElementById('desk-next-btn');
+  if (next) next.textContent = deskSlide === DESK_TOTAL - 1 ? "Let's Go! 🚀" : 'Next →';
+}
+
+function deskNext() {
+  if (deskSlide < DESK_TOTAL - 1) { deskGoToSlide(deskSlide + 1); }
+  else { dismissOnboarding(); }
+}
+
+function deskPrev() {
+  deskGoToSlide(Math.max(0, deskSlide - 1));
+}
+
+/* ── Mobile slides ── */
+var mobSlide = 0;
+var MOB_TOTAL = 7;
+
+function mobGoToSlide(n) {
+  mobSlide = Math.max(0, Math.min(n, MOB_TOTAL - 1));
+  var track = document.getElementById('mob-track');
+  if (track) track.style.transform = 'translateX(-' + (mobSlide * 100) + '%)';
+  updateMobNav();
+}
+
+function updateMobNav() {
+  var dots = document.querySelectorAll('#mob-dots .ob-dot');
+  dots.forEach(function(d, i) { d.classList.toggle('active', i === mobSlide); });
+  var back = document.getElementById('mob-back-btn');
+  if (back) back.classList.toggle('visible', mobSlide > 0);
+  var next = document.getElementById('mob-next-btn');
+  if (next) next.textContent = mobSlide === MOB_TOTAL - 1 ? "Let's Go! 🚀" : 'Next →';
+}
+
+function mobNext() {
+  if (mobSlide < MOB_TOTAL - 1) { mobGoToSlide(mobSlide + 1); }
+  else { dismissOnboarding(); }
+}
+
+function mobPrev() {
+  mobGoToSlide(Math.max(0, mobSlide - 1));
+}
+
+/* ── Shared ── */
 function initOnboarding() {
-  // Check both possible keys so old sessions don't re-show onboarding
   if (localStorage.getItem(STORAGE_KEY) || localStorage.getItem('hasOnboarded') === 'true') {
     localStorage.setItem(STORAGE_KEY, '1');
-    // Already hidden by default — nothing to do
     return;
   }
-  // First visit: show the correct overlay
-  const showId = isMobile() ? 'onboarding-mobile' : 'onboarding-desktop';
-  const el = document.getElementById(showId);
+  var showId = isMobile() ? 'onboarding-mobile' : 'onboarding-desktop';
+  var el = document.getElementById(showId);
   if (el) el.classList.add('visible');
 }
 
 function dismissOnboarding() {
-  localStorage.setItem(STORAGE_KEY,'1');
-  ['onboarding-desktop','onboarding-mobile'].forEach(id => {
-    const el = document.getElementById(id);
+  localStorage.setItem(STORAGE_KEY, '1');
+  ['onboarding-desktop', 'onboarding-mobile'].forEach(function(id) {
+    var el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('visible');
     el.classList.add('hidden');
-    setTimeout(() => el.classList.remove('hidden'), 370);
+    setTimeout(function() { el.classList.remove('hidden'); }, 370);
   });
 }
 
 function showOnboarding() {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem('hasOnboarded');
-  ['onboarding-desktop','onboarding-mobile'].forEach(id => {
-    const el = document.getElementById(id);
+  ['onboarding-desktop', 'onboarding-mobile'].forEach(function(id) {
+    var el = document.getElementById(id);
     if (el) { el.classList.remove('hidden'); el.classList.remove('visible'); }
   });
   initOnboarding();
-  goToSlide(0);
-  const dd = document.getElementById('dropdown');
+  deskGoToSlide(0);
+  mobGoToSlide(0);
+  var dd = document.getElementById('dropdown');
   if (dd && dd.classList.contains('show') && typeof toggleMenu === 'function') toggleMenu();
 }
 
-/* Mobile slides */
-let currentSlide = 0;
-const TOTAL_SLIDES = 5;
-
-function goToSlide(n) {
-  currentSlide = Math.max(0, Math.min(n, TOTAL_SLIDES-1));
-  const track = document.getElementById('ob-m-track');
-  if (track) track.style.transform = `translateX(-${currentSlide*100}%)`;
-  document.querySelectorAll('.ob-m-dot').forEach((d,i) => d.classList.toggle('active', i===currentSlide));
-  const btn = document.getElementById('ob-m-next-btn');
-  if (btn) btn.textContent = currentSlide === TOTAL_SLIDES-1 ? "Let's Go! 🚀" : 'Next →';
-}
-
-function mobileOnboardingNext() {
-  currentSlide < TOTAL_SLIDES-1 ? goToSlide(currentSlide+1) : dismissOnboarding();
-}
-
-(function(){
-  let sx=0;
-  document.addEventListener('DOMContentLoaded',()=>{
-    const vp=document.getElementById('ob-m-viewport');
-    if(!vp)return;
-    vp.addEventListener('touchstart',e=>{sx=e.touches[0].clientX},{passive:true});
-    vp.addEventListener('touchend',e=>{
-      const dx=e.changedTouches[0].clientX-sx;
-      if(Math.abs(dx)>50) goToSlide(currentSlide+(dx<0?1:-1));
-    },{passive:true});
+/* ── Mobile swipe ── */
+(function() {
+  var sx = 0;
+  document.addEventListener('DOMContentLoaded', function() {
+    var sa = document.querySelector('#onboarding-mobile .ob-slide-area');
+    if (!sa) return;
+    sa.addEventListener('touchstart', function(e) { sx = e.touches[0].clientX; }, { passive: true });
+    sa.addEventListener('touchend', function(e) {
+      var dx = e.changedTouches[0].clientX - sx;
+      if (Math.abs(dx) > 50) mobGoToSlide(mobSlide + (dx < 0 ? 1 : -1));
+    }, { passive: true });
   });
 })();
 
