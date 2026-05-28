@@ -34,6 +34,7 @@ tasky/
 - **Column glass opacity** — slider (40–100%) controls column background transparency, keeping the frosted-glass effect
 - **Accent colour** — 6 presets + custom colour picker in Settings
 - **Typography** — font family (6 options), font size (11–20px), and task text colour in Settings
+- **Workspaces** — create multiple independent workspaces, each with its own task board, counter, and optional collaboration link. Switch between them instantly via the top pill bar
 - **CSV export** — all tasks with status, priority, and dates
 - **Due date notifications** — browser push notifications for upcoming dates
 - **Cloud sync (optional)** — sign in with Google to sync across devices (Firebase Firestore)
@@ -103,6 +104,19 @@ Click **Tasky ▼ → Task Groups** to open the task groups modal. Create reusab
 When you start typing in the main input, group names matching what you've typed appear as suggestions. Press `↑`/`↓` to navigate and `Enter` to expand the entire group onto the board instantly. Duplicate tasks (by text) are skipped automatically.
 
 Task Groups survive data resets and are synced to the cloud when signed in.
+
+## Workspaces
+
+Tasky supports multiple **workspaces** — independent task boards that live side‑by‑side. Each workspace has its own tasks, task counter, and optional collaboration link.
+
+- **Personal** — the default workspace (id: 1). Cannot be deleted.
+- **Create a workspace** — click **＋ New Workspace** in the top bar to add an empty workspace and switch to it immediately.
+- **Switch workspaces** — click any pill in the top bar. The board fades out and back in with the new workspace's tasks.
+- **Delete a workspace** — hover over a workspace pill (except Personal) and click **✕**. If it has tasks, a confirmation dialog appears.
+- **Collaboration per workspace** — creating or joining a collaboration automatically links it to the active workspace. The collab code is stored in the workspace's metadata.
+- **Isolation** — workspaces are stored separately in `localStorage` (`ws_tasks_{id}` / `ws_counter_{id}`) and synced independently to Firestore.
+
+The "Personal" workspace always exists. Additional workspaces are named "Workspace 2", "Workspace 3", etc. by default, or after a collaboration name.
 
 ## Team Collaboration
 
