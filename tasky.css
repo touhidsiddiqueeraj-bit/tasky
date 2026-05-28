@@ -2630,7 +2630,7 @@ body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
         @media (max-width: 768px) {
             #mobile-bottom-bar {
                 display: grid;
-                grid-template-columns: 1fr 1fr 1fr;
+                grid-template-columns: 1fr 1fr;
                 position: fixed;
                 bottom: 0;
                 left: 0;
@@ -2655,17 +2655,13 @@ body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
                 width: 100%;
             }
             .bottom-bar-cell:first-child {
-                justify-content: flex-start;
-                padding-left: 6px;
+                justify-content: center;
             }
             .bottom-bar-cell:last-child {
                 justify-content: flex-end;
                 padding-right: 6px;
             }
 
-            .top-menu {
-                position: static !important;
-            }
             .mobile-add-btn {
                 position: static !important;
                 transform: none !important;
