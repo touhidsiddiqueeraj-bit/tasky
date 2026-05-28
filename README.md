@@ -10,11 +10,13 @@ Live at https://touhidsiddiqueeraj-bit.github.io/tasky/
 
 ```
 tasky/
-├── index.html   — Markup only (HTML structure + inline CSS/JS)
-├── tasky.css    — All styles, animations, themes, responsive layout
-├── tasky.js     — All logic: state, rendering, keyboard, voice, drag & drop, Firebase
+├── index.html       — Markup (HTML structure)
+├── tasky.css        — All styles, animations, themes, responsive layout
+├── tasky.js         — Core logic: state, rendering, keyboard, voice, drag & drop, Firebase
+├── tasky-collab.js  — Collaboration layer: groups, supervisor, task assignment, comments
 ├── README.md
-└── CONTRIBUTING.md
+├── CONTRIBUTING.md
+└── LICENSE
 ```
 
 ## Features
@@ -23,19 +25,47 @@ tasky/
 - **Keyboard-first** — any letter/number opens the input, no clicking required
 - **Task Groups** — create reusable task templates, expand onto the board by typing the group name
 - **Voice input** — hold Space to dictate (Chrome/Edge/Brave, mic required)
-- **Drag & drop** — reorder and move tasks between columns
+- **Drag & drop** — reorder and move tasks between columns (desktop + mobile touch)
 - **Priority system** — High 🔴 / Medium 🟡 / Low 🟢, with per-column filters
 - **Due dates** — pick a date per task; overdue ones highlighted in red
 - **Undo** — 3-second undo toast on delete and move
-- **Dark / Light mode** — persisted via localStorage
-- **Custom background** — upload any image; animated orbs float on top
-- **Task card opacity** — slider (40–100%) controls card transparency against your background
+- **Dark / Light mode** — toggle in the Settings panel, persisted via localStorage
+- **Custom background** — upload any image from the Settings panel; animated orbs float on top
+- **Column glass opacity** — slider (40–100%) controls column background transparency, keeping the frosted-glass effect
+- **Accent colour** — 6 presets + custom colour picker in Settings
+- **Typography** — font family (6 options), font size (11–20px), and task text colour in Settings
 - **CSV export** — all tasks with status, priority, and dates
-- **Cloud sync (optional)** — sign in with Google to sync across devices (Firebase)
+- **Due date notifications** — browser push notifications for upcoming dates
+- **Cloud sync (optional)** — sign in with Google to sync across devices (Firebase Firestore)
+- **Team Collaboration** — supervisor creates a group, members join with a 6-character code; assign tasks, add comments, activity feed
+- **Read-only share board** — clients can view a live read-only board without signing in
 - **Quick navigation** — Alt+1–9 to select, Alt+G to jump by number
 - **Task selector** — type a task number to find and select it instantly
 - **Mobile FAB** — floating Add + mic buttons on small screens
 - **No install** — everything in localStorage, works offline
+
+## Settings Panel
+
+Open **Tasky ▼ → Settings** (⚙️) to customise the app:
+
+### Appearance
+- **Theme** — toggle Light / Dark mode
+- **Accent Colour** — 6 preset swatches (Purple, Blue, Green, Amber, Red, Pink) or a custom colour picker. Applies to buttons, slider thumbs, and highlights.
+- **Background Image** — upload a JPEG/PNG as wallpaper. The image sits behind animated orbs with a semi-transparent overlay for readability.
+- **Card Opacity** — controls the glass transparency of the three column cards (40–100%). The frosted-glass blur effect is preserved at every level.
+
+### Typography
+- **Font Family** — System, Inter, DM Sans, Fira Code, Georgia, or Courier
+- **Font Size** — task text size from 11px to 20px
+- **Task Text Colour** — 5 presets (Lavender, White, Slate, Yellow, Mint) or custom colour
+
+### System
+- **Due Date Notifications** — enable browser push notifications
+- **Export Tasks as CSV** — downloads all tasks with number, text, status, priority, due date, and creation date
+- **How to Use** — reopens the onboarding walkthrough
+- **Reset All Data** — deletes all tasks and resets everything (requires confirmation)
+
+All settings are saved to `localStorage` and restored on reload.
 
 ## Keyboard Shortcuts
 
@@ -74,15 +104,18 @@ When you start typing in the main input, group names matching what you've typed 
 
 Task Groups survive data resets and are synced to the cloud when signed in.
 
-## Background
+## Team Collaboration
 
-Click **🖼️ Background** in the dropdown menu to open the background settings modal:
+Click **Tasky ▼ → Create Collaboration** to become a supervisor:
 
-1. **Choose Image** — upload a JPEG/PNG as wallpaper. The image sits behind the animated orbs with a semi-transparent overlay for readability.
-2. **Remove** — clears the custom background and reverts to default.
-3. **Opacity** — adjust task card opacity (40–100%) so the background shows through at your preferred level.
+1. A **6-character code** is generated — share it with your team.
+2. Team members click **Join Collaboration** and enter the code to join.
+3. The supervisor sees a **Team column** (teal accent) on the board.
+4. **Assign tasks** to team members from the task menu. Assigned tasks appear in both the assignee's column and the Team column.
+5. **Comments & activity** — each task has a comment feed visible to all group members. Activity updates (assignments, moves, completions) appear in real time.
+6. **Read-only board** — clients can view a live read-only board without signing in (useful for stakeholders).
 
-Settings are saved to `localStorage` and restored on reload.
+Data is synced in real time via Firebase Firestore.
 
 ## How to Run
 
@@ -102,7 +135,7 @@ Alternatively, open `index.html` directly — all features except cloud sync wil
 Sign in with Google from **Tasky ▼** to sync your tasks across devices. Data is stored in Cloud Firestore (Firebase). Works offline — changes are queued locally and sync when you're back online.
 
 - **Privacy**: Only your tasks and an auto-generated counter are sent to Firestore. No analytics, no tracking, no third-party access.
-- Task Groups are preserved on data reset and synced to the cloud.
+- Task Groups and Collaboration data are preserved on data reset and synced to the cloud.
 
 ## Data & Privacy
 
@@ -110,13 +143,13 @@ All data is stored in your browser's `localStorage` and optionally synced to Fir
 
 ## Browser Support
 
-| Browser | Tasks | Voice | Cloud Sync |
-|---|---|---|---|
-| Chrome 90+ | ✅ | ✅ | ✅ |
-| Edge 90+ | ✅ | ✅ | ✅ |
-| Brave | ✅ | ✅ | ✅ |
-| Firefox | ✅ | ❌ | ✅ |
-| Safari | ✅ | ⚠️ (partial) | ✅ |
+| Browser | Tasks | Voice | Cloud Sync | Collaboration |
+|---|---|---|---|---|
+| Chrome 90+ | ✅ | ✅ | ✅ | ✅ |
+| Edge 90+ | ✅ | ✅ | ✅ | ✅ |
+| Brave | ✅ | ✅ | ✅ | ✅ |
+| Firefox | ✅ | ❌ | ✅ | ✅ |
+| Safari | ✅ | ⚠️ (partial) | ✅ | ✅ |
 
 ## Customisation
 
@@ -131,3 +164,5 @@ CSS custom properties at the top of `tasky.css`:
 ```
 
 Change these to retheme the column rings, orbs, and accents in one go.
+
+Most visual settings (accent colour, font, font size, text colour, background, opacity) can be adjusted directly from the **Settings panel** without touching CSS.
