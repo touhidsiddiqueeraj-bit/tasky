@@ -14,6 +14,9 @@
 <meta property="og:description" content="Three columns. Zero friction. Keyboard shortcuts, voice input, drag-and-drop, cloud sync.">
 <meta property="og:type" content="website">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a0a1a'/><rect x='4' y='5' width='24' height='6' rx='3' fill='%238B5CF6'/><rect x='4' y='13' width='17' height='6' rx='3' fill='%23F59E0B'/><rect x='4' y='21' width='12' height='6' rx='3' fill='%2310B981'/><path d='M7 8 L9.2 10.2 L12.5 6.5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="tasky.css">
 <style>
 /* ============================================================
@@ -1542,10 +1545,10 @@ function showConfirm(title, body, okLabel = 'Delete') {
           <span class="st-row-icon" id="st-theme-icon">☀️</span>
           <span id="st-theme-text">Light Mode</span>
         </div>
-        <label class="st-toggle">
-          <input type="checkbox" id="st-theme-toggle" onchange="stToggleTheme(this.checked)">
-          <span class="st-toggle-track"></span>
-        </label>
+        <button id="st-theme-btn" class="st-theme-btn" onclick="stToggleTheme()" title="Toggle theme">
+          <span id="st-theme-btn-icon">🌙</span>
+          <span id="st-theme-btn-label">Light</span>
+        </button>
       </div>
 
       <!-- Accent colour -->
@@ -1606,7 +1609,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="st-font-chip" data-font="system" onclick="stSetFont(this)">System</button>
-          <button class="st-font-chip" data-font="Inter, sans-serif" onclick="stSetFont(this)">Inter</button>
+          <button class="st-font-chip" data-font="Inter, sans-serif" onclick="stSetFont(this)" style="font-family:'Inter',sans-serif;">Inter</button>
           <button class="st-font-chip" data-font="'DM Sans', sans-serif" onclick="stSetFont(this)" style="font-family:'DM Sans',sans-serif;">DM Sans</button>
           <button class="st-font-chip" data-font="'Fira Code', monospace" onclick="stSetFont(this)" style="font-family:'Fira Code',monospace;">Fira Code</button>
           <button class="st-font-chip" data-font="Georgia, serif" onclick="stSetFont(this)" style="font-family:Georgia,serif;">Georgia</button>
@@ -1710,11 +1713,14 @@ body.light-mode {
   position: fixed;
   top: 0; right: 0; bottom: 0;
   width: min(360px, 100vw);
+  height: 100vh;
+  max-height: 100vh;
   background: var(--st-bg);
   border-left: 1px solid var(--st-border);
   z-index: 9999;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
   box-shadow: -12px 0 48px rgba(0,0,0,0.45);
@@ -1737,12 +1743,17 @@ body.light-mode {
 #settings-close-btn:hover { background: var(--st-hover); color: var(--st-text); }
 
 #settings-body {
-  flex: 1; overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 16px;
   display: flex; flex-direction: column; gap: 14px;
   scrollbar-width: thin;
   scrollbar-color: rgba(139,92,246,0.3) transparent;
 }
+#settings-body::-webkit-scrollbar { width: 4px; }
+#settings-body::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.3); border-radius: 2px; }
 
 .st-section {
   background: var(--st-section);
@@ -1844,6 +1855,29 @@ body.light-mode {
   background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.25); color: #f87171;
 }
 .st-btn-danger:hover { background: rgba(239,68,68,0.18); border-color: rgba(239,68,68,0.4); }
+
+/* Theme toggle button */
+.st-theme-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 20px; padding: 5px 12px 5px 10px;
+  font-size: 12px; color: var(--st-text);
+  cursor: pointer; transition: background .2s, border-color .2s, box-shadow .2s;
+  white-space: nowrap; font-weight: 600;
+}
+.st-theme-btn:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: var(--accent,#8B5CF6);
+  box-shadow: 0 0 0 2px var(--accent-glow,rgba(139,92,246,0.2));
+}
+body.light-mode .st-theme-btn {
+  background: rgba(0,0,0,0.05);
+  border-color: rgba(0,0,0,0.12);
+}
+body.light-mode .st-theme-btn:hover {
+  background: rgba(0,0,0,0.09);
+}
 </style>
 
 <script>
@@ -1863,9 +1897,7 @@ function closeSettings() {
 function _stSyncUI() {
     // Theme toggle
     const isLight = document.body.classList.contains('light-mode');
-    document.getElementById('st-theme-toggle').checked = isLight;
-    document.getElementById('st-theme-icon').textContent = isLight ? '🌙' : '☀️';
-    document.getElementById('st-theme-text').textContent = isLight ? 'Dark Mode' : 'Light Mode';
+    _stSyncThemeBtn(isLight);
 
     // Opacity slider
     const opVal = parseInt(localStorage.getItem('cardOpacity') || '100');
@@ -1909,16 +1941,24 @@ function _stSyncUI() {
 }
 
 // Theme
-function stToggleTheme(toLightMode) {
+function stToggleTheme() {
+    const toLightMode = !document.body.classList.contains('light-mode');
     if (toLightMode) document.body.classList.add('light-mode');
     else document.body.classList.remove('light-mode');
     localStorage.setItem('theme', toLightMode ? 'light' : 'dark');
-    const icon = document.getElementById('st-theme-icon');
-    const txt  = document.getElementById('st-theme-text');
-    if (icon) icon.textContent = toLightMode ? '🌙' : '☀️';
-    if (txt)  txt.textContent  = toLightMode ? 'Dark Mode' : 'Light Mode';
+    _stSyncThemeBtn(toLightMode);
     // Keep legacy theme button in sync if it still exists
     if (typeof updateThemeButton === 'function') updateThemeButton();
+}
+function _stSyncThemeBtn(isLight) {
+    const icon = document.getElementById('st-theme-icon');
+    const txt  = document.getElementById('st-theme-text');
+    const btnIcon  = document.getElementById('st-theme-btn-icon');
+    const btnLabel = document.getElementById('st-theme-btn-label');
+    if (icon) icon.textContent = isLight ? '🌙' : '☀️';
+    if (txt)  txt.textContent  = isLight ? 'Dark Mode' : 'Light Mode';
+    if (btnIcon)  btnIcon.textContent  = isLight ? '☀️' : '🌙';
+    if (btnLabel) btnLabel.textContent = isLight ? 'Dark' : 'Light';
 }
 
 // Accent colour
@@ -1962,6 +2002,9 @@ function _applyFont(font) {
         ? "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
         : font;
     document.documentElement.style.setProperty('--task-font', resolved);
+    // Apply to body so everything inherits
+    document.body.style.fontFamily = resolved;
+    // Also directly target task text elements
     document.querySelectorAll('.task-text, .task-card, .member-task-text').forEach(el => {
         el.style.fontFamily = resolved;
     });
