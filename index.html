@@ -425,26 +425,21 @@
 
 /* ── Dropdown: prevent clipping when logged in (extra items make it tall) ── */
 .dropdown-menu {
-  max-height: calc(100vh - 60px);
+  max-height: calc(100vh - 80px);
   overflow-y: auto;
-  /* Grow upward by default (desktop bottom-left menu button) */
+  /* Desktop: grow upward from bottom-left button */
   top: auto;
   bottom: 100%;
 }
-/* Flip downward on short screens */
-@media (max-height: 520px) {
-  .dropdown-menu {
-    top: 100%;
-    bottom: auto;
-  }
-}
-/* On mobile the menu button moves to top-right — open downward */
+/* On mobile the button is at bottom-left — keep opening upward */
 @media (max-width: 768px) {
   .dropdown-menu {
-    top: 100%;
-    bottom: auto;
-    margin-top: 8px;
-    margin-bottom: 0;
+    top: auto;
+    bottom: 100%;
+    left: 0;
+    right: auto;
+    margin-top: 0;
+    margin-bottom: 8px;
   }
 }
 </style>
@@ -779,78 +774,90 @@
 <!-- ═══════════════════════════════════════════════
      TOP MENU
      ═══════════════════════════════════════════════ -->
-<div class="top-menu">
-  <button class="brand-btn" onclick="toggleMenu()">
-    <svg class="tasky-logo" width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <!-- Three stacked task rows representing the kanban columns -->
-      <rect x="1" y="2" width="20" height="5" rx="2.5" fill="url(#lg-todo)" opacity="0.95"/>
-      <rect x="1" y="8.5" width="14" height="5" rx="2.5" fill="url(#lg-working)" opacity="0.95"/>
-      <rect x="1" y="15" width="10" height="5" rx="2.5" fill="url(#lg-done)" opacity="0.95"/>
-      <!-- Checkmark on first row -->
-      <path d="M4.5 4.5 L6.2 6.1 L8.8 3.2" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
-      <defs>
-        <linearGradient id="lg-todo" x1="1" y1="2" x2="21" y2="7" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#8B5CF6"/>
-          <stop offset="100%" stop-color="#6d28d9"/>
-        </linearGradient>
-        <linearGradient id="lg-working" x1="1" y1="8.5" x2="15" y2="13.5" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#F59E0B"/>
-          <stop offset="100%" stop-color="#d97706"/>
-        </linearGradient>
-        <linearGradient id="lg-done" x1="1" y1="15" x2="11" y2="20" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#10B981"/>
-          <stop offset="100%" stop-color="#059669"/>
-        </linearGradient>
-      </defs>
-    </svg>
-    <span>Tasky</span>
-    <span class="brand-chevron">▼</span>
-  </button>
-  <div class="dropdown-menu" id="dropdown">
-    <!-- Collab buttons — always visible; auth check happens on click -->
-    <button class="dropdown-item collab-dd-item" id="collab-create-dd-btn" onclick="openCollabModal('create')">
-      <span>👥</span>
-      <span>Create Collaboration</span>
-    </button>
-    <button class="dropdown-item collab-dd-item" id="collab-join-dd-btn" onclick="openCollabModal('join')">
-      <span>🔗</span>
-      <span>Join Collaboration</span>
-    </button>
-    <button class="dropdown-item collab-dd-item" id="collab-info-dd-btn" style="display:none;" onclick="openCollabModal('info')">
-      <span>👥</span>
-      <span id="collab-info-dd-text">My Collaboration</span>
-    </button>
-    <button class="dropdown-item collab-dd-item" id="collab-leave-dd-btn" style="display:none;color:#ef4444;" onclick="leaveGroup()">
-      <span>🚪</span>
-      <span>Leave Collaboration</span>
-    </button>
-    <div class="dropdown-divider collab-dd-item" id="collab-dd-divider"></div>
-    <button class="dropdown-item" onclick="openTgModal()">
-      <span>⊞</span>
-      <span>Task Groups</span>
-    </button>
-    <div class="dropdown-divider"></div>
-    <button class="dropdown-item" onclick="openSettings()">
-      <span>⚙️</span>
-      <span>Settings</span>
-    </button>
-    <div class="dropdown-divider"></div>
-    <button class="dropdown-item" onclick="signInWithGoogle()" id="auth-btn">
-      <span>☁️</span>
-      <span id="auth-text">Sign in with Google</span>
-    </button>
-    <button class="dropdown-item" onclick="signOut()" id="signout-btn" style="display:none;">
-      <span>🚪</span>
-      <span>Sign Out</span>
-    </button>
-    <div class="dropdown-item" id="user-info"
-      style="display:none;cursor:default;opacity:0.6;font-size:12px;padding:6px 16px;"
-      onclick="return false;">
-      <span id="user-avatar"
-        style="width:18px;height:18px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:14px;"></span>
-      <span id="user-email"></span>
+<div id="mobile-bottom-bar">
+
+  <div class="bottom-bar-cell">
+    <div class="top-menu">
+      <button class="brand-btn" onclick="toggleMenu()">
+        <svg class="tasky-logo" width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="1" y="2" width="20" height="5" rx="2.5" fill="url(#lg-todo)" opacity="0.95"/>
+          <rect x="1" y="8.5" width="14" height="5" rx="2.5" fill="url(#lg-working)" opacity="0.95"/>
+          <rect x="1" y="15" width="10" height="5" rx="2.5" fill="url(#lg-done)" opacity="0.95"/>
+          <path d="M4.5 4.5 L6.2 6.1 L8.8 3.2" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+          <defs>
+            <linearGradient id="lg-todo" x1="1" y1="2" x2="21" y2="7" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#8B5CF6"/>
+              <stop offset="100%" stop-color="#6d28d9"/>
+            </linearGradient>
+            <linearGradient id="lg-working" x1="1" y1="8.5" x2="15" y2="13.5" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#F59E0B"/>
+              <stop offset="100%" stop-color="#d97706"/>
+            </linearGradient>
+            <linearGradient id="lg-done" x1="1" y1="15" x2="11" y2="20" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#10B981"/>
+              <stop offset="100%" stop-color="#059669"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span>Tasky</span>
+        <span class="brand-chevron">▼</span>
+      </button>
+      <div class="dropdown-menu" id="dropdown">
+        <button class="dropdown-item collab-dd-item" id="collab-create-dd-btn" onclick="openCollabModal('create')">
+          <span>👥</span>
+          <span>Create Collaboration</span>
+        </button>
+        <button class="dropdown-item collab-dd-item" id="collab-join-dd-btn" onclick="openCollabModal('join')">
+          <span>🔗</span>
+          <span>Join Collaboration</span>
+        </button>
+        <button class="dropdown-item collab-dd-item" id="collab-info-dd-btn" style="display:none;" onclick="openCollabModal('info')">
+          <span>👥</span>
+          <span id="collab-info-dd-text">My Collaboration</span>
+        </button>
+        <button class="dropdown-item collab-dd-item" id="collab-leave-dd-btn" style="display:none;color:#ef4444;" onclick="leaveGroup()">
+          <span>🚪</span>
+          <span>Leave Collaboration</span>
+        </button>
+        <div class="dropdown-divider collab-dd-item" id="collab-dd-divider"></div>
+        <button class="dropdown-item" onclick="openTgModal()">
+          <span>⊞</span>
+          <span>Task Groups</span>
+        </button>
+        <div class="dropdown-divider"></div>
+        <button class="dropdown-item" onclick="openSettings()">
+          <span>⚙️</span>
+          <span>Settings</span>
+        </button>
+        <div class="dropdown-divider"></div>
+        <button class="dropdown-item" onclick="signInWithGoogle()" id="auth-btn">
+          <span>☁️</span>
+          <span id="auth-text">Sign in with Google</span>
+        </button>
+        <button class="dropdown-item" onclick="signOut()" id="signout-btn" style="display:none;">
+          <span>🚪</span>
+          <span>Sign Out</span>
+        </button>
+        <div class="dropdown-item" id="user-info"
+          style="display:none;cursor:default;opacity:0.6;font-size:12px;padding:6px 16px;"
+          onclick="return false;">
+          <span id="user-avatar" style="width:18px;height:18px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:14px;"></span>
+          <span id="user-email"></span>
+        </div>
+      </div>
     </div>
   </div>
+
+  <div class="bottom-bar-cell">
+    <button class="mobile-add-btn" id="mobile-add-btn" onclick="mobileFabTap()">
+      <span class="fab-icon">＋</span><span>Add Task</span>
+    </button>
+  </div>
+
+  <div class="bottom-bar-cell">
+    <button class="mobile-mic-btn" id="mobile-mic-btn">🎙️</button>
+  </div>
+
 </div>
 
 <!-- ═══════════════════════════════════════════════
@@ -961,11 +968,6 @@
   <div class="voice-transcript" id="voice-transcript"></div>
   <div class="voice-hint" id="voice-hint">Release <kbd style="background:rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.3)">Space</kbd> to confirm</div>
 </div>
-
-<button class="mobile-add-btn" id="mobile-add-btn" onclick="mobileFabTap()">
-  <span class="fab-icon">＋</span><span>Add Task</span>
-</button>
-<button class="mobile-mic-btn" id="mobile-mic-btn">🎙️</button>
 
 <input type="file" id="bg-upload-input" accept="image/*" style="display:none;">
 

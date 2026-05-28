@@ -1381,7 +1381,7 @@
             .container {
                 padding: 10px;
                 gap: 10px;
-                padding-bottom: 90px; /* room for FAB */
+                padding-bottom: 80px; /* room for bottom bar */
             }
             .board {
                 flex-direction: column;
@@ -1462,21 +1462,7 @@
                 line-height: 1;
             }
 
-            /* Revert hamburger menu to top-right on mobile */
-            .top-menu {
-                top: 20px;
-                right: 20px;
-                bottom: auto;
-                left: auto;
-            }
-            .dropdown-menu {
-                top: 100%;
-                bottom: auto;
-                right: 0;
-                left: auto;
-                margin-top: 8px;
-                margin-bottom: 0;
-            }
+
         }
 
         /* ── Voice input overlay ─────────────────────────────────────── */
@@ -2633,4 +2619,83 @@ body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
             .ws-pill-name { font-size: 11px; max-width: 70px; }
             .ws-pill-count { font-size: 9px; padding: 0 5px; }
             .ws-pill-add { padding: 4px 10px; font-size: 11px; }
+        }
+
+        /* ═══════════════════════════════════════════════════════════
+           MOBILE BOTTOM BAR — 3-column grid
+           ═══════════════════════════════════════════════════════════ */
+        #mobile-bottom-bar {
+            display: none;
+        }
+        @media (max-width: 768px) {
+            #mobile-bottom-bar {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 200;
+                padding: 8px 4px;
+                align-items: center;
+                background: transparent;
+                backdrop-filter: none;
+                -webkit-backdrop-filter: none;
+                border-top: 1px solid rgba(255,255,255,0.06);
+            }
+            body.light-mode #mobile-bottom-bar {
+                background: transparent;
+                border-top-color: rgba(0,0,0,0.06);
+            }
+
+            .bottom-bar-cell {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+            }
+            .bottom-bar-cell:first-child {
+                justify-content: flex-start;
+                padding-left: 6px;
+            }
+            .bottom-bar-cell:last-child {
+                justify-content: flex-end;
+                padding-right: 6px;
+            }
+
+            .top-menu {
+                position: static !important;
+            }
+            .mobile-add-btn {
+                position: static !important;
+                transform: none !important;
+                margin: 0 auto !important;
+                padding: 12px 28px !important;
+                font-size: 15px !important;
+                border-radius: 50px !important;
+                box-shadow: 0 4px 20px rgba(139,92,246,0.4) !important;
+                width: auto !important;
+                left: auto !important;
+                bottom: auto !important;
+            }
+            .mobile-add-btn:active {
+                transform: scale(0.95) !important;
+            }
+            .mobile-add-btn.hidden {
+                opacity: 0;
+                pointer-events: none;
+                transform: scale(0.9) !important;
+            }
+            .mobile-add-btn .fab-icon {
+                font-size: 20px !important;
+            }
+            .mobile-mic-btn {
+                position: static !important;
+                width: 48px !important;
+                height: 48px !important;
+                font-size: 22px !important;
+                bottom: auto !important;
+                right: auto !important;
+                flex-shrink: 0;
+            }
         }
