@@ -132,21 +132,29 @@ async function joinGroup(code) {
     return { ok: true };
 }
 
-// ─── Leave Group ──────────────────────────────────────────────────────────
+// ─── Leave / Delete Group ────────────────────────────────────────────────
 async function leaveGroup() {
     if (!currentUser || !currentGroup) return;
     if (isSupervisor && currentGroup.members.length > 1) {
-        showTaskyToast('Transfer supervisor role before leaving.');
-        return;
-    }
-    const ref = db.collection('groups').doc(currentGroup.code);
-    const snap = await ref.get();
-    if (snap.exists) {
-        const updated = (snap.data().members || []).filter(m => m.uid !== currentUser.uid);
-        if (updated.length === 0) {
-            await ref.delete();
-        } else {
-            await ref.update({ members: updated });
+        var confirmed = await showConfirm(
+            'Delete Collaboration',
+            'You are the supervisor of this collaboration. Leaving will delete it for everyone. All tasks, comments, and member data will be lost. This cannot be undone.',
+            'Delete'
+        );
+        if (!confirmed) return;
+        // Delete the entire group document — all members lose access
+        var ref = db.collection('groups').doc(currentGroup.code);
+        await ref.delete();
+    } else {
+        const ref = db.collection('groups').doc(currentGroup.code);
+        const snap = await ref.get();
+        if (snap.exists) {
+            const updated = (snap.data().members || []).filter(m => m.uid !== currentUser.uid);
+            if (updated.length === 0) {
+                await ref.delete();
+            } else {
+                await ref.update({ members: updated });
+            }
         }
     }
     await db.collection('users').doc(currentUser.uid).update({ activeGroup: firebase.firestore.FieldValue.delete() });
