@@ -1713,7 +1713,7 @@ body.light-mode {
   position: fixed;
   top: 0; right: 0;
   width: min(360px, 100vw);
-  height: 100%;
+  height: 100vh;
   background: var(--st-bg);
   border-left: 1px solid var(--st-border);
   z-index: 9999;
@@ -1722,6 +1722,7 @@ body.light-mode {
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
   box-shadow: -12px 0 48px rgba(0,0,0,0.45);
+  overflow: hidden;
 }
 #settings-panel.open { transform: translateX(0); }
 
@@ -1740,13 +1741,14 @@ body.light-mode {
 #settings-close-btn:hover { background: var(--st-hover); color: var(--st-text); }
 
 #settings-body {
-  overflow-y: scroll;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 16px 16px 32px;
   display: flex; flex-direction: column; gap: 14px;
   scrollbar-width: thin;
   scrollbar-color: rgba(139,92,246,0.4) transparent;
+  min-height: 0;
 }
 #settings-body::-webkit-scrollbar { width: 5px; }
 #settings-body::-webkit-scrollbar-track { background: transparent; }
