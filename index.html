@@ -1525,15 +1525,15 @@ function showConfirm(title, body, okLabel = 'Delete') {
      SETTINGS PANEL
      ═══════════════════════════════════════════════ -->
 <div id="settings-backdrop" onclick="closeSettings()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;backdrop-filter:blur(2px);"></div>
-<div id="settings-panel">
-  <div id="settings-header">
+<div id="settings-panel" style="position:fixed;top:0;right:0;width:min(360px,100vw);height:100dvh;display:flex;flex-direction:column;overflow:hidden;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);background:var(--st-bg);border-left:1px solid var(--st-border);z-index:9999;box-shadow:-12px 0 48px rgba(0,0,0,0.45);">
+  <div id="settings-header" style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:18px 20px 16px;border-bottom:1px solid var(--st-border);">
     <div style="display:flex;align-items:center;gap:10px;">
       <span style="font-size:20px;">⚙️</span>
       <span style="font-size:16px;font-weight:700;color:var(--st-text);">Settings</span>
     </div>
     <button id="settings-close-btn" onclick="closeSettings()">✕</button>
   </div>
-  <div id="settings-body">
+  <div id="settings-body" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:16px 16px 32px;display:flex;flex-direction:column;gap:14px;">
 
     <!-- ── APPEARANCE ── -->
     <div class="st-section">
@@ -1713,16 +1713,15 @@ body.light-mode {
   position: fixed;
   top: 0; right: 0;
   width: min(360px, 100vw);
-  height: 100dvh;
+  height: 100%;
   background: var(--st-bg);
   border-left: 1px solid var(--st-border);
   z-index: 9999;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto 1fr;
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
   box-shadow: -12px 0 48px rgba(0,0,0,0.45);
-  overflow: hidden;
 }
 #settings-panel.open { transform: translateX(0); }
 
@@ -1730,7 +1729,6 @@ body.light-mode {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 20px 16px;
   border-bottom: 1px solid var(--st-border);
-  flex-shrink: 0;
 }
 #settings-close-btn {
   background: none; border: none;
@@ -1742,9 +1740,7 @@ body.light-mode {
 #settings-close-btn:hover { background: var(--st-hover); color: var(--st-text); }
 
 #settings-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 16px 16px 32px;
