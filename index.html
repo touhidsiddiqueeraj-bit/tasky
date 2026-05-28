@@ -1711,16 +1711,14 @@ body.light-mode {
 
 #settings-panel {
   position: fixed;
-  top: 0; right: 0; bottom: 0;
+  top: 0; right: 0;
   width: min(360px, 100vw);
-  height: 100vh;
-  max-height: 100vh;
+  height: 100%;
   background: var(--st-bg);
   border-left: 1px solid var(--st-border);
   z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr;
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
   box-shadow: -12px 0 48px rgba(0,0,0,0.45);
@@ -1731,7 +1729,6 @@ body.light-mode {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 20px 16px;
   border-bottom: 1px solid var(--st-border);
-  flex-shrink: 0;
 }
 #settings-close-btn {
   background: none; border: none;
@@ -1743,17 +1740,23 @@ body.light-mode {
 #settings-close-btn:hover { background: var(--st-hover); color: var(--st-text); }
 
 #settings-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
-  padding: 16px;
+  overscroll-behavior: contain;
+  padding: 16px 16px 32px;
   display: flex; flex-direction: column; gap: 14px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(139,92,246,0.3) transparent;
+  scrollbar-color: rgba(139,92,246,0.4) transparent;
 }
-#settings-body::-webkit-scrollbar { width: 4px; }
-#settings-body::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.3); border-radius: 2px; }
+#settings-body::-webkit-scrollbar { width: 5px; }
+#settings-body::-webkit-scrollbar-track { background: transparent; }
+#settings-body::-webkit-scrollbar-thumb {
+  background: rgba(139,92,246,0.4);
+  border-radius: 3px;
+}
+#settings-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(139,92,246,0.65);
+}
 
 .st-section {
   background: var(--st-section);
