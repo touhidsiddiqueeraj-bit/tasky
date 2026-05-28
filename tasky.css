@@ -2538,11 +2538,12 @@ body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
                 position: static !important;
                 transform: none !important;
                 margin: 0 auto !important;
-                padding: 12px 28px !important;
-                font-size: 15px !important;
-                border-radius: 50px !important;
+                padding: 0 !important;
+                font-size: 22px !important;
+                border-radius: 50% !important;
                 box-shadow: 0 4px 20px rgba(139,92,246,0.4) !important;
-                width: auto !important;
+                width: 52px !important;
+                height: 52px !important;
                 left: auto !important;
                 bottom: auto !important;
             }
@@ -2555,7 +2556,7 @@ body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
                 transform: scale(0.9) !important;
             }
             .mobile-add-btn .fab-icon {
-                font-size: 20px !important;
+                font-size: 24px !important;
             }
             .mobile-mic-btn {
                 position: static !important;
