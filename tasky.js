@@ -70,30 +70,27 @@
             localStorage.removeItem('ws_counter_' + id);
             saveWorkspacesMeta();
         }
-        function updateWorkspaceIndicator() {
-            var el = document.getElementById('ws-indicator-label');
-            if (!el) return;
-            var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
-            el.textContent = ws ? ws.name : 'Personal';
-        }
-
         function switchWorkspace(id) {
             if (id === activeWorkspaceId) return;
             saveCurrentWorkspaceData();
             var prevId = activeWorkspaceId;
             activeWorkspaceId = id;
-            loadWorkspaceData(id);
-            localStorage.setItem('ws_active', String(id));
-            renderAllColumns();
-            updateDailySummary();
-            deselectTask();
-            exitTaskSelector();
-            renderWorkspaceSwitcher();
-            updateWorkspaceIndicator();
-            // Notify collab layer
-            if (typeof window.__onWorkspaceSwitch === 'function') {
-                window.__onWorkspaceSwitch(id, prevId);
-            }
+            var board = document.querySelector('.board');
+            if (board) board.classList.add('board-switching');
+            setTimeout(function() {
+                loadWorkspaceData(id);
+                localStorage.setItem('ws_active', String(id));
+                renderAllColumns();
+                updateDailySummary();
+                deselectTask();
+                exitTaskSelector();
+                renderWorkspaceSwitcher();
+                if (board) board.classList.remove('board-switching');
+                // Notify collab layer
+                if (typeof window.__onWorkspaceSwitch === 'function') {
+                    window.__onWorkspaceSwitch(id, prevId);
+                }
+            }, 170);
         }
         function getWorkspaceByCollab(code) {
             return workspaces.find(function(w) { return w.collabCode === code; }) || null;
@@ -220,14 +217,7 @@
         setupVoice();             // speech recognition
         setupFirebase();          // Firebase cloud sync
 
-        // ─── Workspace indicator click handler ─────────────────────────────────────
-        var wsIndicator = document.getElementById('ws-indicator');
-        if (wsIndicator) {
-            wsIndicator.addEventListener('click', function() {
-                var switcher = document.getElementById('workspace-switcher');
-                if (switcher) switcher.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            });
-        }
+
 
         // ─── Custom background upload ─────────────────────────────────────────────
         var bgInput = document.getElementById('bg-upload-input');
@@ -1083,7 +1073,6 @@
         function renderWorkspaceSwitcher() {
             var container = document.getElementById('workspace-switcher');
             if (!container) return;
-            updateWorkspaceIndicator();
             var html = '<span class="ws-bar-label">Workspaces</span>';
             workspaces.forEach(function(w) {
                 var isActive = w.id === activeWorkspaceId;

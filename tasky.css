@@ -410,6 +410,11 @@
             gap: 20px;
             flex: 1;
             height: 100%;
+            transition: opacity 0.15s ease, transform 0.2s ease;
+        }
+        .board.board-switching {
+            opacity: 0;
+            transform: scale(0.96);
         }
 
         .column-wrapper {
@@ -1196,7 +1201,7 @@
         .top-menu {
             position: fixed;
             bottom: 20px;
-            left: 70px;
+            left: 20px;
             z-index: 200;
         }
 
@@ -2463,54 +2468,7 @@ body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
             background: rgba(109,40,217,0.04);
         }
 
-                /* ── Workspace indicator (next to brand button) ──────────── */
-        .ws-indicator {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            background: rgba(139,92,246,0.1);
-            border: 1px solid rgba(139,92,246,0.2);
-            border-radius: 20px;
-            padding: 3px 9px 3px 10px;
-            margin-left: 6px;
-            cursor: pointer;
-            transition: background .2s, border-color .2s;
-            white-space: nowrap;
-        }
-        .ws-indicator:hover {
-            background: rgba(139,92,246,0.18);
-            border-color: rgba(139,92,246,0.4);
-        }
-        .ws-indicator-label {
-            font-size: 11px;
-            font-weight: 600;
-            color: #a78bfa;
-            max-width: 90px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .ws-indicator-arrow {
-            font-size: 10px;
-            color: rgba(139,92,246,0.5);
-            transition: transform .2s;
-        }
-        .ws-indicator:hover .ws-indicator-arrow {
-            transform: translate(1px, -1px);
-        }
-        body.light-mode .ws-indicator {
-            background: rgba(139,92,246,0.06);
-            border-color: rgba(139,92,246,0.15);
-        }
-        body.light-mode .ws-indicator:hover {
-            background: rgba(139,92,246,0.12);
-        }
-        body.light-mode .ws-indicator-label { color: #6d28d9; }
-        @media (max-width: 768px) {
-            .ws-indicator { display: none; }
-        }
-
-/* ═══════════════════════════════════════════════════════════════
+        /* ═══════════════════════════════════════════════════════════════
    WORKSPACE SWITCHER — TOP BAR
    ═══════════════════════════════════════════════════════════════ */
         #workspace-switcher {
