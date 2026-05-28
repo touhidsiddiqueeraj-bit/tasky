@@ -1,6 +1,137 @@
 // ─── State ────────────────────────────────────────────────────────────────
-        let tasks = JSON.parse(localStorage.getItem('tasks')) || { todo: [], working: [], done: [] };
-        let taskCounter = parseInt(localStorage.getItem('taskCounter')) || 0;
+        let workspaces = [];
+        let activeWorkspaceId = 1;
+        let nextWorkspaceId = 2;
+        let tasks = { todo: [], working: [], done: [] };
+        let taskCounter = 0;
+
+        // ─── Workspace init & migration ────────────────────────────────────────────
+        (function initWorkspaces() {
+            var meta = localStorage.getItem('workspaces_meta');
+            if (meta) {
+                workspaces = JSON.parse(meta);
+                activeWorkspaceId = parseInt(localStorage.getItem('ws_active')) || (workspaces[0] ? workspaces[0].id : 1);
+                nextWorkspaceId = workspaces.reduce(function(max, w) { return Math.max(max, w.id); }, 0) + 1;
+            } else {
+                var oldTasks = JSON.parse(localStorage.getItem('tasks'));
+                var oldCounter = parseInt(localStorage.getItem('taskCounter')) || 0;
+                var oldCode = localStorage.getItem('tasky_groupCode') || null;
+                tasks = oldTasks || { todo: [], working: [], done: [] };
+                taskCounter = oldCounter;
+                workspaces = [{ id: 1, name: 'Personal', collabCode: oldCode }];
+                activeWorkspaceId = 1;
+                nextWorkspaceId = 2;
+                localStorage.setItem('ws_tasks_1', JSON.stringify(tasks));
+                localStorage.setItem('ws_counter_1', String(taskCounter));
+                localStorage.setItem('workspaces_meta', JSON.stringify(workspaces));
+                // Clean up old keys
+                var oldKeys = ['tasks', 'taskCounter', 'tasks_local', 'taskCounter_local', 'tasky_groupCode'];
+                oldKeys.forEach(function(k) { localStorage.removeItem(k); });
+            }
+            var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
+            if (ws) {
+                var saved = localStorage.getItem('ws_tasks_' + ws.id);
+                if (saved) tasks = JSON.parse(saved);
+                var cnt = localStorage.getItem('ws_counter_' + ws.id);
+                if (cnt) taskCounter = parseInt(cnt);
+            }
+        })();
+
+        // ─── Workspace helpers ─────────────────────────────────────────────────────
+        function saveWorkspacesMeta() {
+            var meta = workspaces.map(function(w) { return { id: w.id, name: w.name, collabCode: w.collabCode }; });
+            localStorage.setItem('workspaces_meta', JSON.stringify(meta));
+        }
+        function saveCurrentWorkspaceData() {
+            localStorage.setItem('ws_tasks_' + activeWorkspaceId, JSON.stringify(tasks));
+            localStorage.setItem('ws_counter_' + activeWorkspaceId, String(taskCounter));
+        }
+        function loadWorkspaceData(id) {
+            var saved = localStorage.getItem('ws_tasks_' + id);
+            tasks = saved ? JSON.parse(saved) : { todo: [], working: [], done: [] };
+            var cnt = localStorage.getItem('ws_counter_' + id);
+            taskCounter = cnt ? parseInt(cnt) : 0;
+        }
+        function createWorkspace(name, collabCode) {
+            var id = nextWorkspaceId++;
+            var ws = { id: id, name: name || 'Workspace ' + id, collabCode: collabCode || null };
+            workspaces.push(ws);
+            localStorage.setItem('ws_tasks_' + id, JSON.stringify({ todo: [], working: [], done: [] }));
+            localStorage.setItem('ws_counter_' + id, '0');
+            saveWorkspacesMeta();
+            return id;
+        }
+        function deleteWorkspace(id) {
+            if (id === 1) return;
+            var idx = workspaces.findIndex(function(w) { return w.id === id; });
+            if (idx === -1) return;
+            workspaces.splice(idx, 1);
+            localStorage.removeItem('ws_tasks_' + id);
+            localStorage.removeItem('ws_counter_' + id);
+            saveWorkspacesMeta();
+        }
+        function updateWorkspaceIndicator() {
+            var el = document.getElementById('ws-indicator-label');
+            if (!el) return;
+            var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
+            el.textContent = ws ? ws.name : 'Personal';
+        }
+
+        function switchWorkspace(id) {
+            if (id === activeWorkspaceId) return;
+            saveCurrentWorkspaceData();
+            var prevId = activeWorkspaceId;
+            activeWorkspaceId = id;
+            loadWorkspaceData(id);
+            localStorage.setItem('ws_active', String(id));
+            renderAllColumns();
+            updateDailySummary();
+            deselectTask();
+            exitTaskSelector();
+            renderWorkspaceSwitcher();
+            updateWorkspaceIndicator();
+            // Notify collab layer
+            if (typeof window.__onWorkspaceSwitch === 'function') {
+                window.__onWorkspaceSwitch(id, prevId);
+            }
+        }
+        function getWorkspaceByCollab(code) {
+            return workspaces.find(function(w) { return w.collabCode === code; }) || null;
+        }
+        function linkWorkspaceToCollab(id, code, collabName) {
+            var ws = workspaces.find(function(w) { return w.id === id; });
+            if (!ws) return;
+            ws.collabCode = code;
+            if (collabName) ws.name = collabName;
+            saveWorkspacesMeta();
+        }
+        function createWorkspaceClick() {
+            var id = createWorkspace();
+            switchWorkspace(id);
+            showToast('New workspace created', function() {});
+        }
+        async function deleteWorkspaceConfirm(id) {
+            if (id === 1) return;
+            var t = localStorage.getItem('ws_tasks_' + id);
+            var hasTasks = t && JSON.parse(t) && Object.values(JSON.parse(t)).some(function(arr) { return arr.length > 0; });
+            if (hasTasks) {
+                if (!await showConfirm('Delete Workspace', 'This workspace has tasks. Delete it and all its data? This cannot be undone.', 'Delete')) return;
+            }
+            var isActive = id === activeWorkspaceId;
+            deleteWorkspace(id);
+            if (isActive) switchWorkspace(1);
+            renderWorkspaceSwitcher();
+            showToast('Workspace deleted', function() {});
+        }
+
+        // ─── Expose globals for HTML onclick handlers ──────────────────────────────
+        window.switchWorkspace = switchWorkspace;
+        window.createWorkspaceClick = createWorkspaceClick;
+        window.deleteWorkspaceConfirm = deleteWorkspaceConfirm;
+        window.createWorkspace = createWorkspace;
+        window.getWorkspaceByCollab = getWorkspaceByCollab;
+        window.linkWorkspaceToCollab = linkWorkspaceToCollab;
+        window.renderWorkspaceSwitcher = renderWorkspaceSwitcher;
 
         // Returns the lowest positive integer not already used as a task number.
         // This lets deleted numbers be reused instead of incrementing forever.
@@ -83,10 +214,20 @@
         db = firebase.firestore(app);
 
         renderAllColumns();
+        renderWorkspaceSwitcher();
         updateDailySummary();
         setupKeyboard();          // single unified keyboard handler
         setupVoice();             // speech recognition
         setupFirebase();          // Firebase cloud sync
+
+        // ─── Workspace indicator click handler ─────────────────────────────────────
+        var wsIndicator = document.getElementById('ws-indicator');
+        if (wsIndicator) {
+            wsIndicator.addEventListener('click', function() {
+                var switcher = document.getElementById('workspace-switcher');
+                if (switcher) switcher.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+        }
 
         // ─── Custom background upload ─────────────────────────────────────────────
         var bgInput = document.getElementById('bg-upload-input');
@@ -249,11 +390,19 @@
             syncTimeout = setTimeout(() => {
                 const docRef = getUserDocRef();
                 if (!docRef) return;
-                docRef.set({
-                    tasks: JSON.parse(JSON.stringify(tasks)),
-                    taskCounter: taskCounter,
+                var cloudData = {
+                    workspaces: workspaces.map(function(w) { return { id: w.id, name: w.name, collabCode: w.collabCode }; }),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true }).then(() => setSyncStatus('synced')).catch(() => setSyncStatus('offline'));
+                };
+                workspaces.forEach(function(w) {
+                    var t = localStorage.getItem('ws_tasks_' + w.id);
+                    var c = localStorage.getItem('ws_counter_' + w.id);
+                    if (t) cloudData['ws_tasks_' + w.id] = JSON.parse(t);
+                    if (c) cloudData['ws_counter_' + w.id] = parseInt(c);
+                });
+                docRef.set(cloudData, { merge: true })
+                    .then(function() { setSyncStatus('synced'); })
+                    .catch(function() { setSyncStatus('offline'); });
             }, 500);
         }
 
@@ -265,42 +414,71 @@
             docRef.get().then(snap => {
                 if (!snap.exists) {
                     if (replace) {
+                        workspaces = [{ id: 1, name: 'Personal', collabCode: null }];
+                        activeWorkspaceId = 1;
                         tasks = { todo: [], working: [], done: [] };
                         taskCounter = 0;
+                        saveCurrentWorkspaceData();
+                        saveWorkspacesMeta();
                     } else {
                         pushToCloud();
                     }
-                    saveAll();
                     renderAllColumns();
                     updateDailySummary();
+                    renderWorkspaceSwitcher();
                     setSyncStatus('synced');
                     return;
                 }
-                const cloudData = snap.data();
-                if (!cloudData || !cloudData.tasks) {
-                    if (replace) {
-                        tasks = { todo: [], working: [], done: [] };
-                        taskCounter = 0;
-                    } else {
-                        pushToCloud();
-                    }
-                    saveAll();
-                    renderAllColumns();
-                    updateDailySummary();
-                    setSyncStatus('synced');
-                    return;
-                }
+                var cloudData = snap.data();
                 if (replace) {
-                    tasks = JSON.parse(JSON.stringify(cloudData.tasks));
-                    taskCounter = cloudData.taskCounter || 0;
+                    // Replace local workspaces with cloud data
+                    if (cloudData.workspaces && cloudData.workspaces.length > 0) {
+                        workspaces = cloudData.workspaces.map(function(w) { return { id: w.id, name: w.name, collabCode: w.collabCode }; });
+                        nextWorkspaceId = workspaces.reduce(function(max, w) { return Math.max(max, w.id); }, 0) + 1;
+                        workspaces.forEach(function(w) {
+                            var t = cloudData['ws_tasks_' + w.id];
+                            var c = cloudData['ws_counter_' + w.id];
+                            if (t) localStorage.setItem('ws_tasks_' + w.id, JSON.stringify(t));
+                            if (c !== undefined) localStorage.setItem('ws_counter_' + w.id, String(c));
+                        });
+                        saveWorkspacesMeta();
+                    }
+                    activeWorkspaceId = parseInt(localStorage.getItem('ws_active')) || workspaces[0].id;
+                    loadWorkspaceData(activeWorkspaceId);
                 } else {
-                    const merged = mergeTasks(tasks, cloudData.tasks, taskCounter, cloudData.taskCounter || 0);
-                    tasks = merged.tasks;
-                    taskCounter = merged.taskCounter;
+                    // Merge: merge each workspace's data
+                    if (cloudData.workspaces && cloudData.workspaces.length > 0) {
+                        cloudData.workspaces.forEach(function(cw) {
+                            var lw = workspaces.find(function(w) { return w.id === cw.id; });
+                            if (lw) {
+                                lw.collabCode = cw.collabCode || lw.collabCode;
+                                if (cw.name) lw.name = cw.name;
+                                var cTasks = cloudData['ws_tasks_' + cw.id];
+                                var cCounter = cloudData['ws_counter_' + cw.id];
+                                if (cTasks) {
+                                    var lTasks = localStorage.getItem('ws_tasks_' + cw.id);
+                                    var localT = lTasks ? JSON.parse(lTasks) : { todo: [], working: [], done: [] };
+                                    var localC = parseInt(localStorage.getItem('ws_counter_' + cw.id)) || 0;
+                                    var merged = mergeTasks(localT, cTasks, localC, cCounter || 0);
+                                    localStorage.setItem('ws_tasks_' + cw.id, JSON.stringify(merged.tasks));
+                                    localStorage.setItem('ws_counter_' + cw.id, String(merged.taskCounter));
+                                }
+                            } else {
+                                workspaces.push({ id: cw.id, name: cw.name, collabCode: cw.collabCode });
+                                var ct = cloudData['ws_tasks_' + cw.id];
+                                var cc = cloudData['ws_counter_' + cw.id];
+                                if (ct) localStorage.setItem('ws_tasks_' + cw.id, JSON.stringify(ct));
+                                localStorage.setItem('ws_counter_' + cw.id, String(cc || 0));
+                            }
+                        });
+                        nextWorkspaceId = workspaces.reduce(function(max, w) { return Math.max(max, w.id); }, 0) + 1;
+                        saveWorkspacesMeta();
+                    }
+                    loadWorkspaceData(activeWorkspaceId);
                 }
-                saveAll();
                 renderAllColumns();
                 updateDailySummary();
+                renderWorkspaceSwitcher();
                 setSyncStatus('synced');
             }).catch(() => setSyncStatus('offline'));
         }
@@ -859,11 +1037,7 @@
 
         // ─── Persistence ──────────────────────────────────────────────────────────
         function saveAll() {
-            localStorage.setItem('tasks', JSON.stringify(tasks));
-            localStorage.setItem('taskCounter', taskCounter.toString());
-            // Keep a local snapshot so we can restore state on logout
-            localStorage.setItem('tasks_local', JSON.stringify(tasks));
-            localStorage.setItem('taskCounter_local', taskCounter.toString());
+            saveCurrentWorkspaceData();
             pushToCloud();
         }
 
@@ -904,6 +1078,27 @@
             renderColumn('todo');
             renderColumn('working');
             renderColumn('done');
+        }
+
+        function renderWorkspaceSwitcher() {
+            var container = document.getElementById('workspace-switcher');
+            if (!container) return;
+            updateWorkspaceIndicator();
+            var html = '<span class="ws-bar-label">Workspaces</span>';
+            workspaces.forEach(function(w) {
+                var isActive = w.id === activeWorkspaceId;
+                var t = localStorage.getItem('ws_tasks_' + w.id);
+                var wsTasks = t ? JSON.parse(t) : { todo: [], working: [], done: [] };
+                var total = wsTasks.todo.length + wsTasks.working.length + wsTasks.done.length;
+                html += '<div class="ws-pill' + (isActive ? ' ws-active' : '') + '" onclick="switchWorkspace(' + w.id + ')">';
+                if (w.collabCode) html += '<span class="ws-pill-collab" title="Collaboration: ' + w.collabCode + '">👥</span>';
+                html += '<span class="ws-pill-name">' + escapeHtml(w.name) + '</span>';
+                html += '<span class="ws-pill-count">' + total + '</span>';
+                if (w.id !== 1) html += '<button class="ws-pill-del" onclick="event.stopPropagation();deleteWorkspaceConfirm(' + w.id + ')" title="Delete workspace">✕</button>';
+                html += '</div>';
+            });
+            html += '<button class="ws-pill-add" onclick="createWorkspaceClick()" title="New workspace">＋ New Workspace</button>';
+            container.innerHTML = html;
         }
 
         function renderColumn(column) {
@@ -1429,6 +1624,10 @@
         // ─── Reset ────────────────────────────────────────────────────────────────
         async function resetAllData() {
             if (!await showConfirm('Reset Everything', 'Delete all tasks and reset Tasky? This cannot be undone.')) return;
+            workspaces.forEach(function(w) {
+                localStorage.setItem('ws_tasks_' + w.id, JSON.stringify({ todo: [], working: [], done: [] }));
+                localStorage.setItem('ws_counter_' + w.id, '0');
+            });
             tasks = { todo: [], working: [], done: [] };
             taskCounter = 0;
             if (currentUser) {
@@ -1438,6 +1637,7 @@
             saveAll();
             renderAllColumns();
             updateDailySummary();
+            renderWorkspaceSwitcher();
             deselectTask();
             exitTaskSelector();
             document.getElementById('dropdown').classList.remove('show');

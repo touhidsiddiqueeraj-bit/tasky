@@ -75,13 +75,18 @@ async function createGroup(groupName) {
         code,
         supervisorUid: currentUser.uid,
         supervisorHandle: currentHandle,
-        supervisorPlan: plan,          // cached so joinGroup can check without extra read
+        supervisorPlan: plan,
         memberLimit: plan === 'pro' ? Infinity : FREE_MEMBER_LIMIT,
         members: [{ uid: currentUser.uid, handle: currentHandle, email: currentUser.email }],
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     await db.collection('groups').doc(code).set(groupData);
     await db.collection('users').doc(currentUser.uid).set({ activeGroup: code, plan }, { merge: true });
+    // Create a workspace for this collaboration and switch to it
+    if (typeof window.createWorkspace === 'function') {
+        var wsId = window.createWorkspace(groupName, code);
+        if (typeof window.switchWorkspace === 'function') window.switchWorkspace(wsId);
+    }
     saveGroupCodeLocally(code);
     return code;
 }
@@ -97,7 +102,6 @@ async function joinGroup(code) {
     const already = data.members.some(m => m.uid === currentUser.uid);
 
     if (!already) {
-        // Enforce member limit — check supervisor's plan (stored on group doc)
         const limit = (data.supervisorPlan === 'pro') ? Infinity : FREE_MEMBER_LIMIT;
         if (data.members.length >= limit) {
             return {
@@ -114,6 +118,16 @@ async function joinGroup(code) {
         });
     }
     await db.collection('users').doc(currentUser.uid).set({ activeGroup: code.toUpperCase() }, { merge: true });
+    // Find or create a workspace for this collaboration
+    if (typeof window.getWorkspaceByCollab === 'function' && typeof window.createWorkspace === 'function') {
+        var ws = window.getWorkspaceByCollab(code.toUpperCase());
+        if (ws) {
+            if (typeof window.switchWorkspace === 'function') window.switchWorkspace(ws.id);
+        } else {
+            var wsId = window.createWorkspace(data.name || 'Collaboration', code.toUpperCase());
+            if (typeof window.switchWorkspace === 'function') window.switchWorkspace(wsId);
+        }
+    }
     saveGroupCodeLocally(code.toUpperCase());
     return { ok: true };
 }
@@ -121,7 +135,6 @@ async function joinGroup(code) {
 // ─── Leave Group ──────────────────────────────────────────────────────────
 async function leaveGroup() {
     if (!currentUser || !currentGroup) return;
-    // Remove self from members (unless supervisor — supervisor must transfer first)
     if (isSupervisor && currentGroup.members.length > 1) {
         showTaskyToast('Transfer supervisor role before leaving.');
         return;
@@ -138,11 +151,16 @@ async function leaveGroup() {
     }
     await db.collection('users').doc(currentUser.uid).update({ activeGroup: firebase.firestore.FieldValue.delete() });
     saveGroupCodeLocally(null);
+    // Unlink collab code from active workspace
+    if (typeof window.linkWorkspaceToCollab === 'function') {
+        window.linkWorkspaceToCollab(typeof activeWorkspaceId !== 'undefined' ? activeWorkspaceId : 1, null, null);
+    }
     stopGroupListener();
     currentGroup = null;
     isSupervisor = false;
     teamPanelMember = null;
     renderGroupUI();
+    if (typeof window.renderWorkspaceSwitcher === 'function') window.renderWorkspaceSwitcher();
 }
 
 // ─── Load & Listen to Group ───────────────────────────────────────────────
@@ -156,18 +174,27 @@ const LS_GROUP_KEY = 'tasky_active_group';
 function saveGroupCodeLocally(code) {
     if (code) localStorage.setItem(LS_GROUP_KEY, code);
     else       localStorage.removeItem(LS_GROUP_KEY);
+    // Also sync to the active workspace's collabCode
+    if (typeof window.linkWorkspaceToCollab === 'function' && typeof activeWorkspaceId !== 'undefined') {
+        window.linkWorkspaceToCollab(activeWorkspaceId, code, null);
+    }
 }
 
 async function loadActiveGroup() {
     if (!currentUser) return;
 
-    // 1. Start immediately from localStorage (instant, zero network dependency)
-    const localCode = localStorage.getItem(LS_GROUP_KEY);
+    // 1. Start immediately from the active workspace or localStorage
+    var localCode = null;
+    if (typeof workspaces !== 'undefined' && workspaces.length > 0) {
+        var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
+        if (ws && ws.collabCode) localCode = ws.collabCode;
+    }
+    if (!localCode) localCode = localStorage.getItem(LS_GROUP_KEY);
     if (localCode) {
         startGroupListener(localCode);
     }
 
-    // 2. Verify from Firestore in background — corrects if user left on another device
+    // 2. Verify from Firestore in background
     try {
         const snap = await db.collection('users').doc(currentUser.uid).get();
         const serverCode = snap.exists ? (snap.data().activeGroup || null) : null;
@@ -2151,6 +2178,22 @@ setupCollabAuth(); // run immediately — auth events fire before window 'load'
 document.addEventListener('DOMContentLoaded', () => {
     renderCollabDropdownItems();
 });
+
+// ─── Workspace switch handler: follow collab per workspace ─────────────────
+window.__onWorkspaceSwitch = function(newId, oldId) {
+    stopGroupListener();
+    var ws = typeof workspaces !== 'undefined' ? workspaces.find(function(w) { return w.id === newId; }) : null;
+    if (ws && ws.collabCode) {
+        saveGroupCodeLocally(ws.collabCode);
+        startGroupListener(ws.collabCode);
+    } else {
+        saveGroupCodeLocally(null);
+        currentGroup = null;
+        isSupervisor = false;
+        teamPanelMember = null;
+        renderGroupUI();
+    }
+};
 
 // ─── Floating input assignment hint visibility ─────────────────────────────
 function updateAssignHintVisibility() {
