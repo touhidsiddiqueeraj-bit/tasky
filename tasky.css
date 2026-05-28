@@ -1438,6 +1438,22 @@
             .mobile-add-btn {
                 left: calc(50% - 39px);
             }
+
+            /* Mobile Tasky button — compact icon-only at bottom-left */
+            .top-menu {
+                bottom: 10px;
+                left: 10px;
+                z-index: 201;
+            }
+            .brand-btn {
+                padding: 8px;
+                border-radius: 50%;
+                width: 44px;
+                height: 44px;
+                justify-content: center;
+            }
+            .brand-text { display: none; }
+            .brand-chevron { display: none; }
         }
 
 /* ═══════════════════════════════════════════════════════════════
