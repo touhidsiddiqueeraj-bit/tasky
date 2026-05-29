@@ -249,8 +249,16 @@
                 }
 
                 document.documentElement.classList.add('ready');
-                var ls = document.getElementById('loading-splash');
-                if (ls) ls.remove();
+                // Wait one paint frame so all transient UIs settle,
+                // then fade splash out smoothly
+                requestAnimationFrame(function() {
+                    var ls = document.getElementById('loading-splash');
+                    if (ls) {
+                        ls.style.transition = 'opacity 0.2s ease';
+                        ls.style.opacity = '0';
+                        setTimeout(function() { ls.remove(); }, 250);
+                    }
+                });
             }, 0);
         }, 0);
 
