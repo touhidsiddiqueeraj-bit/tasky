@@ -22,16 +22,6 @@
 <link rel="preload" as="style" href="tasky.css" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="tasky.css"></noscript>
 <style>
-  html:not(.ready) .board,
-  html:not(.ready) .top-menu,
-  html:not(.ready) #workspace-switcher,
-  html:not(.ready) #mobile-bottom-bar,
-  html:not(.ready) .floating-input-container {
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
-</style>
-<style>
 /* ═══════════════════════════════════════════════════════════
    ONBOARDING — GLASSMORPHISM
    ═══════════════════════════════════════════════════════════ */
@@ -502,6 +492,10 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
 </style>
 </head>
 <body>
+<div id="loading-splash" style="position:fixed;inset:0;z-index:99999;background:#0a0a1a;display:flex;align-items:center;justify-content:center;">
+  <div style="width:36px;height:36px;border:3px solid rgba(139,92,246,0.2);border-top-color:#8B5CF6;border-radius:50%;animation:ls-spin .8s linear infinite;"></div>
+</div>
+<style>@keyframes ls-spin{to{transform:rotate(360deg)}}</style>
 <div class="bg-orbs">
   <div class="orb orb-1"></div>
   <div class="orb orb-2"></div>

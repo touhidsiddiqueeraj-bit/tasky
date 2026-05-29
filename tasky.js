@@ -249,6 +249,8 @@
                 }
 
                 document.documentElement.classList.add('ready');
+                var ls = document.getElementById('loading-splash');
+                if (ls) ls.remove();
             }, 0);
         }, 0);
 
