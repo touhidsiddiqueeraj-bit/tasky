@@ -214,6 +214,7 @@
         renderWorkspaceSwitcher();
         updateDailySummary();
         setupKeyboard();          // single unified keyboard handler
+        setupDelegatedListeners();
         setupVoice();             // speech recognition
         setupFirebase();          // Firebase cloud sync
 
@@ -900,13 +901,13 @@
             };
             tasks.todo.push(task);
             saveAll();
-            renderColumn('todo');
+            appendCardToColumn('todo', task);
         }
 
         function deleteTask(column, taskId) {
             tasks[column] = tasks[column].filter(t => t.id !== taskId);
             saveAll();
-            renderColumn(column);
+            removeCardFromColumn(column, taskId);
         }
 
         function deleteTaskWithUndo(column, taskId) {
@@ -916,12 +917,12 @@
             const snapshot = { column, task: { ...task } };
             tasks[column] = tasks[column].filter(t => t.id !== taskId);
             saveAll();
-            renderColumn(column);
+            removeCardFromColumn(column, taskId);
 
             showToast(`Deleted "#${task.number} ${task.text}"`, () => {
                 tasks[snapshot.column].push(snapshot.task);
                 saveAll();
-                renderColumn(snapshot.column);
+                appendCardToColumn(snapshot.column, snapshot.task);
             });
         }
 
@@ -931,8 +932,8 @@
             const [task] = tasks[fromColumn].splice(idx, 1);
             tasks[toColumn].push(task);
             saveAll();
-            renderColumn(fromColumn);
-            renderColumn(toColumn);
+            removeCardFromColumn(fromColumn, taskId);
+            appendCardToColumn(toColumn, task);
             if (toColumn === 'done') updateDailySummary();
         }
 
@@ -955,8 +956,8 @@
                     const [movedTask] = tasks[toColumn].splice(idx, 1);
                     tasks[fromColumn].push(movedTask);
                     saveAll();
-                    renderColumn(fromColumn);
-                    renderColumn(toColumn);
+                    removeCardFromColumn(toColumn, taskId);
+                    appendCardToColumn(fromColumn, movedTask);
                     if (fromColumn === 'done' || toColumn === 'done') updateDailySummary();
                     if (selectedTask && selectedTask.taskId === taskId) {
                         selectedTask.column = fromColumn;
@@ -981,7 +982,11 @@
             const priorities = ['low', 'medium', 'high'];
             task.priority = priorities[(priorities.indexOf(task.priority) + 1) % 3];
             saveAll();
-            renderColumn(column);
+            if (activeFilters[column]) {
+                renderColumn(column);
+            } else {
+                replaceCardInColumn(column, task);
+            }
             restoreSelection();
         }
 
@@ -990,7 +995,11 @@
             if (!task) return;
             task.dueDate = date || null;
             saveAll();
-            renderColumn(column);
+            if (activeFilters[column]) {
+                renderColumn(column);
+            } else {
+                replaceCardInColumn(column, task);
+            }
             restoreSelection();
         }
 
@@ -1026,9 +1035,14 @@
         }
 
         // ─── Persistence ──────────────────────────────────────────────────────────
+        var _saveAllTimer = null;
         function saveAll() {
-            saveCurrentWorkspaceData();
-            pushToCloud();
+            if (_saveAllTimer) return;
+            _saveAllTimer = requestAnimationFrame(function() {
+                _saveAllTimer = null;
+                saveCurrentWorkspaceData();
+                pushToCloud();
+            });
         }
 
         // ─── Toast ────────────────────────────────────────────────────────────────
@@ -1090,6 +1104,55 @@
             container.innerHTML = html;
         }
 
+        // ─── Targeted DOM helpers ────────────────────────────────────────────
+        function appendCardToColumn(column, task) {
+            var list = document.getElementById(column + '-list');
+            if (!list) return;
+            var emptyEl = list.querySelector('.empty-state');
+            if (emptyEl) emptyEl.remove();
+            list.appendChild(createTaskCard(task, column));
+            updateColumnCount(column);
+        }
+
+        function removeCardFromColumn(column, taskId) {
+            var card = document.getElementById('task-' + taskId);
+            if (!card) return;
+            card.remove();
+            var list = document.getElementById(column + '-list');
+            if (list && list.children.length === 0) {
+                var filter = activeFilters[column];
+                list.innerHTML = filter
+                    ? '<div class="empty-state"><div class="empty-state-icon">🔍</div><div>No ' + filter + ' priority tasks</div></div>'
+                    : getEmptyState(column);
+            }
+            updateColumnCount(column);
+        }
+
+        function replaceCardInColumn(column, task) {
+            var list = document.getElementById(column + '-list');
+            if (!list) return;
+            var oldCard = document.getElementById('task-' + task.id);
+            if (oldCard) {
+                var newCard = createTaskCard(task, column);
+                list.replaceChild(newCard, oldCard);
+            } else {
+                appendCardToColumn(column, task);
+            }
+            updateColumnCount(column);
+        }
+
+        function updateColumnCount(column) {
+            var count = document.getElementById(column + '-count');
+            if (count) {
+                var actual = tasks[column].length;
+                if (count.textContent !== String(actual)) {
+                    count.classList.add('pulse');
+                    setTimeout(function() { count.classList.remove('pulse'); }, 400);
+                }
+                count.textContent = actual;
+            }
+        }
+
         function renderColumn(column) {
             const list   = document.getElementById(`${column}-list`);
             const count  = document.getElementById(`${column}-count`);
@@ -1130,6 +1193,8 @@
             card.className = `task-card priority-${task.priority}`;
             card.draggable = true;
             card.id = `task-${task.id}`;
+            card.dataset.taskId = task.id;
+            card.dataset.column = column;
 
             const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && column !== 'done';
             const dateDisplay = task.dueDate
@@ -1147,30 +1212,25 @@
                 </div>
                 <div class="task-meta">
                     <div class="task-left">
-                        <span class="priority-badge ${task.priority}" title="Click to cycle priority (or press 1/2/3 when selected)">
+                            <span class="priority-badge ${task.priority}" data-action="priority" title="Click to cycle priority (or press 1/2/3 when selected)">
                             ${task.priority === 'high' ? '🔴' : task.priority === 'medium' ? '🟡' : '🟢'} ${priorityLabel}
                         </span>
                         ${task.dueDate ? `<span class="due-date ${isOverdue ? 'overdue' : ''}">📅 ${dateDisplay}</span>` : ''}
                     </div>
                     <div class="task-hover-controls">
-                        <button class="edit-btn" title="Edit task text (double-click)">✏️</button>
-                        <button class="date-btn" title="Set due date">
+                        <button class="edit-btn" data-action="edit" title="Edit task text (double-click)">✏️</button>
+                        <button class="date-btn" data-action="date" title="Set due date">
                             📅 ${task.dueDate ? 'Change' : 'Date'}
                         </button>
-                        <input type="date" id="date-picker-${task.id}" value="${task.dueDate || ''}"
+                        <input type="date" id="date-picker-${task.id}" data-action="date-input" value="${task.dueDate || ''}"
                                style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;">
-                        ${column === 'todo'    ? `<button class="move-btn" title="Move to Working On (→)">→</button>` : ''}
-                        ${column === 'working' ? `<button class="move-btn back-btn" title="Move back to To Do (←)">←</button><button class="move-btn fwd-btn" title="Move to Done (→)">→</button>` : ''}
-                        ${column === 'done'    ? `<button class="move-btn" title="Move back to Working On (←)">←</button>` : ''}
-                        <button class="delete-btn" title="Delete (Del)">✕</button>
+                        ${column === 'todo'    ? `<button class="move-btn" data-action="move-todo" title="Move to Working On (→)">→</button>` : ''}
+                        ${column === 'working' ? `<button class="move-btn back-btn" data-action="move-working-back" title="Move back to To Do (←)">←</button><button class="move-btn fwd-btn" data-action="move-working-fwd" title="Move to Done (→)">→</button>` : ''}
+                        ${column === 'done'    ? `<button class="move-btn" data-action="move-done" title="Move back to Working On (←)">←</button>` : ''}
+                        <button class="delete-btn" data-action="delete" title="Delete (Del)">✕</button>
                     </div>
                 </div>
             `;
-
-            card.querySelector('.priority-badge').addEventListener('click', (e) => {
-                e.stopPropagation();
-                cyclePriority(column, task.id);
-            });
 
             // ── Inline edit ──────────────────────────────────────────────────────
             const taskTextEl  = card.querySelector('.task-text');
@@ -1199,7 +1259,7 @@
                     const t = tasks[column].find(t => t.id === task.id);
                     if (t) {
                         t.text = newText;
-                        task.text = newText;          // keep local ref in sync
+                        task.text = newText;
                         taskTextEl.textContent = newText;
                         saveAll();
                     }
@@ -1235,72 +1295,78 @@
             });
 
             editInput.addEventListener('blur', () => {
-                // Small delay so click on ✓ button fires before blur
                 setTimeout(() => {
                     if (card.classList.contains('editing')) commitEdit();
                 }, 150);
             });
 
-            card.querySelector('.date-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                openDatePicker(task.id);
-            });
-
-            card.querySelector('input[type="date"]').addEventListener('change', (e) => {
-                setDueDate(column, task.id, e.target.value);
-            });
-
-            card.querySelector('.delete-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (selectedTask && selectedTask.taskId === task.id) deselectTask();
-                deleteTaskWithUndo(column, task.id);
-            });
-
-
-            if (column === 'todo') {
-                card.querySelector('.move-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    moveTaskWithUndo('todo', 'working', task.id);
-                });
-            }
-            if (column === 'working') {
-                card.querySelector('.back-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    moveTaskWithUndo('working', 'todo', task.id);
-                });
-                card.querySelector('.fwd-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    moveTaskWithUndo('working', 'done', task.id);
-                });
-            }
-            if (column === 'done') {
-                card.querySelector('.move-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    moveTaskWithUndo('done', 'working', task.id);
-                });
-            }
-
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('button') || e.target.closest('.priority-badge')) return;
-                if (taskSelectorActive) exitTaskSelector();
-                if (selectedTask && selectedTask.taskId === task.id) {
-                    deselectTask();
-                } else {
-                    selectTask(column, task.id);
-                }
-            });
-
-            card.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, fromColumn: column }));
-                card.style.opacity = '0.4';
-                deselectTask();
-            });
-            card.addEventListener('dragend', () => { card.style.opacity = ''; });
-
-            // ── Touch drag (mobile / Capacitor) ──────────────────────────────
+            // ── Touch drag ────────────────────────────────────────────────────────
             setupTouchDrag(card, task.id, column);
 
             return card;
+        }
+
+        // ─── Delegated listeners (one per column, not per card) ────────────────
+        function setupDelegatedListeners() {
+            ['todo', 'working', 'done'].forEach(function(col) {
+                var list = document.getElementById(col + '-list');
+                if (!list) return;
+
+                list.addEventListener('click', function(e) {
+                    var card = e.target.closest('.task-card');
+                    if (!card) return;
+
+                    // Action buttons via data-action attribute
+                    var btn = e.target.closest('[data-action]');
+                    if (btn) {
+                        var action = btn.dataset.action;
+                        var tid = parseInt(card.dataset.taskId);
+                        var c = card.dataset.column;
+                        e.stopPropagation();
+                        switch (action) {
+                            case 'priority':       cyclePriority(c, tid); break;
+                            case 'date':           openDatePicker(tid); break;
+                            case 'delete':         if (selectedTask && selectedTask.taskId === tid) deselectTask(); deleteTaskWithUndo(c, tid); break;
+                            case 'move-todo':      moveTaskWithUndo(c, 'working', tid); break;
+                            case 'move-working-back': moveTaskWithUndo(c, 'todo', tid); break;
+                            case 'move-working-fwd':  moveTaskWithUndo(c, 'done', tid); break;
+                            case 'move-done':      moveTaskWithUndo(c, 'working', tid); break;
+                            // 'edit' is handled by per-card listeners
+                        }
+                        return;
+                    }
+
+                    // Card selection (ignore clicks on buttons/badges)
+                    if (e.target.closest('button, .priority-badge, input')) return;
+                    if (taskSelectorActive) exitTaskSelector();
+                    if (selectedTask && selectedTask.taskId === parseInt(card.dataset.taskId)) {
+                        deselectTask();
+                    } else {
+                        selectTask(card.dataset.column, parseInt(card.dataset.taskId));
+                    }
+                });
+
+                list.addEventListener('change', function(e) {
+                    var input = e.target.closest('input[data-action="date-input"]');
+                    if (!input) return;
+                    var card = input.closest('.task-card');
+                    if (!card) return;
+                    setDueDate(card.dataset.column, parseInt(card.dataset.taskId), input.value);
+                });
+
+                list.addEventListener('dragstart', function(e) {
+                    var card = e.target.closest('.task-card');
+                    if (!card) return;
+                    e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: parseInt(card.dataset.taskId), fromColumn: card.dataset.column }));
+                    card.style.opacity = '0.4';
+                    deselectTask();
+                });
+
+                list.addEventListener('dragend', function(e) {
+                    var card = e.target.closest('.task-card');
+                    if (card) card.style.opacity = '';
+                });
+            });
         }
 
         function escapeHtml(str) {
@@ -1409,8 +1475,14 @@
                 el.classList.add('drop-zone-active');
             });
 
+            // Cache column list rects for hit-testing during drag
+            var _columnRects = [];
+            document.querySelectorAll('.task-list').forEach(function(el) {
+                _columnRects.push({ el: el, rect: el.getBoundingClientRect() });
+            });
             _touchDrag = { taskId, fromColumn: column, ghost, card,
-                           offsetX: x - rect.left, offsetY: y - rect.top };
+                           offsetX: x - rect.left, offsetY: y - rect.top,
+                           columnRects: _columnRects };
 
             // Haptic feedback if available
             if (navigator.vibrate) navigator.vibrate(30);
@@ -1418,15 +1490,15 @@
 
         function _moveTouchDrag(x, y) {
             if (!_touchDrag) return;
-            const { ghost, offsetX, offsetY } = _touchDrag;
+            const { ghost, offsetX, offsetY, columnRects } = _touchDrag;
             ghost.style.left = (x - offsetX) + 'px';
             ghost.style.top  = (y - offsetY) + 'px';
 
-            // Highlight the column the ghost is over
-            document.querySelectorAll('.task-list').forEach(el => {
-                const r = el.getBoundingClientRect();
-                const over = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-                el.classList.toggle('drop-zone-hover', over);
+            // Highlight the column the ghost is over (using cached rects)
+            columnRects.forEach(function(item) {
+                var r = item.rect;
+                var over = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+                item.el.classList.toggle('drop-zone-hover', over);
             });
         }
 
@@ -1557,13 +1629,18 @@
             if (e.target === document.getElementById('bg-modal-overlay')) closeBgModal();
         }
 
+        var _opacityDebounceTimer = null;
         function setCardOpacity(val) {
             cardOpacity = Math.max(40, Math.min(100, val));
             var darkAlpha = 0.01 + (cardOpacity - 40) * (0.08 - 0.01) / 60;
             var lightAlpha = 0.35 + (cardOpacity - 40) * (0.75 - 0.35) / 60;
             document.documentElement.style.setProperty('--column-bg', 'rgba(255, 255, 255, ' + darkAlpha + ')');
             document.documentElement.style.setProperty('--column-bg-light', 'rgba(255, 255, 255, ' + lightAlpha + ')');
-            localStorage.setItem('cardOpacity', cardOpacity);
+            if (_opacityDebounceTimer) cancelAnimationFrame(_opacityDebounceTimer);
+            _opacityDebounceTimer = requestAnimationFrame(function() {
+                localStorage.setItem('cardOpacity', cardOpacity);
+                _opacityDebounceTimer = null;
+            });
             var valEl = document.getElementById('card-opacity-value');
             if (valEl) valEl.textContent = cardOpacity + '%';
             var stVal = document.getElementById('st-opacity-val');

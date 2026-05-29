@@ -105,7 +105,7 @@
             cursor: pointer;
             font-weight: 700;
             font-size: 13px;
-            transition: all 0.2s ease;
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
         }
 
         .toast-undo-btn:hover {
@@ -407,7 +407,7 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
             display: flex;
             flex-direction: column;
-            transition: all 0.3s ease;
+            transition: background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
             position: relative;
             z-index: 2;
             overflow: visible;
@@ -472,7 +472,7 @@
             color: rgba(255, 255, 255, 0.6);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
+            transition: background-color 0.3s ease;
         }
 
         .task-count.pulse {
@@ -501,7 +501,7 @@
             border-radius: 50%;
             cursor: pointer;
             opacity: 0.35;
-            transition: all 0.2s ease;
+            transition: opacity 0.2s ease, border-color 0.2s ease;
             border: 1px solid transparent;
         }
 
@@ -585,7 +585,7 @@
             border-radius: 14px;
             border: 1px solid rgba(255, 255, 255, 0.08);
             cursor: grab;
-            transition: all 0.2s ease;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
             animation: slideIn 0.25s ease;
             flex-shrink: 0;
             position: relative;
@@ -742,7 +742,7 @@
             letter-spacing: 0.2px;
             flex-shrink: 0;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
         }
 
         .priority-badge:hover {
@@ -851,7 +851,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s ease;
+            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
             flex-shrink: 0;
             padding: 0 8px;
             gap: 4px;
@@ -924,7 +924,7 @@
             cursor: pointer;
             font-size: 12px;
             font-weight: 600;
-            transition: all 0.2s ease;
+            transition: background 0.2s ease, color 0.2s ease;
             width: 100%;
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
@@ -949,7 +949,7 @@
             z-index: 100;
             pointer-events: none;
             opacity: 0;
-            transition: all 0.3s ease;
+            transition: opacity 0.3s ease, transform 0.3s ease;
         }
 
         .floating-input-container.active {
@@ -970,7 +970,7 @@
             max-width: 90vw;
             outline: none;
             box-shadow: 0 8px 40px rgba(139, 92, 246, 0.3);
-            transition: all 0.3s ease;
+            transition: box-shadow 0.3s ease, border-color 0.3s ease;
         }
 
         body.light-mode .floating-input {
@@ -1073,7 +1073,7 @@
             font-size: 16px;
             font-weight: 700;
             letter-spacing: -0.3px;
-            transition: all 0.3s ease;
+            transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
             display: flex;
             align-items: center;
             gap: 7px;
@@ -1155,7 +1155,7 @@
             font-size: 14px;
             font-weight: 500;
             text-align: left;
-            transition: all 0.2s ease;
+            transition: background 0.2s ease, color 0.2s ease;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -2369,7 +2369,7 @@ body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
             background: rgba(255,255,255,0.04);
             border: 1px solid rgba(255,255,255,0.07);
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
             white-space: nowrap;
             position: relative;
         }
@@ -2464,7 +2464,7 @@ body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
             white-space: nowrap;
         }
         .ws-pill-add:hover {
