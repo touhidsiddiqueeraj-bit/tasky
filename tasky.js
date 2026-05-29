@@ -188,68 +188,67 @@
         let db = null;               // Firestore instance
         let syncTimeout = null;      // debounce for cloud sync
 
-        // ─── Init ─────────────────────────────────────────────────────────────────
+        // ─── Init (deferred chunks to avoid long tasks) ──────────────────────────────
         if (isLightMode) {
             document.body.classList.add('light-mode');
             updateThemeButton();
         }
-        // NOTE: Onboarding visibility is handled entirely in the HTML <script> block.
-        // tasky.js no longer touches #onboarding (that id does not exist in the HTML).
-
         if (customBg) applyCustomBg();
         initOpacity();
 
-        // ─── Firebase / Cloud Sync ─────────────────────────────────────────────────
-        app = firebase.initializeApp({
-            apiKey: "AIzaSyBN8ZJil4vWWJ6XPPGgp20htp8IBxDLL_o",
-            authDomain: "tasky-95785.firebaseapp.com",
-            projectId: "tasky-95785",
-            storageBucket: "tasky-95785.firebasestorage.app",
-            messagingSenderId: "285483279389",
-            appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
-        });
-        db = firebase.firestore(app);
-
-        renderAllColumns();
-        renderWorkspaceSwitcher();
-        updateDailySummary();
-        setupKeyboard();          // single unified keyboard handler
-        setupDelegatedListeners();
-        setupVoice();             // speech recognition
-        setupFirebase();          // Firebase cloud sync
-
-
-
-        // ─── Custom background upload ─────────────────────────────────────────────
-        var bgInput = document.getElementById('bg-upload-input');
-        if (bgInput) {
-            bgInput.addEventListener('change', function(e) {
-                var file = e.target.files[0];
-                if (!file) return;
-                var reader = new FileReader();
-                reader.onload = function(ev) {
-                    customBg = ev.target.result;
-                    try {
-                        localStorage.setItem('customBg', customBg);
-                        applyCustomBg();
-                        showToast('Background set', () => {});
-                    } catch(_) {
-                        showToast('Image too large to save', () => {});
-                        customBg = null;
-                    }
-                };
-                reader.readAsDataURL(file);
-                this.value = '';
+        // Chunk 1 — Firebase + first render (deferred to release main thread)
+        setTimeout(function() {
+            app = firebase.initializeApp({
+                apiKey: "AIzaSyBN8ZJil4vWWJ6XPPGgp20htp8IBxDLL_o",
+                authDomain: "tasky-95785.firebaseapp.com",
+                projectId: "tasky-95785",
+                storageBucket: "tasky-95785.firebasestorage.app",
+                messagingSenderId: "285483279389",
+                appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
             });
-        }
+            db = firebase.firestore(app);
 
-        // ─── Card opacity slider ────────────────────────────────────────────────────
-        var opacitySlider = document.getElementById('card-opacity-slider');
-        if (opacitySlider) {
-            opacitySlider.addEventListener('input', function() {
-                setCardOpacity(parseInt(this.value));
-            });
-        }
+            renderAllColumns();
+            renderWorkspaceSwitcher();
+            updateDailySummary();
+
+            // Chunk 2 — keyboard, voice, Firebase auth, deferred listeners
+            setTimeout(function() {
+                setupKeyboard();
+                setupDelegatedListeners();
+                setupVoice();
+                setupFirebase();
+
+                var bgInput = document.getElementById('bg-upload-input');
+                if (bgInput) {
+                    bgInput.addEventListener('change', function(e) {
+                        var file = e.target.files[0];
+                        if (!file) return;
+                        var reader = new FileReader();
+                        reader.onload = function(ev) {
+                            customBg = ev.target.result;
+                            try {
+                                localStorage.setItem('customBg', customBg);
+                                applyCustomBg();
+                                showToast('Background set', () => {});
+                            } catch(_) {
+                                showToast('Image too large to save', () => {});
+                                customBg = null;
+                            }
+                        };
+                        reader.readAsDataURL(file);
+                        this.value = '';
+                    });
+                }
+
+                var opacitySlider = document.getElementById('card-opacity-slider');
+                if (opacitySlider) {
+                    opacitySlider.addEventListener('input', function() {
+                        setCardOpacity(parseInt(this.value));
+                    });
+                }
+            }, 0);
+        }, 0);
 
         // ─── Firebase Auth ─────────────────────────────────────────────────────────
         function setupFirebase() {

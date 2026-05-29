@@ -16,8 +16,11 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a0a1a'/><rect x='4' y='5' width='24' height='6' rx='3' fill='%238B5CF6'/><rect x='4' y='13' width='17' height='6' rx='3' fill='%23F59E0B'/><rect x='4' y='21' width='12' height='6' rx='3' fill='%2310B981'/><path d='M7 8 L9.2 10.2 L12.5 6.5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="tasky.css">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" 
+      onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap"></noscript>
+<link rel="preload" as="style" href="tasky.css" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="tasky.css"></noscript>
 <style>
 /* ═══════════════════════════════════════════════════════════
    ONBOARDING — GLASSMORPHISM
@@ -1032,11 +1035,11 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
 <input type="file" id="bg-upload-input" accept="image/*" style="display:none;">
 
 <!-- ▼▼▼  FIXED: v10 compat CDN (v11 removed the compat layer) ▼▼▼ -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="tasky.js"></script>
-<script src="tasky-collab.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script defer src="tasky.js"></script>
+<script defer src="tasky-collab.js"></script>
 
 <script>
 /* ============================================================

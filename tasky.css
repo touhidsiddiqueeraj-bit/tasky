@@ -292,51 +292,29 @@
         }
 
         .column-wrapper:nth-child(1) .column-ring {
-            border: 2px solid transparent;
-            animation: ringPulse1 4s ease-in-out infinite;
+            border: 2px solid rgba(139, 92, 246, 0.35);
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.15), 0 0 80px rgba(139, 92, 246, 0.08), inset 0 0 30px rgba(139, 92, 246, 0.08);
+            will-change: opacity;
+            animation: ringGlow 4s ease-in-out infinite;
         }
 
         .column-wrapper:nth-child(2) .column-ring {
-            border: 2px solid transparent;
-            animation: ringPulse2 4s ease-in-out infinite 0.5s;
+            border: 2px solid rgba(245, 158, 11, 0.35);
+            box-shadow: 0 0 30px rgba(245, 158, 11, 0.15), 0 0 80px rgba(245, 158, 11, 0.08), inset 0 0 30px rgba(245, 158, 11, 0.08);
+            will-change: opacity;
+            animation: ringGlow 4s ease-in-out infinite 0.5s;
         }
 
         .column-wrapper:nth-child(3) .column-ring {
-            border: 2px solid transparent;
-            animation: ringPulse3 4s ease-in-out infinite 1s;
+            border: 2px solid rgba(16, 185, 129, 0.35);
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.15), 0 0 80px rgba(16, 185, 129, 0.08), inset 0 0 30px rgba(16, 185, 129, 0.08);
+            will-change: opacity;
+            animation: ringGlow 4s ease-in-out infinite 1s;
         }
 
-        @keyframes ringPulse1 {
-            0%, 100% {
-                border-color: rgba(139, 92, 246, 0.2);
-                box-shadow: 0 0 20px rgba(139, 92, 246, 0.1), 0 0 60px rgba(139, 92, 246, 0.05), inset 0 0 20px rgba(139, 92, 246, 0.05);
-            }
-            50% {
-                border-color: rgba(139, 92, 246, 0.5);
-                box-shadow: 0 0 40px rgba(139, 92, 246, 0.25), 0 0 100px rgba(139, 92, 246, 0.15), inset 0 0 40px rgba(139, 92, 246, 0.1);
-            }
-        }
-
-        @keyframes ringPulse2 {
-            0%, 100% {
-                border-color: rgba(245, 158, 11, 0.2);
-                box-shadow: 0 0 20px rgba(245, 158, 11, 0.1), 0 0 60px rgba(245, 158, 11, 0.05), inset 0 0 20px rgba(245, 158, 11, 0.05);
-            }
-            50% {
-                border-color: rgba(245, 158, 11, 0.5);
-                box-shadow: 0 0 40px rgba(245, 158, 11, 0.25), 0 0 100px rgba(245, 158, 11, 0.15), inset 0 0 40px rgba(245, 158, 11, 0.1);
-            }
-        }
-
-        @keyframes ringPulse3 {
-            0%, 100% {
-                border-color: rgba(16, 185, 129, 0.2);
-                box-shadow: 0 0 20px rgba(16, 185, 129, 0.1), 0 0 60px rgba(16, 185, 129, 0.05), inset 0 0 20px rgba(16, 185, 129, 0.05);
-            }
-            50% {
-                border-color: rgba(16, 185, 129, 0.5);
-                box-shadow: 0 0 40px rgba(16, 185, 129, 0.25), 0 0 100px rgba(16, 185, 129, 0.15), inset 0 0 40px rgba(16, 185, 129, 0.1);
-            }
+        @keyframes ringGlow {
+            0%, 100% { opacity: 0.5; }
+            50%      { opacity: 1; }
         }
 
         /* Inner ring */
@@ -353,48 +331,24 @@
         }
 
         .column-wrapper:nth-child(1) .column-ring-inner {
-            animation: ringInnerPulse1 4s ease-in-out infinite 0.3s;
+            border: 1px solid rgba(139, 92, 246, 0.25);
+            box-shadow: inset 0 0 20px rgba(139, 92, 246, 0.08);
+            will-change: opacity;
+            animation: ringGlow 4s ease-in-out infinite 0.3s;
         }
 
         .column-wrapper:nth-child(2) .column-ring-inner {
-            animation: ringInnerPulse2 4s ease-in-out infinite 0.8s;
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            box-shadow: inset 0 0 20px rgba(245, 158, 11, 0.08);
+            will-change: opacity;
+            animation: ringGlow 4s ease-in-out infinite 0.8s;
         }
 
         .column-wrapper:nth-child(3) .column-ring-inner {
-            animation: ringInnerPulse3 4s ease-in-out infinite 1.3s;
-        }
-
-        @keyframes ringInnerPulse1 {
-            0%, 100% {
-                border-color: rgba(139, 92, 246, 0.15);
-                box-shadow: inset 0 0 15px rgba(139, 92, 246, 0.05);
-            }
-            50% {
-                border-color: rgba(139, 92, 246, 0.4);
-                box-shadow: inset 0 0 30px rgba(139, 92, 246, 0.15);
-            }
-        }
-
-        @keyframes ringInnerPulse2 {
-            0%, 100% {
-                border-color: rgba(245, 158, 11, 0.15);
-                box-shadow: inset 0 0 15px rgba(245, 158, 11, 0.05);
-            }
-            50% {
-                border-color: rgba(245, 158, 11, 0.4);
-                box-shadow: inset 0 0 30px rgba(245, 158, 11, 0.15);
-            }
-        }
-
-        @keyframes ringInnerPulse3 {
-            0%, 100% {
-                border-color: rgba(16, 185, 129, 0.15);
-                box-shadow: inset 0 0 15px rgba(16, 185, 129, 0.05);
-            }
-            50% {
-                border-color: rgba(16, 185, 129, 0.4);
-                box-shadow: inset 0 0 30px rgba(16, 185, 129, 0.15);
-            }
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            box-shadow: inset 0 0 20px rgba(16, 185, 129, 0.08);
+            will-change: opacity;
+            animation: ringGlow 4s ease-in-out infinite 1.3s;
         }
 
         .column {
@@ -411,6 +365,8 @@
             position: relative;
             z-index: 2;
             overflow: visible;
+            will-change: transform;
+            transform: translateZ(0);
         }
 
         body.light-mode .column {
@@ -589,6 +545,8 @@
             animation: slideIn 0.25s ease;
             flex-shrink: 0;
             position: relative;
+            will-change: transform;
+            transform: translateZ(0);
         }
 
         .task-card:active {
@@ -1380,8 +1338,8 @@
             animation: voicePulse 1s ease-in-out infinite alternate;
         }
         @keyframes voicePulse {
-            from { box-shadow: 0 0 20px var(--accent-glow,rgba(139, 92, 246, 0.5)); transform: scale(1);    }
-            to   { box-shadow: 0 0 50px var(--accent-glow,rgba(139, 92, 246, 0.9)); transform: scale(1.08); }
+            from { transform: scale(1);    }
+            to   { transform: scale(1.08); }
         }
         .voice-label {
             font-size: 18px;
