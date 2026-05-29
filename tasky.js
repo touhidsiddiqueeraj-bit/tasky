@@ -1464,7 +1464,7 @@
                 if (!dragStarted) {
                     // Swipe visual feedback (only on horizontal movement)
                     if (Math.abs(dx) > 20 && Math.abs(dy) < 30) {
-                        card.style.transform = 'translateX(' + (dx * 0.4) + 'px)';
+                        card.style.transform = 'translateX(' + (dx * 0.65) + 'px)';
                         card.style.opacity = Math.max(0.4, 1 - Math.abs(dx) / 300);
                         card.classList.toggle('swiping-right', dx > 0);
                         card.classList.toggle('swiping-left', dx < 0);
@@ -1494,7 +1494,7 @@
                     var t = e.changedTouches[0];
                     var dx = t.clientX - startX;
                     var dy = t.clientY - startY;
-                    if (Math.abs(dx) > 60 && Math.abs(dy) < 30) {
+                    if (Math.abs(dx) > 40 && Math.abs(dy) < 30) {
                         e.preventDefault();
                         if (dx > 0) {
                             if (column === 'working') moveTaskWithUndo(column, 'todo', taskId);
