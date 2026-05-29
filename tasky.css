@@ -4,6 +4,15 @@
             box-sizing: border-box;
         }
 
+        /* ─── Ready-state fade-in (prevents flash of unstyled board) ────── */
+        html.ready .board,
+        html.ready .top-menu,
+        html.ready #workspace-switcher,
+        html.ready #mobile-bottom-bar,
+        html.ready .floating-input-container {
+            transition: opacity 0.35s ease;
+        }
+
         :root {
             --todo-color: #8B5CF6;
             --todo-glow: rgba(139, 92, 246, 0.4);

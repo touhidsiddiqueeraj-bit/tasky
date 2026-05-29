@@ -22,6 +22,16 @@
 <link rel="preload" as="style" href="tasky.css" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="tasky.css"></noscript>
 <style>
+  html:not(.ready) .board,
+  html:not(.ready) .top-menu,
+  html:not(.ready) #workspace-switcher,
+  html:not(.ready) #mobile-bottom-bar,
+  html:not(.ready) .floating-input-container {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+</style>
+<style>
 /* ═══════════════════════════════════════════════════════════
    ONBOARDING — GLASSMORPHISM
    ═══════════════════════════════════════════════════════════ */

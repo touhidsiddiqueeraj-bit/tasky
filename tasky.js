@@ -247,6 +247,8 @@
                         setCardOpacity(parseInt(this.value));
                     });
                 }
+
+                document.documentElement.classList.add('ready');
             }, 0);
         }, 0);
 
