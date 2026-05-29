@@ -1790,7 +1790,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
           <span class="st-row-icon">❓</span>
           <span>How to Use</span>
         </div>
-        <button class="st-btn" onclick="showOnboarding();closeSettings()">Open</button>
+        <button class="st-btn" onclick="showShortcuts()">Open</button>
       </div>
 
       <div class="st-row" style="margin-top:4px;">
@@ -2169,6 +2169,32 @@ function stSetTextColorRaw(color) {
     if (fontsize)  document.documentElement.style.setProperty('--task-fontsize', fontsize + 'px');
     if (textcolor) _applyTextColor(textcolor);
 })();
+
+function showShortcuts() {
+    closeSettings();
+    if (isMobile()) { showOnboarding(); return; }
+    document.getElementById('shortcuts-overlay').classList.add('visible');
+}
+function closeShortcuts() {
+    document.getElementById('shortcuts-overlay').classList.remove('visible');
+}
 </script>
+
+<div class="shortcuts-overlay" id="shortcuts-overlay" onclick="closeShortcuts()">
+  <div class="shortcuts-card" onclick="event.stopPropagation()">
+    <button class="shortcuts-close" onclick="closeShortcuts()">✕</button>
+    <h3>⌨️ Keyboard Shortcuts</h3>
+    <div class="shortcuts-grid">
+      <div><kbd>←</kbd><kbd>→</kbd><span>Move task between columns</span></div>
+      <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><span>Set priority (High / Medium / Low)</span></div>
+      <div><kbd>Del</kbd><span>Delete selected task</span></div>
+      <div><kbd>Esc</kbd><span>Deselect task / Undo last action</span></div>
+      <div><kbd>Space</kbd><span>Hold for voice input</span></div>
+      <div><kbd>Alt</kbd>+<kbd>G</kbd><span>Go to task by number</span></div>
+      <div><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd><span>Jump to task 1–9</span></div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

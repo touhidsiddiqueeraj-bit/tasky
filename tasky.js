@@ -182,11 +182,12 @@
         let spaceHeld        = false;
         let voiceSR           = null;
         let voiceAccumulated  = '';
-        let voiceSession       = 0;        // incremented each startVoice; stale onend calls are ignored
-        let currentUser = null;       // Firebase user object
-        let app = null;              // Firebase app instance
-        let db = null;               // Firestore instance
-        let syncTimeout = null;      // debounce for cloud sync
+        let voiceSession       = 0;
+        let currentUser = null;
+        let app = null;
+        let db = null;
+        let syncTimeout = null;
+        let _lastUndoCallback = null;
 
         // ─── Init (deferred chunks to avoid long tasks) ──────────────────────────────
         if (isLightMode) {
@@ -566,6 +567,23 @@
 
             // ── Global keys ───────────────────────────────────────────────────────
             document.addEventListener('keydown', (e) => {
+                // Esc → undo last action (highest priority)
+                if (e.key === 'Escape') {
+                    if (_lastUndoCallback) {
+                        e.preventDefault();
+                        var _cb = _lastUndoCallback;
+                        _lastUndoCallback = null;
+                        _cb();
+                        return;
+                    }
+                    // Close shortcuts overlay if open
+                    var _so = document.getElementById('shortcuts-overlay');
+                    if (_so && _so.classList.contains('visible')) {
+                        closeShortcuts();
+                        return;
+                    }
+                }
+
                 const tag = e.target.tagName;
                 if (tag === 'TEXTAREA' || tag === 'SELECT') return;
                 if (tag === 'INPUT' && e.target !== input) return;
@@ -1058,6 +1076,7 @@
 
         // ─── Toast ────────────────────────────────────────────────────────────────
         function showToast(message, undoCallback) {
+            _lastUndoCallback = undoCallback || null;
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = 'toast';
@@ -1070,6 +1089,7 @@
             undoBtn.textContent = 'Undo';
             undoBtn.onclick = () => {
                 toast.remove();
+                _lastUndoCallback = null;
                 if (undoCallback) undoCallback();
             };
 
@@ -1077,7 +1097,12 @@
             toast.appendChild(undoBtn);
             container.appendChild(toast);
 
-            setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3000);
+            setTimeout(function() {
+                if (toast.parentNode) {
+                    toast.remove();
+                    _lastUndoCallback = null;
+                }
+            }, 3000);
         }
 
         // ─── Daily summary ────────────────────────────────────────────────────────
@@ -1420,42 +1445,81 @@
             let dragStarted = false;
             let startX = 0, startY = 0;
 
-            card.addEventListener('touchstart', (e) => {
-                // Don't hijack taps on buttons / badges
+            card.addEventListener('touchstart', function(e) {
                 if (e.target.closest('button, .priority-badge, input')) return;
-                const t = e.touches[0];
+                var t = e.touches[0];
                 startX = t.clientX; startY = t.clientY;
                 dragStarted = false;
-                pressTimer = setTimeout(() => {
+                pressTimer = setTimeout(function() {
                     dragStarted = true;
                     _startTouchDrag(card, taskId, column, t.clientX, t.clientY);
                 }, 400);
             }, { passive: true });
 
-            card.addEventListener('touchmove', (e) => {
-                if (!dragStarted && pressTimer) {
-                    // Cancel long-press if finger moved more than 8px (it's a scroll)
-                    const t = e.touches[0];
-                    if (Math.abs(t.clientX - startX) > 8 || Math.abs(t.clientY - startY) > 8) {
-                        clearTimeout(pressTimer); pressTimer = null;
+            card.addEventListener('touchmove', function(e) {
+                var t = e.touches[0];
+                var dx = t.clientX - startX;
+                var dy = t.clientY - startY;
+
+                if (!dragStarted) {
+                    // Swipe visual feedback (only on horizontal movement)
+                    if (Math.abs(dx) > 20 && Math.abs(dy) < 30) {
+                        card.style.transform = 'translateX(' + (dx * 0.4) + 'px)';
+                        card.style.opacity = Math.max(0.4, 1 - Math.abs(dx) / 300);
+                        card.classList.toggle('swiping-right', dx > 0);
+                        card.classList.toggle('swiping-left', dx < 0);
                     }
+                    // Cancel long-press on vertical movement (scroll)
+                    if (pressTimer && Math.abs(dy) > 8) {
+                        clearTimeout(pressTimer); pressTimer = null;
+                        card.style.transform = '';
+                        card.style.opacity = '';
+                        card.classList.remove('swiping-left', 'swiping-right');
+                    }
+                    return;
                 }
-                if (!dragStarted || !_touchDrag) return;
-                e.preventDefault();
-                _moveTouchDrag(e.touches[0].clientX, e.touches[0].clientY);
+                if (_touchDrag) {
+                    e.preventDefault();
+                    _moveTouchDrag(t.clientX, t.clientY);
+                }
             }, { passive: false });
 
-            card.addEventListener('touchend', (e) => {
+            card.addEventListener('touchend', function(e) {
                 clearTimeout(pressTimer); pressTimer = null;
-                if (!dragStarted || !_touchDrag) return;
-                e.preventDefault();
-                const t = e.changedTouches[0];
-                _endTouchDrag(t.clientX, t.clientY);
-                dragStarted = false;
+                card.style.transform = '';
+                card.style.opacity = '';
+                card.classList.remove('swiping-left', 'swiping-right');
+
+                if (!dragStarted) {
+                    var t = e.changedTouches[0];
+                    var dx = t.clientX - startX;
+                    var dy = t.clientY - startY;
+                    if (Math.abs(dx) > 60 && Math.abs(dy) < 30) {
+                        e.preventDefault();
+                        if (dx > 0) {
+                            if (column === 'working') moveTaskWithUndo(column, 'todo', taskId);
+                            else if (column === 'done') moveTaskWithUndo(column, 'working', taskId);
+                        } else {
+                            if (column === 'todo') moveTaskWithUndo(column, 'working', taskId);
+                            else if (column === 'working') moveTaskWithUndo(column, 'done', taskId);
+                        }
+                        return;
+                    }
+                    return;
+                }
+                if (_touchDrag) {
+                    e.preventDefault();
+                    const t = e.changedTouches[0];
+                    _endTouchDrag(t.clientX, t.clientY);
+                    dragStarted = false;
+                }
             }, { passive: false });
 
-            card.addEventListener('touchcancel', () => {
+            card.addEventListener('touchcancel', function() {
                 clearTimeout(pressTimer); pressTimer = null;
+                card.style.transform = '';
+                card.style.opacity = '';
+                card.classList.remove('swiping-left', 'swiping-right');
                 if (_touchDrag) _cancelTouchDrag();
                 dragStarted = false;
             }, { passive: true });

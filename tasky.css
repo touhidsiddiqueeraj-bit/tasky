@@ -2439,6 +2439,80 @@ body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
             color: var(--accent, #8B5CF6);
         }
 
+        /* ─── Swipe visual feedback on mobile ────────────────────────────── */
+        .task-card.swiping-left {
+            background: linear-gradient(to left, rgba(16,185,129,0.12), transparent 70%);
+            border-color: rgba(16,185,129,0.25);
+        }
+        .task-card.swiping-right {
+            background: linear-gradient(to right, rgba(139,92,246,0.12), transparent 70%);
+            border-color: rgba(139,92,246,0.25);
+        }
+
+        /* ─── Keyboard shortcuts modal ────────────────────────────────────── */
+        .shortcuts-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            display: none; align-items: center; justify-content: center;
+            background: rgba(6,5,10,0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .shortcuts-overlay.visible { display: flex; }
+        .shortcuts-overlay.visible { animation: ob-fade-in 0.25s ease; }
+        .shortcuts-card {
+            background: rgba(20,20,40,0.92);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 20px;
+            padding: 32px;
+            max-width: 460px;
+            width: 90vw;
+            position: relative;
+            box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+        }
+        .shortcuts-card h3 {
+            font-size: 20px; font-weight: 700;
+            color: #ede9fe; margin: 0 0 20px;
+        }
+        .shortcuts-close {
+            position: absolute; top: 12px; right: 14px;
+            background: none; border: none; color: rgba(255,255,255,0.35);
+            font-size: 22px; cursor: pointer; padding: 4px;
+        }
+        .shortcuts-close:hover { color: rgba(255,255,255,0.7); }
+        .shortcuts-grid {
+            display: flex; flex-direction: column; gap: 14px;
+        }
+        .shortcuts-grid > div {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 14px; color: rgba(255,255,255,0.8);
+        }
+        .shortcuts-grid kbd {
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.13);
+            border-radius: 5px;
+            padding: 2px 8px;
+            font-size: 12px;
+            font-family: inherit;
+            font-weight: 600;
+            color: #c4b5fd;
+            line-height: 1.6;
+        }
+        .shortcuts-grid span { margin-left: auto; color: rgba(255,255,255,0.55); font-size: 13px; }
+        body.light-mode .shortcuts-card {
+            background: rgba(245,240,255,0.95);
+            border-color: rgba(0,0,0,0.08);
+        }
+        body.light-mode .shortcuts-card h3 { color: #1a1040; }
+        body.light-mode .shortcuts-grid > div { color: rgba(0,0,0,0.8); }
+        body.light-mode .shortcuts-grid kbd {
+            background: rgba(0,0,0,0.05);
+            border-color: rgba(0,0,0,0.12);
+            color: #6d4ddb;
+        }
+        body.light-mode .shortcuts-grid span { color: rgba(0,0,0,0.4); }
+
         @media (max-width: 768px) {
             #workspace-switcher {
                 padding: 6px 10px 4px;
