@@ -44,6 +44,7 @@ tasky/
 - **Task selector** — type a task number to find and select it instantly
 - **Mobile FAB** — floating Add + mic buttons on small screens
 - **No install** — everything in localStorage, works offline
+- **Local encryption** — all task data encrypted at rest with AES-256-GCM + PBKDF2 passphrase; optional, toggled from Settings
 
 ## Settings Panel
 
@@ -64,6 +65,7 @@ Open **Tasky ▼ → Settings** (⚙️) to customise the app:
 - **Due Date Notifications** — enable browser push notifications
 - **Export Tasks as CSV** — downloads all tasks with number, text, status, priority, due date, and creation date
 - **How to Use** — reopens the onboarding walkthrough
+- **Encryption** — set a passphrase to encrypt all task data in `localStorage` at rest. AES-256-GCM with PBKDF2 key derivation (100k iterations, SHA-256). Unlock with the same passphrase on return. Change or disable at any time. **If you forget your passphrase, data cannot be recovered.**
 - **Reset All Data** — deletes all tasks and resets everything (requires confirmation)
 
 All settings are saved to `localStorage` and restored on reload.
@@ -153,7 +155,11 @@ Sign in with Google from **Tasky ▼** to sync your tasks across devices. Data i
 
 ## Data & Privacy
 
-All data is stored in your browser's `localStorage` and optionally synced to Firebase Firestore when signed in. Nothing is sent to any other server. Clearing site data will erase your tasks — export to CSV first if you need a backup.
+All data is stored in your browser's `localStorage` and optionally synced to Firebase Firestore when signed in. Nothing is sent to any other server.
+
+**Encryption**: When enabled, all workspace data (tasks, counters, workspace names, collaboration codes) are encrypted at rest using AES-256-GCM with a key derived from your passphrase via PBKDF2 (100k iterations, SHA-256). The encrypted blob is stored under the `_enc_data` key. Preferences (theme, opacity, font, accent) remain plaintext. Encryption can be enabled, changed, or disabled from **Settings → Encryption**. If you forget your passphrase, your data cannot be recovered — there is no backdoor.
+
+Clearing site data will erase your tasks — export to CSV first if you need a backup.
 
 ## Browser Support
 

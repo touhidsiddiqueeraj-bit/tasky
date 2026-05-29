@@ -40,24 +40,45 @@
         // ─── Workspace helpers ─────────────────────────────────────────────────────
         function saveWorkspacesMeta() {
             var meta = workspaces.map(function(w) { return { id: w.id, name: w.name, collabCode: w.collabCode }; });
-            localStorage.setItem('workspaces_meta', JSON.stringify(meta));
+            if (_encKey && _allWorkspaceData) {
+                _allWorkspaceData.workspaces = meta;
+            } else {
+                localStorage.setItem('workspaces_meta', JSON.stringify(meta));
+            }
         }
         function saveCurrentWorkspaceData() {
-            localStorage.setItem('ws_tasks_' + activeWorkspaceId, JSON.stringify(tasks));
-            localStorage.setItem('ws_counter_' + activeWorkspaceId, String(taskCounter));
+            if (_encKey && _allWorkspaceData) {
+                _allWorkspaceData['ws_tasks_' + activeWorkspaceId] = JSON.parse(JSON.stringify(tasks));
+                _allWorkspaceData['ws_counter_' + activeWorkspaceId] = taskCounter;
+            } else {
+                localStorage.setItem('ws_tasks_' + activeWorkspaceId, JSON.stringify(tasks));
+                localStorage.setItem('ws_counter_' + activeWorkspaceId, String(taskCounter));
+            }
         }
         function loadWorkspaceData(id) {
-            var saved = localStorage.getItem('ws_tasks_' + id);
-            tasks = saved ? JSON.parse(saved) : { todo: [], working: [], done: [] };
-            var cnt = localStorage.getItem('ws_counter_' + id);
-            taskCounter = cnt ? parseInt(cnt) : 0;
+            if (_encKey && _allWorkspaceData) {
+                var saved = _allWorkspaceData['ws_tasks_' + id];
+                tasks = saved ? JSON.parse(JSON.stringify(saved)) : { todo: [], working: [], done: [] };
+                var cnt = _allWorkspaceData['ws_counter_' + id];
+                taskCounter = cnt !== undefined ? cnt : 0;
+            } else {
+                var saved = localStorage.getItem('ws_tasks_' + id);
+                tasks = saved ? JSON.parse(saved) : { todo: [], working: [], done: [] };
+                var cnt = localStorage.getItem('ws_counter_' + id);
+                taskCounter = cnt ? parseInt(cnt) : 0;
+            }
         }
         function createWorkspace(name, collabCode) {
             var id = nextWorkspaceId++;
             var ws = { id: id, name: name || 'Workspace ' + id, collabCode: collabCode || null };
             workspaces.push(ws);
-            localStorage.setItem('ws_tasks_' + id, JSON.stringify({ todo: [], working: [], done: [] }));
-            localStorage.setItem('ws_counter_' + id, '0');
+            if (_encKey && _allWorkspaceData) {
+                _allWorkspaceData['ws_tasks_' + id] = { todo: [], working: [], done: [] };
+                _allWorkspaceData['ws_counter_' + id] = 0;
+            } else {
+                localStorage.setItem('ws_tasks_' + id, JSON.stringify({ todo: [], working: [], done: [] }));
+                localStorage.setItem('ws_counter_' + id, '0');
+            }
             saveWorkspacesMeta();
             return id;
         }
@@ -66,8 +87,13 @@
             var idx = workspaces.findIndex(function(w) { return w.id === id; });
             if (idx === -1) return;
             workspaces.splice(idx, 1);
-            localStorage.removeItem('ws_tasks_' + id);
-            localStorage.removeItem('ws_counter_' + id);
+            if (_encKey && _allWorkspaceData) {
+                delete _allWorkspaceData['ws_tasks_' + id];
+                delete _allWorkspaceData['ws_counter_' + id];
+            } else {
+                localStorage.removeItem('ws_tasks_' + id);
+                localStorage.removeItem('ws_counter_' + id);
+            }
             saveWorkspacesMeta();
         }
         function switchWorkspace(id) {
@@ -109,8 +135,14 @@
         }
         async function deleteWorkspaceConfirm(id) {
             if (id === 1) return;
-            var t = localStorage.getItem('ws_tasks_' + id);
-            var hasTasks = t && JSON.parse(t) && Object.values(JSON.parse(t)).some(function(arr) { return arr.length > 0; });
+            var hasTasks = false;
+            if (_encKey && _allWorkspaceData) {
+                var wsTasks = _allWorkspaceData['ws_tasks_' + id] || { todo: [], working: [], done: [] };
+                hasTasks = wsTasks.todo.length > 0 || wsTasks.working.length > 0 || wsTasks.done.length > 0;
+            } else {
+                var t = localStorage.getItem('ws_tasks_' + id);
+                hasTasks = t && JSON.parse(t) && Object.values(JSON.parse(t)).some(function(arr) { return arr.length > 0; });
+            }
             if (hasTasks) {
                 if (!await showConfirm('Delete Workspace', 'This workspace has tasks. Delete it and all its data? This cannot be undone.', 'Delete')) return;
             }
@@ -129,6 +161,10 @@
         window.getWorkspaceByCollab = getWorkspaceByCollab;
         window.linkWorkspaceToCollab = linkWorkspaceToCollab;
         window.renderWorkspaceSwitcher = renderWorkspaceSwitcher;
+        window._updateEncIndicator = _updateEncIndicator;
+        window._setupEncryption = _setupEncryption;
+        window._unlockEncryption = _unlockEncryption;
+        window._encryptStoredData = _encryptStoredData;
 
         // Returns the lowest positive integer not already used as a task number.
         // This lets deleted numbers be reused instead of incrementing forever.
@@ -189,79 +225,353 @@
         let syncTimeout = null;
         let _lastUndoCallback = null;
 
-        // ─── Init (deferred chunks to avoid long tasks) ──────────────────────────────
-        if (isLightMode) {
-            document.body.classList.add('light-mode');
-            updateThemeButton();
+        // ─── Encryption state ───────────────────────────────────────────────────────
+        let _encKey = null;
+        let _encSalt = null;
+        let _allWorkspaceData = null;  // { workspaces, ws_tasks_1, ws_counter_1, ... }
+
+        // ─── Encryption utils ───────────────────────────────────────────────────────
+        function _bytesToBase64(bytes) {
+            var binary = '';
+            for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            return btoa(binary);
         }
-        if (customBg) applyCustomBg();
-        initOpacity();
+        function _base64ToBytes(str) {
+            var binary = atob(str);
+            var bytes = new Uint8Array(binary.length);
+            for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes;
+        }
+        async function _deriveKey(passphrase, salt) {
+            var enc = new TextEncoder();
+            var keyMaterial = await crypto.subtle.importKey(
+                'raw', enc.encode(passphrase), 'PBKDF2', false,
+                ['deriveKey']
+            );
+            return crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: salt,
+                    iterations: 100000,
+                    hash: 'SHA-256'
+                },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt', 'decrypt']
+            );
+        }
+        async function _encryptString(plain) {
+            if (!_encKey) return plain;
+            var enc = new TextEncoder();
+            var iv = crypto.getRandomValues(new Uint8Array(12));
+            var ciphertext = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: iv },
+                _encKey,
+                enc.encode(plain)
+            );
+            var combined = new Uint8Array(iv.length + ciphertext.byteLength);
+            combined.set(iv, 0);
+            combined.set(new Uint8Array(ciphertext), iv.length);
+            return 'enc_v1:' + _bytesToBase64(combined);
+        }
+        async function _decryptString(enc) {
+            if (!enc || typeof enc !== 'string' || !enc.startsWith('enc_v1:')) return enc;
+            var raw = _base64ToBytes(enc.slice(7));
+            var iv = raw.slice(0, 12);
+            var data = raw.slice(12);
+            var dec = await crypto.subtle.decrypt(
+                { name: 'AES-GCM', iv: iv },
+                _encKey,
+                data
+            );
+            return new TextDecoder().decode(dec);
+        }
+        async function _verifyEncryptionKey() {
+            var stored = localStorage.getItem('_enc_verify');
+            if (!stored) return false;
+            try {
+                var dec = await _decryptString(stored);
+                return dec === '__tasky_ok__';
+            } catch(_) { return false; }
+        }
+        async function _storeEncryptionVerify() {
+            var enc = await _encryptString('__tasky_ok__');
+            localStorage.setItem('_enc_verify', enc);
+        }
 
-        // Chunk 1 — Firebase + first render (deferred to release main thread)
-        setTimeout(function() {
-            app = firebase.initializeApp({
-                apiKey: "AIzaSyBN8ZJil4vWWJ6XPPGgp20htp8IBxDLL_o",
-                authDomain: "tasky-95785.firebaseapp.com",
-                projectId: "tasky-95785",
-                storageBucket: "tasky-95785.firebasestorage.app",
-                messagingSenderId: "285483279389",
-                appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
-            });
-            db = firebase.firestore(app);
+        // ─── Encryption passphrase modals ──────────────────────────────────────────
+        function _showEncModal(type) {
+            return new Promise(function(resolve) {
+                var overlay = document.getElementById('enc-' + type + '-overlay');
+                if (!overlay) { resolve(''); return; }
+                var input = overlay.querySelector('.enc-pass-input');
+                var confirmInput = overlay.querySelector('.enc-pass-confirm');
+                var errorEl = overlay.querySelector('.enc-error');
+                var submitBtn = overlay.querySelector('.enc-submit-btn');
+                var warningEl = overlay.querySelector('.enc-warning');
+                if (confirmInput) confirmInput.value = '';
+                input.value = '';
+                errorEl.style.display = 'none';
+                overlay.classList.remove('hidden');
+                overlay.classList.add('visible');
+                input.focus();
 
-            renderAllColumns();
-            renderWorkspaceSwitcher();
-            updateDailySummary();
-
-            // Chunk 2 — keyboard, voice, Firebase auth, deferred listeners
-            setTimeout(function() {
-                setupKeyboard();
-                setupDelegatedListeners();
-                setupVoice();
-                setupFirebase();
-
-                var bgInput = document.getElementById('bg-upload-input');
-                if (bgInput) {
-                    bgInput.addEventListener('change', function(e) {
-                        var file = e.target.files[0];
-                        if (!file) return;
-                        var reader = new FileReader();
-                        reader.onload = function(ev) {
-                            customBg = ev.target.result;
-                            try {
-                                localStorage.setItem('customBg', customBg);
-                                applyCustomBg();
-                                showToast('Background set', () => {});
-                            } catch(_) {
-                                showToast('Image too large to save', () => {});
-                                customBg = null;
-                            }
-                        };
-                        reader.readAsDataURL(file);
-                        this.value = '';
-                    });
+                function cleanup() {
+                    overlay.classList.remove('visible');
+                    overlay.classList.add('hidden');
+                    setTimeout(function() { overlay.classList.remove('hidden'); }, 270);
                 }
 
-                var opacitySlider = document.getElementById('card-opacity-slider');
-                if (opacitySlider) {
-                    opacitySlider.addEventListener('input', function() {
-                        setCardOpacity(parseInt(this.value));
-                    });
-                }
-
-                document.documentElement.classList.add('ready');
-                // Wait one paint frame so all transient UIs settle,
-                // then fade splash out smoothly
-                requestAnimationFrame(function() {
-                    var ls = document.getElementById('loading-splash');
-                    if (ls) {
-                        ls.style.transition = 'opacity 0.2s ease';
-                        ls.style.opacity = '0';
-                        setTimeout(function() { ls.remove(); }, 250);
+                submitBtn.onclick = function() {
+                    var val = input.value;
+                    if (type === 'setup') {
+                        if (val.length < 4) {
+                            errorEl.textContent = 'Passphrase must be at least 4 characters';
+                            errorEl.style.display = 'block';
+                            return;
+                        }
+                        if (val !== confirmInput.value) {
+                            errorEl.textContent = 'Passphrases do not match';
+                            errorEl.style.display = 'block';
+                            return;
+                        }
+                    } else {
+                        if (!val) {
+                            errorEl.textContent = 'Enter your passphrase';
+                            errorEl.style.display = 'block';
+                            return;
+                        }
                     }
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = type === 'setup' ? 'Setting up…' : 'Unlocking…';
+                    // On Enter we will resolve; actual key derivation happens in boot()
+                    resolve(val);
+                    cleanup();
+                };
+
+                input.onkeydown = function(e) {
+                    if (e.key === 'Enter') submitBtn.click();
+                };
+                if (confirmInput) {
+                    confirmInput.onkeydown = function(e) {
+                        if (e.key === 'Enter') submitBtn.click();
+                    };
+                }
+            });
+        }
+
+        async function _setupEncryption(passphrase) {
+            _encSalt = crypto.getRandomValues(new Uint8Array(16));
+            localStorage.setItem('_encSalt', _bytesToBase64(_encSalt));
+            _encKey = await _deriveKey(passphrase, _encSalt);
+            await _storeEncryptionVerify();
+            // Build initial allWorkspaceData from existing plaintext keys
+            _allWorkspaceData = {
+                workspaces: workspaces.map(function(w) { return { id: w.id, name: w.name, collabCode: w.collabCode }; })
+            };
+            workspaces.forEach(function(w) {
+                var t = localStorage.getItem('ws_tasks_' + w.id);
+                var c = localStorage.getItem('ws_counter_' + w.id);
+                if (t) _allWorkspaceData['ws_tasks_' + w.id] = JSON.parse(t);
+                if (c !== null) _allWorkspaceData['ws_counter_' + w.id] = parseInt(c) || 0;
+                // Remove plaintext keys
+                localStorage.removeItem('ws_tasks_' + w.id);
+                localStorage.removeItem('ws_counter_' + w.id);
+            });
+            localStorage.removeItem('workspaces_meta');
+            await _encryptStoredData();
+            _updateEncIndicator();
+        }
+
+        async function _unlockEncryption(passphrase) {
+            var storedSalt = localStorage.getItem('_encSalt');
+            if (!storedSalt) return false;
+            _encSalt = _base64ToBytes(storedSalt);
+            _encKey = await _deriveKey(passphrase, _encSalt);
+            var ok = await _verifyEncryptionKey();
+            if (!ok) {
+                _encKey = null;
+                _encSalt = null;
+                return false;
+            }
+            // Load encrypted data
+            var encData = localStorage.getItem('_enc_data');
+            if (encData) {
+                var plain = await _decryptString(encData);
+                _allWorkspaceData = JSON.parse(plain);
+            } else {
+                _allWorkspaceData = {
+                    workspaces: workspaces.map(function(w) { return { id: w.id, name: w.name, collabCode: w.collabCode }; })
+                };
+            }
+            _updateEncIndicator();
+            return true;
+        }
+
+        function _encryptStoredData() {
+            if (!_encKey || !_allWorkspaceData) return Promise.resolve();
+            _allWorkspaceData.workspaces = workspaces.map(function(w) { return { id: w.id, name: w.name, collabCode: w.collabCode }; });
+            var plain = JSON.stringify(_allWorkspaceData);
+            return _encryptString(plain).then(function(enc) {
+                localStorage.setItem('_enc_data', enc);
+            }).catch(function(err) {
+                console.warn('Encryption failed:', err);
+            });
+        }
+
+        function _updateEncIndicator() {
+            var el = document.getElementById('enc-indicator');
+            if (!el) return;
+            if (_encKey) {
+                el.textContent = '🔒';
+                el.className = 'enc-indicator active';
+                el.title = 'Encryption: Active';
+            } else {
+                el.textContent = '🔓';
+                el.className = 'enc-indicator';
+                el.title = 'Encryption: Off';
+            }
+        }
+
+        // ─── Boot (async) ──────────────────────────────────────────────────────────
+        (async function boot() {
+            // Sync init before any async
+            if (isLightMode) {
+                document.body.classList.add('light-mode');
+                updateThemeButton();
+            }
+            if (customBg) applyCustomBg();
+            initOpacity();
+
+            // Populate workspaces/tasks from either encrypted or plaintext storage
+            var storedSalt = localStorage.getItem('_encSalt');
+            if (storedSalt) {
+                // Encryption is active — unlock required
+                var unlocked = false;
+                while (!unlocked) {
+                    var passphrase = await _showEncModal('unlock');
+                    if (!passphrase) break;
+                    unlocked = await _unlockEncryption(passphrase);
+                    if (!unlocked) {
+                        var errEl = document.querySelector('#enc-unlock-overlay .enc-error');
+                        if (errEl) {
+                            errEl.textContent = 'Wrong passphrase';
+                            errEl.style.display = 'block';
+                        }
+                    }
+                }
+                if (_allWorkspaceData) {
+                    workspaces = _allWorkspaceData.workspaces || [];
+                    activeWorkspaceId = parseInt(localStorage.getItem('ws_active')) || (workspaces[0] ? workspaces[0].id : 1);
+                    nextWorkspaceId = workspaces.reduce(function(max, w) { return Math.max(max, w.id); }, 0) + 1;
+                    var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
+                    if (ws) {
+                        var saved = _allWorkspaceData['ws_tasks_' + ws.id];
+                        tasks = saved ? JSON.parse(JSON.stringify(saved)) : { todo: [], working: [], done: [] };
+                        var cnt = _allWorkspaceData['ws_counter_' + ws.id];
+                        taskCounter = cnt !== undefined ? cnt : 0;
+                    }
+                }
+            } else {
+                // No encryption — original sync initWorkspaces
+                var meta = localStorage.getItem('workspaces_meta');
+                if (meta) {
+                    workspaces = JSON.parse(meta);
+                    activeWorkspaceId = parseInt(localStorage.getItem('ws_active')) || (workspaces[0] ? workspaces[0].id : 1);
+                    nextWorkspaceId = workspaces.reduce(function(max, w) { return Math.max(max, w.id); }, 0) + 1;
+                } else {
+                    var oldTasks = JSON.parse(localStorage.getItem('tasks'));
+                    var oldCounter = parseInt(localStorage.getItem('taskCounter')) || 0;
+                    var oldCode = localStorage.getItem('tasky_groupCode') || null;
+                    tasks = oldTasks || { todo: [], working: [], done: [] };
+                    taskCounter = oldCounter;
+                    workspaces = [{ id: 1, name: 'Personal', collabCode: oldCode }];
+                    activeWorkspaceId = 1;
+                    nextWorkspaceId = 2;
+                    localStorage.setItem('ws_tasks_1', JSON.stringify(tasks));
+                    localStorage.setItem('ws_counter_1', String(taskCounter));
+                    localStorage.setItem('workspaces_meta', JSON.stringify(workspaces));
+                    var oldKeys = ['tasks', 'taskCounter', 'tasks_local', 'taskCounter_local', 'tasky_groupCode'];
+                    oldKeys.forEach(function(k) { localStorage.removeItem(k); });
+                }
+                var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
+                if (ws) {
+                    var saved = localStorage.getItem('ws_tasks_' + ws.id);
+                    if (saved) tasks = JSON.parse(saved);
+                    var cnt = localStorage.getItem('ws_counter_' + ws.id);
+                    if (cnt) taskCounter = parseInt(cnt);
+                }
+            }
+
+            // Expose encryption state for settings
+            window._encKey = _encKey;
+            window._encSalt = _encSalt;
+
+            // Chunk 1 — Firebase + first render (deferred to release main thread)
+            setTimeout(function() {
+                app = firebase.initializeApp({
+                    apiKey: "AIzaSyBN8ZJil4vWWJ6XPPGgp20htp8IBxDLL_o",
+                    authDomain: "tasky-95785.firebaseapp.com",
+                    projectId: "tasky-95785",
+                    storageBucket: "tasky-95785.firebasestorage.app",
+                    messagingSenderId: "285483279389",
+                    appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
                 });
+                db = firebase.firestore(app);
+
+                renderAllColumns();
+                renderWorkspaceSwitcher();
+                updateDailySummary();
+
+                // Chunk 2 — keyboard, voice, Firebase auth, deferred listeners
+                setTimeout(function() {
+                    setupKeyboard();
+                    setupDelegatedListeners();
+                    setupVoice();
+                    setupFirebase();
+
+                    var bgInput = document.getElementById('bg-upload-input');
+                    if (bgInput) {
+                        bgInput.addEventListener('change', function(e) {
+                            var file = e.target.files[0];
+                            if (!file) return;
+                            var reader = new FileReader();
+                            reader.onload = function(ev) {
+                                customBg = ev.target.result;
+                                try {
+                                    localStorage.setItem('customBg', customBg);
+                                    applyCustomBg();
+                                    showToast('Background set', () => {});
+                                } catch(_) {
+                                    showToast('Image too large to save', () => {});
+                                    customBg = null;
+                                }
+                            };
+                            reader.readAsDataURL(file);
+                            this.value = '';
+                        });
+                    }
+
+                    var opacitySlider = document.getElementById('card-opacity-slider');
+                    if (opacitySlider) {
+                        opacitySlider.addEventListener('input', function() {
+                            setCardOpacity(parseInt(this.value));
+                        });
+                    }
+
+                    document.documentElement.classList.add('ready');
+                    requestAnimationFrame(function() {
+                        var ls = document.getElementById('loading-splash');
+                        if (ls) {
+                            ls.style.transition = 'opacity 0.2s ease';
+                            ls.style.opacity = '0';
+                            setTimeout(function() { ls.remove(); }, 250);
+                        }
+                    });
+                }, 0);
             }, 0);
-        }, 0);
+        })();
 
         // ─── Firebase Auth ─────────────────────────────────────────────────────────
         function setupFirebase() {
@@ -311,20 +621,19 @@
         }
 
         function signOut() {
-            // Cancel any in-flight sync so the Google user's tasks don't get
-            // written to Firestore one last time after state is cleared.
             if (syncTimeout) { clearTimeout(syncTimeout); syncTimeout = null; }
 
-            // Wipe local board state BEFORE signing out. The auth state change
-            // will trigger syncFromCloud on the new anon account; if tasks are
-            // still in localStorage at that point, pushToCloud writes them into
-            // the anon doc and they bleed back on the next Google login.
             tasks = { todo: [], working: [], done: [] };
             taskCounter = 0;
-            localStorage.setItem('tasks',             JSON.stringify(tasks));
-            localStorage.setItem('taskCounter',       '0');
-            localStorage.setItem('tasks_local',       JSON.stringify(tasks));
-            localStorage.setItem('taskCounter_local', '0');
+            if (_encKey && _allWorkspaceData) {
+                _allWorkspaceData['ws_tasks_' + activeWorkspaceId] = { todo: [], working: [], done: [] };
+                _allWorkspaceData['ws_counter_' + activeWorkspaceId] = 0;
+            } else {
+                localStorage.setItem('tasks',             JSON.stringify(tasks));
+                localStorage.setItem('taskCounter',       '0');
+                localStorage.setItem('tasks_local',       JSON.stringify(tasks));
+                localStorage.setItem('taskCounter_local', '0');
+            }
             renderAllColumns();
 
             firebase.auth(app).signOut().catch(() => {});
@@ -374,11 +683,13 @@
             if (!el) return;
             el.classList.remove('synced', 'syncing', 'offline', 'visible');
             if (!currentUser) return;
-            // For anonymous users, only show if explicitly set (updateAuthUI handles anon label)
             if (currentUser.isAnonymous && state !== 'syncing') return;
             el.classList.add('visible', state);
-            const labels = { synced: '☁️ Synced', syncing: '☁️ Syncing…', offline: '☁️ Offline' };
-            el.textContent = labels[state] || '';
+            var label = '';
+            if (state === 'synced') label = _encKey ? '🔒 Synced' : '☁️ Synced';
+            else if (state === 'syncing') label = _encKey ? '🔒 Syncing…' : '☁️ Syncing…';
+            else if (state === 'offline') label = _encKey ? '🔒 Offline' : '☁️ Offline';
+            el.textContent = label;
         }
 
         function getUserDocRef() {
@@ -397,18 +708,46 @@
                     workspaces: workspaces.map(function(w) { return { id: w.id, name: w.name, collabCode: w.collabCode }; }),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
-                workspaces.forEach(function(w) {
-                    var t = localStorage.getItem('ws_tasks_' + w.id);
-                    var c = localStorage.getItem('ws_counter_' + w.id);
-                    if (t) cloudData['ws_tasks_' + w.id] = JSON.parse(t);
-                    if (c) cloudData['ws_counter_' + w.id] = parseInt(c);
-                });
+                if (_encKey && _allWorkspaceData) {
+                    workspaces.forEach(function(w) {
+                        var t = _allWorkspaceData['ws_tasks_' + w.id];
+                        var c = _allWorkspaceData['ws_counter_' + w.id];
+                        if (t) cloudData['ws_tasks_' + w.id] = t;
+                        if (c !== undefined) cloudData['ws_counter_' + w.id] = c;
+                    });
+                } else {
+                    workspaces.forEach(function(w) {
+                        var t = localStorage.getItem('ws_tasks_' + w.id);
+                        var c = localStorage.getItem('ws_counter_' + w.id);
+                        if (t) cloudData['ws_tasks_' + w.id] = JSON.parse(t);
+                        if (c) cloudData['ws_counter_' + w.id] = parseInt(c);
+                    });
+                }
                 docRef.set(cloudData, { merge: true })
                     .then(function() { setSyncStatus('synced'); })
                     .catch(function() { setSyncStatus('offline'); });
             }, 500);
         }
 
+        function _writeLocalWorkspaceData(id, tasksData, counter) {
+            if (_encKey && _allWorkspaceData) {
+                _allWorkspaceData['ws_tasks_' + id] = JSON.parse(JSON.stringify(tasksData));
+                _allWorkspaceData['ws_counter_' + id] = counter;
+            } else {
+                localStorage.setItem('ws_tasks_' + id, JSON.stringify(tasksData));
+                localStorage.setItem('ws_counter_' + id, String(counter));
+            }
+        }
+        function _readLocalWorkspaceData(id) {
+            if (_encKey && _allWorkspaceData) {
+                var t = _allWorkspaceData['ws_tasks_' + id];
+                var c = _allWorkspaceData['ws_counter_' + id];
+                return { tasks: t ? JSON.parse(JSON.stringify(t)) : null, counter: c !== undefined ? c : null };
+            }
+            var t = localStorage.getItem('ws_tasks_' + id);
+            var c = localStorage.getItem('ws_counter_' + id);
+            return { tasks: t ? JSON.parse(t) : null, counter: c !== undefined ? parseInt(c) : null };
+        }
         function syncFromCloud(replace) {
             if (!currentUser) return;
             const docRef = getUserDocRef();
@@ -430,6 +769,7 @@
                     updateDailySummary();
                     renderWorkspaceSwitcher();
                     setSyncStatus('synced');
+                    if (_encKey) _encryptStoredData();
                     return;
                 }
                 var cloudData = snap.data();
@@ -441,8 +781,7 @@
                         workspaces.forEach(function(w) {
                             var t = cloudData['ws_tasks_' + w.id];
                             var c = cloudData['ws_counter_' + w.id];
-                            if (t) localStorage.setItem('ws_tasks_' + w.id, JSON.stringify(t));
-                            if (c !== undefined) localStorage.setItem('ws_counter_' + w.id, String(c));
+                            _writeLocalWorkspaceData(w.id, t || { todo: [], working: [], done: [] }, c !== undefined ? c : 0);
                         });
                         saveWorkspacesMeta();
                     }
@@ -459,19 +798,17 @@
                                 var cTasks = cloudData['ws_tasks_' + cw.id];
                                 var cCounter = cloudData['ws_counter_' + cw.id];
                                 if (cTasks) {
-                                    var lTasks = localStorage.getItem('ws_tasks_' + cw.id);
-                                    var localT = lTasks ? JSON.parse(lTasks) : { todo: [], working: [], done: [] };
-                                    var localC = parseInt(localStorage.getItem('ws_counter_' + cw.id)) || 0;
+                                    var local = _readLocalWorkspaceData(cw.id);
+                                    var localT = local.tasks || { todo: [], working: [], done: [] };
+                                    var localC = local.counter !== null ? local.counter : 0;
                                     var merged = mergeTasks(localT, cTasks, localC, cCounter || 0);
-                                    localStorage.setItem('ws_tasks_' + cw.id, JSON.stringify(merged.tasks));
-                                    localStorage.setItem('ws_counter_' + cw.id, String(merged.taskCounter));
+                                    _writeLocalWorkspaceData(cw.id, merged.tasks, merged.taskCounter);
                                 }
                             } else {
                                 workspaces.push({ id: cw.id, name: cw.name, collabCode: cw.collabCode });
                                 var ct = cloudData['ws_tasks_' + cw.id];
                                 var cc = cloudData['ws_counter_' + cw.id];
-                                if (ct) localStorage.setItem('ws_tasks_' + cw.id, JSON.stringify(ct));
-                                localStorage.setItem('ws_counter_' + cw.id, String(cc || 0));
+                                _writeLocalWorkspaceData(cw.id, ct || { todo: [], working: [], done: [] }, cc || 0);
                             }
                         });
                         nextWorkspaceId = workspaces.reduce(function(max, w) { return Math.max(max, w.id); }, 0) + 1;
@@ -483,6 +820,7 @@
                 updateDailySummary();
                 renderWorkspaceSwitcher();
                 setSyncStatus('synced');
+                if (_encKey) _encryptStoredData();
             }).catch(() => setSyncStatus('offline'));
         }
 
@@ -1070,6 +1408,7 @@
             _saveAllTimer = requestAnimationFrame(function() {
                 _saveAllTimer = null;
                 saveCurrentWorkspaceData();
+                if (_encKey) _encryptStoredData();
                 pushToCloud();
             });
         }
@@ -1126,9 +1465,15 @@
             var html = '<span class="ws-bar-label">Workspaces</span>';
             workspaces.forEach(function(w) {
                 var isActive = w.id === activeWorkspaceId;
-                var t = localStorage.getItem('ws_tasks_' + w.id);
-                var wsTasks = t ? JSON.parse(t) : { todo: [], working: [], done: [] };
-                var total = wsTasks.todo.length + wsTasks.working.length + wsTasks.done.length;
+                var total = 0;
+                if (_encKey && _allWorkspaceData) {
+                    var wsTasks = _allWorkspaceData['ws_tasks_' + w.id] || { todo: [], working: [], done: [] };
+                    total = wsTasks.todo.length + wsTasks.working.length + wsTasks.done.length;
+                } else {
+                    var t = localStorage.getItem('ws_tasks_' + w.id);
+                    var wsTasks = t ? JSON.parse(t) : { todo: [], working: [], done: [] };
+                    total = wsTasks.todo.length + wsTasks.working.length + wsTasks.done.length;
+                }
                 html += '<div class="ws-pill' + (isActive ? ' ws-active' : '') + '" onclick="switchWorkspace(' + w.id + ')">';
                 if (w.collabCode) html += '<span class="ws-pill-collab" title="Collaboration: ' + w.collabCode + '">👥</span>';
                 html += '<span class="ws-pill-name">' + escapeHtml(w.name) + '</span>';
@@ -1765,10 +2110,17 @@
         // ─── Reset ────────────────────────────────────────────────────────────────
         async function resetAllData() {
             if (!await showConfirm('Reset Everything', 'Delete all tasks and reset Tasky? This cannot be undone.')) return;
-            workspaces.forEach(function(w) {
-                localStorage.setItem('ws_tasks_' + w.id, JSON.stringify({ todo: [], working: [], done: [] }));
-                localStorage.setItem('ws_counter_' + w.id, '0');
-            });
+            if (_encKey && _allWorkspaceData) {
+                workspaces.forEach(function(w) {
+                    _allWorkspaceData['ws_tasks_' + w.id] = { todo: [], working: [], done: [] };
+                    _allWorkspaceData['ws_counter_' + w.id] = 0;
+                });
+            } else {
+                workspaces.forEach(function(w) {
+                    localStorage.setItem('ws_tasks_' + w.id, JSON.stringify({ todo: [], working: [], done: [] }));
+                    localStorage.setItem('ws_counter_' + w.id, '0');
+                });
+            }
             tasks = { todo: [], working: [], done: [] };
             taskCounter = 0;
             if (currentUser) {

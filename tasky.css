@@ -1157,6 +1157,22 @@
         .sync-status.syncing { color: #F59E0B; }
         .sync-status.offline { color: #ef4444; }
 
+        .enc-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: calc(50% + 72px);
+            transform: translateX(-50%);
+            font-size: 11px;
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0.6;
+            transition: opacity .3s;
+        }
+        .enc-indicator.active {
+            opacity: 1;
+            text-shadow: 0 0 8px rgba(139,92,246,0.4);
+        }
+
         /* Shortcuts hint bar */
         .shortcuts-hint {
             position: fixed;

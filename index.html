@@ -1014,6 +1014,7 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
 </div>
 
 <div class="sync-status" id="sync-status"></div>
+<span class="enc-indicator" id="enc-indicator" title="Encryption: Off">🔓</span>
 
 <div class="shortcuts-hint">
   <span>Click task then: <kbd>←</kbd><kbd>→</kbd> move</span>
@@ -1785,6 +1786,14 @@ function showConfirm(title, body, okLabel = 'Delete') {
         <button class="st-btn" onclick="exportToCSV()">Export</button>
       </div>
 
+      <div class="st-row" id="st-enc-row">
+        <div class="st-row-label">
+          <span class="st-row-icon" id="st-enc-icon">🔓</span>
+          <span id="st-enc-label">Local Encryption: <strong>Off</strong></span>
+        </div>
+        <button class="st-btn" id="st-enc-btn" onclick="openEncryptionModal()">Set Passphrase</button>
+      </div>
+
       <div class="st-row">
         <div class="st-row-label">
           <span class="st-row-icon">❓</span>
@@ -2056,6 +2065,19 @@ function _stSyncUI() {
     const granted = Notification && Notification.permission === 'granted';
     const nb = document.getElementById('st-notif-btn');
     if (nb) { nb.textContent = granted ? 'Enabled ✓' : 'Enable'; nb.disabled = granted; }
+
+    // Encryption status
+    _stSyncEncryptionUI();
+}
+
+function _stSyncEncryptionUI() {
+    const hasEnc = !!localStorage.getItem('_encSalt');
+    const icon = document.getElementById('st-enc-icon');
+    const label = document.getElementById('st-enc-label');
+    const btn = document.getElementById('st-enc-btn');
+    if (icon) icon.textContent = hasEnc ? '🔒' : '🔓';
+    if (label) label.innerHTML = 'Local Encryption: <strong>' + (hasEnc ? 'Active' : 'Off') + '</strong>';
+    if (btn) btn.textContent = hasEnc ? 'Change Passphrase' : 'Set Passphrase';
 }
 
 // Theme
@@ -2178,6 +2200,157 @@ function showShortcuts() {
 function closeShortcuts() {
     document.getElementById('shortcuts-overlay').classList.remove('visible');
 }
+
+/* ── Encryption modals ── */
+function openEncryptionModal() {
+    closeSettings();
+    var hasEnc = !!localStorage.getItem('_encSalt');
+    var overlay = document.getElementById(hasEnc ? 'enc-change-overlay' : 'enc-setup-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('hidden');
+    overlay.classList.add('visible');
+    overlay.querySelectorAll('input').forEach(function(i) { i.value = ''; });
+    var err = overlay.querySelector('.enc-error, #enc-change-error');
+    if (err) err.style.display = 'none';
+    // Focus first input
+    var firstInput = overlay.querySelector('input');
+    if (firstInput) setTimeout(function() { firstInput.focus(); }, 100);
+}
+
+async function submitEncryptionSetup() {
+    var overlay = document.getElementById('enc-setup-overlay');
+    var input = overlay ? overlay.querySelector('.enc-pass-input') : null;
+    var confirmInput = overlay ? overlay.querySelector('.enc-pass-confirm') : null;
+    var errEl = overlay ? overlay.querySelector('.enc-error') : null;
+    if (!input || !confirmInput || !errEl) return;
+
+    var pass = input.value;
+    var confirm = confirmInput.value;
+
+    if (pass.length < 4) { errEl.textContent = 'Passphrase must be at least 4 characters'; errEl.style.display = 'block'; return; }
+    if (pass !== confirm) { errEl.textContent = 'Passphrases do not match'; errEl.style.display = 'block'; return; }
+
+    // Call _setupEncryption from tasky.js
+    if (typeof window._setupEncryption !== 'function') {
+        errEl.textContent = 'Encryption not available yet. Please wait for app to load.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    try {
+        await window._setupEncryption(pass);
+        overlay.classList.remove('visible');
+        overlay.classList.add('hidden');
+        setTimeout(function() { overlay.classList.remove('hidden'); }, 270);
+        _stSyncEncryptionUI();
+        if (typeof showToast === 'function') showToast('🔐 Encryption enabled', function(){});
+    } catch(e) {
+        errEl.textContent = 'Encryption setup failed: ' + e.message;
+        errEl.style.display = 'block';
+    }
+}
+
+function closeEncryptionModal() {
+    var overlay = document.getElementById('enc-change-overlay');
+    if (overlay) {
+        overlay.classList.remove('visible');
+        overlay.classList.add('hidden');
+        setTimeout(function() { overlay.classList.remove('hidden'); }, 270);
+    }
+}
+
+async function submitEncryptionChange() {
+    var currentPass = document.getElementById('enc-change-current').value;
+    var newPass = document.getElementById('enc-change-new').value;
+    var confirmPass = document.getElementById('enc-change-confirm').value;
+    var errEl = document.getElementById('enc-change-error');
+
+    if (!currentPass) { errEl.textContent = 'Enter your current passphrase'; errEl.style.display = 'block'; return; }
+    if (newPass.length < 4) { errEl.textContent = 'New passphrase must be at least 4 characters'; errEl.style.display = 'block'; return; }
+    if (newPass !== confirmPass) { errEl.textContent = 'New passphrases do not match'; errEl.style.display = 'block'; return; }
+
+    var storedSalt = localStorage.getItem('_encSalt');
+    if (!storedSalt) { errEl.textContent = 'No encryption key found'; errEl.style.display = 'block'; return; }
+
+    // Verify current passphrase first
+    var saltBytes = function(str){var bin=atob(str);var b=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b}(storedSalt);
+    var enc = new TextEncoder();
+    var keyMaterial = await crypto.subtle.importKey('raw', enc.encode(currentPass), 'PBKDF2', false, ['deriveKey']);
+    var oldKey = await crypto.subtle.deriveKey(
+        {name:'PBKDF2',salt:saltBytes,iterations:100000,hash:'SHA-256'},
+        keyMaterial,
+        {name:'AES-GCM',length:256},
+        false,
+        ['encrypt','decrypt']
+    );
+    var verify = localStorage.getItem('_enc_verify');
+    if (verify) {
+        try {
+            var raw = function(str){var bin=atob(str.slice(7));var b=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b}(verify);
+            var iv = raw.slice(0,12); var data = raw.slice(12);
+            var dec = await crypto.subtle.decrypt({name:'AES-GCM',iv:iv}, oldKey, data);
+            if (new TextDecoder().decode(dec) !== '__tasky_ok__') throw new Error('verify failed');
+        } catch(e) {
+            errEl.textContent = 'Current passphrase is wrong';
+            errEl.style.display = 'block';
+            return;
+        }
+    }
+
+    // Generate new salt and key
+    var newSalt = crypto.getRandomValues(new Uint8Array(16));
+    localStorage.setItem('_encSalt', function(bytes){var b='';for(var i=0;i<bytes.length;i++)b+=String.fromCharCode(bytes[i]);return btoa(b)}(newSalt));
+    var newKeyMaterial = await crypto.subtle.importKey('raw', enc.encode(newPass), 'PBKDF2', false, ['deriveKey']);
+    var newKey = await crypto.subtle.deriveKey(
+        {name:'PBKDF2',salt:newSalt,iterations:100000,hash:'SHA-256'},
+        newKeyMaterial,
+        {name:'AES-GCM',length:256},
+        false,
+        ['encrypt','decrypt']
+    );
+
+    // Re-encrypt verify token
+    var iv2 = crypto.getRandomValues(new Uint8Array(12));
+    var ct2 = await crypto.subtle.encrypt({name:'AES-GCM',iv:iv2}, newKey, enc.encode('__tasky_ok__'));
+    var comb2 = new Uint8Array(iv2.length + ct2.byteLength);
+    comb2.set(iv2,0); comb2.set(new Uint8Array(ct2), iv2.length);
+    function b64(bytes){var b='';for(var i=0;i<bytes.length;i++)b+=String.fromCharCode(bytes[i]);return btoa(b)}
+    localStorage.setItem('_enc_verify', 'enc_v1:' + b64(comb2));
+
+    // Re-encrypt all data with new key
+    var encData = localStorage.getItem('_enc_data');
+    if (encData) {
+        try {
+            var raw2 = function(str){var bin=atob(str.slice(7));var b=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b}(encData);
+            var iv3 = raw2.slice(0,12); var data3 = raw2.slice(12);
+            var oldPlain = await crypto.subtle.decrypt({name:'AES-GCM',iv:iv3}, oldKey, data3);
+            var iv4 = crypto.getRandomValues(new Uint8Array(12));
+            var newCt = await crypto.subtle.encrypt({name:'AES-GCM',iv:iv4}, newKey, oldPlain);
+            var comb4 = new Uint8Array(iv4.length + newCt.byteLength);
+            comb4.set(iv4,0); comb4.set(new Uint8Array(newCt), iv4.length);
+            localStorage.setItem('_enc_data', 'enc_v1:' + b64(comb4));
+        } catch(e) {
+            console.warn('Re-encryption of data failed:', e);
+        }
+    }
+
+    // Update global state
+    window._encKey = newKey;
+    if (typeof window._updateEncIndicator === 'function') window._updateEncIndicator();
+    closeEncryptionModal();
+    if (typeof showToast === 'function') showToast('🔐 Passphrase changed', function(){});
+}
+
+function disableEncryption() {
+    if (!confirm('Disable encryption? All task data will be stored as plaintext in your browser.')) return;
+    localStorage.removeItem('_encSalt');
+    localStorage.removeItem('_enc_verify');
+    localStorage.removeItem('_enc_data');
+    window._encKey = null;
+    if (typeof window._updateEncIndicator === 'function') window._updateEncIndicator();
+    closeEncryptionModal();
+    if (typeof showToast === 'function') showToast('🔓 Encryption disabled', function(){});
+}
 </script>
 
 <div class="shortcuts-overlay" id="shortcuts-overlay" onclick="closeShortcuts()">
@@ -2192,6 +2365,73 @@ function closeShortcuts() {
       <div><kbd>Space</kbd><span>Hold for voice input</span></div>
       <div><kbd>Alt</kbd>+<kbd>G</kbd><span>Go to task by number</span></div>
       <div><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd><span>Jump to task 1–9</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Encryption: Setup overlay ── -->
+<div class="tg-overlay hidden" id="enc-setup-overlay" onclick="if(event.target===this){this.classList.remove('visible');this.classList.add('hidden');setTimeout(function(){this.classList.remove('hidden')}.bind(this),270);}">
+  <div class="tg-modal" style="width:min(400px,92vw);">
+    <div class="tg-header">
+      <div class="tg-header-title">🔐 Set Encryption Passphrase</div>
+      <button class="tg-close-btn" onclick="var o=document.getElementById('enc-setup-overlay');o.classList.remove('visible');o.classList.add('hidden');setTimeout(function(){o.classList.remove('hidden')},270);">✕</button>
+    </div>
+    <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;">
+      <p style="color:var(--st-muted,rgba(255,255,255,0.6));font-size:13px;line-height:1.5;margin:0;">
+        This passphrase encrypts all task data in your browser.
+        <strong style="color:#f87171;">If you forget it, your data cannot be recovered.</strong>
+      </p>
+      <input type="password" class="enc-pass-input" placeholder="Passphrase (min 4 characters)"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <input type="password" class="enc-pass-confirm" placeholder="Confirm passphrase"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <div class="enc-error" style="display:none;color:#f87171;font-size:12px;"></div>
+      <button class="enc-submit-btn" onclick="submitEncryptionSetup()"
+        style="background:#8B5CF6;border:none;border-radius:10px;padding:12px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;width:100%;">Set Passphrase</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Encryption: Unlock overlay ── -->
+<div class="tg-overlay hidden" id="enc-unlock-overlay">
+  <div class="tg-modal" style="width:min(400px,92vw);">
+    <div class="tg-header">
+      <div class="tg-header-title">🔐 Enter Passphrase</div>
+    </div>
+    <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;">
+      <p style="color:var(--st-muted,rgba(255,255,255,0.6));font-size:13px;line-height:1.5;margin:0;">
+        Enter your passphrase to decrypt your task data.
+      </p>
+      <input type="password" class="enc-pass-input" placeholder="Passphrase"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <div class="enc-error" style="display:none;color:#f87171;font-size:12px;"></div>
+      <button class="enc-submit-btn"
+        style="background:#8B5CF6;border:none;border-radius:10px;padding:12px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;width:100%;">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Encryption: Change passphrase overlay ── -->
+<div class="tg-overlay hidden" id="enc-change-overlay" onclick="if(event.target===this)closeEncryptionModal()">
+  <div class="tg-modal" style="width:min(420px,92vw);">
+    <div class="tg-header">
+      <div class="tg-header-title">🔐 Change Encryption Passphrase</div>
+      <button class="tg-close-btn" onclick="closeEncryptionModal()">✕</button>
+    </div>
+    <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;">
+      <input type="password" id="enc-change-current" placeholder="Current passphrase"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <input type="password" id="enc-change-new" placeholder="New passphrase (min 4 chars)"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <input type="password" id="enc-change-confirm" placeholder="Confirm new passphrase"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <div id="enc-change-error" style="display:none;color:#f87171;font-size:12px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="submitEncryptionChange()"
+          style="flex:1;background:#8B5CF6;border:none;border-radius:10px;padding:12px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Change Passphrase</button>
+        <button onclick="disableEncryption()"
+          style="flex:0;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px 16px;color:#f87171;font-size:13px;font-weight:500;cursor:pointer;">Disable</button>
+      </div>
     </div>
   </div>
 </div>
