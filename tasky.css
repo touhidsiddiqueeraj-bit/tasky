@@ -2457,12 +2457,12 @@ body.light-mode .ic-ts { color: rgba(0,0,0,0.3); }
 
         /* ─── Swipe visual feedback on mobile ────────────────────────────── */
         .task-card.swiping-left {
-            background: linear-gradient(to left, rgba(16,185,129,0.12), transparent 70%);
-            border-color: rgba(16,185,129,0.25);
+            background: linear-gradient(to left, rgba(139,92,246,0.12), transparent 70%);
+            border-color: rgba(139,92,246,0.25);
         }
         .task-card.swiping-right {
-            background: linear-gradient(to right, rgba(139,92,246,0.12), transparent 70%);
-            border-color: rgba(139,92,246,0.25);
+            background: linear-gradient(to right, rgba(16,185,129,0.12), transparent 70%);
+            border-color: rgba(16,185,129,0.25);
         }
 
         /* ─── Keyboard shortcuts modal ────────────────────────────────────── */

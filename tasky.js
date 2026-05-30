@@ -1842,11 +1842,11 @@
                     if (Math.abs(dx) > 40 && Math.abs(dy) < 30) {
                         e.preventDefault();
                         if (dx > 0) {
-                            if (column === 'working') moveTaskWithUndo(column, 'todo', taskId);
-                            else if (column === 'done') moveTaskWithUndo(column, 'working', taskId);
-                        } else {
                             if (column === 'todo') moveTaskWithUndo(column, 'working', taskId);
                             else if (column === 'working') moveTaskWithUndo(column, 'done', taskId);
+                        } else {
+                            if (column === 'done') moveTaskWithUndo(column, 'working', taskId);
+                            else if (column === 'working') moveTaskWithUndo(column, 'todo', taskId);
                         }
                         return;
                     }
