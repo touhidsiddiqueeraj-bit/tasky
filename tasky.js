@@ -509,6 +509,29 @@
             window._encKey = _encKey;
             window._encSalt = _encSalt;
 
+            // ── Read-only view mode: skip full app init ──────────────────────────
+            // When ?view=CODE is present, tasky-collab.js takes over the page.
+            // We still need Firebase initialised (for Firestore reads), but we must
+            // NOT render the normal board UI or remove the loading splash — that is
+            // handled entirely by _mountReadOnlyBoard in tasky-collab.js.
+            var _isReadOnlyView = (new URLSearchParams(window.location.search)).get('view');
+            if (_isReadOnlyView) {
+                setTimeout(function() {
+                    app = firebase.initializeApp({
+                        apiKey: "AIzaSyBN8ZJil4vWWJ6XPPGgp20htp8IBxDLL_o",
+                        authDomain: "tasky-95785.firebaseapp.com",
+                        projectId: "tasky-95785",
+                        storageBucket: "tasky-95785.firebasestorage.app",
+                        messagingSenderId: "285483279389",
+                        appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
+                    });
+                    db = firebase.firestore(app);
+                    window.db = db;
+                    // tasky-collab.js will boot read-only mode once db is ready
+                }, 0);
+                return; // bail out — do not run the rest of the normal app init
+            }
+
             // Chunk 1 — Firebase + first render (deferred to release main thread)
             setTimeout(function() {
                 app = firebase.initializeApp({
