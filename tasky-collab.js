@@ -1712,14 +1712,21 @@ function openShareableBoard() {
 })();
 
 async function _mountReadOnlyBoard(code) {
-    // Hide the normal app UI entirely
+    // Remove loading splash (tasky.js skips this when ?view= is present)
+    const splash = document.getElementById('loading-splash');
+    if (splash) splash.remove();
+
+    // Hide the normal app UI entirely (defensive — none should exist in view mode)
     document.querySelector('.top-menu')?.remove();
     document.querySelector('.container')?.remove();
     document.querySelector('.floating-input-container')?.remove();
     document.querySelector('.shortcuts-hint')?.remove();
+    document.querySelector('#mobile-bottom-bar')?.remove();
     document.querySelector('.mobile-add-btn')?.remove();
     document.querySelector('.mobile-mic-btn')?.remove();
     document.querySelector('.sync-status')?.remove();
+    document.querySelector('#enc-indicator')?.remove();
+    document.querySelector('#workspace-switcher')?.remove();
     document.querySelector('.task-selector')?.remove();
     document.querySelector('.voice-overlay')?.remove();
     document.querySelectorAll('.onboarding-overlay').forEach(e => e.remove());
