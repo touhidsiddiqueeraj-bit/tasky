@@ -176,6 +176,7 @@
             while (used.has(n)) n++;
             return n;
         }
+        const WIP_LIMIT = 3;
         let isLightMode = localStorage.getItem('theme') === 'light';
         let customBg = localStorage.getItem('customBg') || null;
         let cardOpacity = parseInt(localStorage.getItem('cardOpacity')) || 100;
@@ -1308,6 +1309,11 @@
             const task = tasks[fromColumn].find(t => t.id === taskId);
             if (!task) return;
 
+            if (toColumn === 'working' && tasks.working.length >= WIP_LIMIT) {
+                showToast(`⚠️ WIP limit (${WIP_LIMIT}) — move or complete tasks first`, () => {});
+                return;
+            }
+
             moveTask(fromColumn, toColumn, taskId);
 
             if (selectedTask && selectedTask.taskId === taskId) {
@@ -1526,11 +1532,13 @@
             var count = document.getElementById(column + '-count');
             if (count) {
                 var actual = tasks[column].length;
-                if (count.textContent !== String(actual)) {
+                var display = column === 'working' ? actual + ' / ' + WIP_LIMIT : String(actual);
+                if (count.textContent !== display) {
                     count.classList.add('pulse');
                     setTimeout(function() { count.classList.remove('pulse'); }, 400);
                 }
-                count.textContent = actual;
+                count.textContent = display;
+                count.classList.toggle('wip-limit', column === 'working' && actual >= WIP_LIMIT);
             }
         }
 
@@ -1553,11 +1561,13 @@
             }
 
             const actual = tasks[column].length;
-            if (count.textContent !== String(actual)) {
+            const display = column === 'working' ? `${actual} / ${WIP_LIMIT}` : String(actual);
+            if (count.textContent !== display) {
                 count.classList.add('pulse');
                 setTimeout(() => count.classList.remove('pulse'), 400);
             }
-            count.textContent = actual;
+            count.textContent = display;
+            count.classList.toggle('wip-limit', column === 'working' && actual >= WIP_LIMIT);
         }
 
         function getEmptyState(column) {

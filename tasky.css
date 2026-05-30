@@ -431,6 +431,13 @@
             transition: background-color 0.3s ease;
         }
 
+        .task-count.wip-limit {
+            background: rgba(239, 68, 68, 0.25);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+        }
+
         .task-count.pulse {
             animation: countPulse 0.4s ease;
         }
