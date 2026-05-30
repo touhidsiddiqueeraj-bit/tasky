@@ -1658,7 +1658,16 @@ function openShareableBoard() {
 
     // Wait for Firebase to be ready, then boot read-only mode
     function _bootReadOnly() {
-        if (typeof db === 'undefined' || typeof firebase === 'undefined') { setTimeout(_bootReadOnly, 100); return; }
+        // Wait until tasky.js has set window.db AND firebase has at least one
+        // registered app (initializeApp completed). Checking only typeof db is
+        // unreliable because window.db is assigned inside a setTimeout(,0) in
+        // tasky.js — there is a brief window where firebase.apps is still empty
+        // even after window.db appears, causing firebase.auth() to throw
+        // "no-app" which previously triggered an infinite retry loop.
+        if (!window.db || typeof firebase === 'undefined' || !firebase.apps || firebase.apps.length === 0) {
+            setTimeout(_bootReadOnly, 100);
+            return;
+        }
         // Sign in anonymously so Firestore rules can grant read access without a Google account.
         // This works in incognito — anonymous auth creates a temporary session with no stored credentials.
         const auth = firebase.auth();
