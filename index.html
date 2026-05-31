@@ -1847,13 +1847,9 @@ body.light-mode {
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
   box-shadow: -12px 0 48px rgba(0,0,0,0.45);
-  overflow: hidden;   /* keeps slide animation clean */
+  overflow: hidden;
 }
-/* Once open, let the scrollable body handle all clipping */
-#settings-panel.open {
-  transform: translateX(0);
-  overflow: visible;
-}
+#settings-panel.open { transform: translateX(0); }
 
 #settings-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -1870,12 +1866,12 @@ body.light-mode {
 #settings-close-btn:hover { background: var(--st-hover); color: var(--st-text); }
 
 #settings-body {
-  overflow-y: scroll;
-  overflow-x: clip;    /* clip instead of hidden — avoids creating scroll context that clips children */
+  overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 8px 0 32px;
-  display: flex; flex-direction: column; gap: 0;
+  display: block;
   scrollbar-width: thin;
   scrollbar-color: rgba(139,92,246,0.4) transparent;
 }
@@ -1904,12 +1900,10 @@ body.light-mode {
   padding: 12px 20px;
   border-bottom: 1px solid var(--st-border);
   gap: 10px;
-  height: auto;         /* always grow to fit content */
   min-height: 48px;
   background: transparent;
   transition: background .12s;
   box-sizing: border-box;
-  width: 100%;
 }
 .st-row:hover { background: var(--st-hover); }
 .st-row--stack {
