@@ -2986,8 +2986,10 @@ function openMsgBoard() {
     document.getElementById('mb-panel').classList.add('mb-panel--open');
     const ov = document.getElementById('mb-overlay');
     if (ov) ov.classList.add('mb-overlay--visible');
-    _mbMarkSeen();
     _mbStartListener();
+    _mbMarkSeen();
+    // Always render feed immediately in case listener already has messages
+    _mbRenderFeed();
     // Update board button states
     const tcBtn = document.getElementById('tc-board-btn');
     if (tcBtn) tcBtn.classList.add('tc-board-btn--active');
