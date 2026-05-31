@@ -1671,12 +1671,12 @@ function showConfirm(title, body, okLabel = 'Delete') {
       </div>
 
       <!-- Accent colour -->
-      <div class="st-row">
+      <div class="st-row st-row--wrap">
         <div class="st-row-label">
           <span class="st-row-icon">🎨</span>
           <span>Accent Colour</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <div class="st-swatch-group">
           <div class="st-swatch" data-color="#8B5CF6" title="Purple (default)" onclick="stSetAccent(this)"></div>
           <div class="st-swatch" data-color="#3B82F6" title="Blue" onclick="stSetAccent(this)"></div>
           <div class="st-swatch" data-color="#10B981" title="Green" onclick="stSetAccent(this)"></div>
@@ -1685,7 +1685,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
           <div class="st-swatch" data-color="#EC4899" title="Pink" onclick="stSetAccent(this)"></div>
           <input type="color" id="st-accent-custom" title="Custom colour" oninput="stSetAccentRaw(this.value)"
             style="width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);
-            background:none;cursor:pointer;padding:0;overflow:hidden;">
+            background:none;cursor:pointer;padding:0;overflow:hidden;flex-shrink:0;">
         </div>
       </div>
 
@@ -1724,7 +1724,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
           <span class="st-row-icon">🔤</span>
           <span>Font Family</span>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <div class="st-font-chip-group">
           <button class="st-font-chip" data-font="system" onclick="stSetFont(this)">System</button>
           <button class="st-font-chip" data-font="Inter, sans-serif" onclick="stSetFont(this)" style="font-family:'Inter',sans-serif;">Inter</button>
           <button class="st-font-chip" data-font="'DM Sans', sans-serif" onclick="stSetFont(this)" style="font-family:'DM Sans',sans-serif;">DM Sans</button>
@@ -1748,20 +1748,20 @@ function showConfirm(title, body, okLabel = 'Delete') {
       </div>
 
       <!-- Task text colour -->
-      <div class="st-row">
+      <div class="st-row st-row--wrap">
         <div class="st-row-label">
           <span class="st-row-icon">🖊️</span>
           <span>Task Text Colour</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-          <div class="st-swatch" data-color="#e2d9ff" title="Lavender (default)" onclick="stSetTextColor(this)" style="background:#e2d9ff;"></div>
-          <div class="st-swatch" data-color="#ffffff" title="White" onclick="stSetTextColor(this)" style="background:#ffffff;"></div>
-          <div class="st-swatch" data-color="#94a3b8" title="Slate" onclick="stSetTextColor(this)" style="background:#94a3b8;"></div>
-          <div class="st-swatch" data-color="#fde68a" title="Yellow" onclick="stSetTextColor(this)" style="background:#fde68a;"></div>
-          <div class="st-swatch" data-color="#bbf7d0" title="Mint" onclick="stSetTextColor(this)" style="background:#bbf7d0;"></div>
+        <div class="st-swatch-group">
+          <div class="st-swatch" data-color="#e2d9ff" title="Lavender (default)" onclick="stSetTextColor(this)"></div>
+          <div class="st-swatch" data-color="#ffffff" title="White" onclick="stSetTextColor(this)"></div>
+          <div class="st-swatch" data-color="#94a3b8" title="Slate" onclick="stSetTextColor(this)"></div>
+          <div class="st-swatch" data-color="#fde68a" title="Yellow" onclick="stSetTextColor(this)"></div>
+          <div class="st-swatch" data-color="#bbf7d0" title="Mint" onclick="stSetTextColor(this)"></div>
           <input type="color" id="st-textcolor-custom" value="#e2d9ff" oninput="stSetTextColorRaw(this.value)"
             style="width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);
-            background:none;cursor:pointer;padding:0;overflow:hidden;" title="Custom colour">
+            background:none;cursor:pointer;padding:0;overflow:hidden;flex-shrink:0;" title="Custom colour">
         </div>
       </div>
 
@@ -1837,7 +1837,7 @@ body.light-mode {
 #settings-panel {
   position: fixed;
   top: 0; right: 0;
-  width: min(360px, 100vw);
+  width: min(400px, 100vw);
   height: 100%;
   background: var(--st-bg);
   border-left: 1px solid var(--st-border);
@@ -1903,8 +1903,9 @@ body.light-mode {
   min-height: 46px;
   background: transparent;
   transition: background .12s;
-  overflow: hidden;
-  min-width: 0;
+  /* removed overflow:hidden so swatch rows can breathe */
+  box-sizing: border-box;
+  width: 100%;
 }
 .st-row:hover { background: var(--st-hover); }
 .st-row--stack {
@@ -1912,13 +1913,32 @@ body.light-mode {
   align-items: flex-start;
   gap: 10px;
 }
+/* rows that have multiline right-side content (swatches, font chips) */
+.st-row--wrap {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
 .st-row-label {
   display: flex; align-items: center; gap: 8px;
   font-size: 13.5px; color: var(--st-text);
-  flex-shrink: 0; min-width: 0;
+  /* allow shrinking so the right side isn't crushed */
+  flex-shrink: 1;
+  min-width: 0;
   white-space: nowrap;
+  /* give labels a stable minimum so they don't collapse */
+  flex-basis: 130px;
 }
-.st-row-icon { font-size: 15px; }
+.st-row-icon { font-size: 15px; flex-shrink: 0; }
+
+/* Swatch / chip containers — allow wrapping on narrow panels */
+.st-swatch-group {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  flex: 1; justify-content: flex-end;
+}
+.st-font-chip-group {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  width: 100%;
+}
 
 /* Toggle switch */
 .st-toggle { position:relative; display:inline-block; width:40px; height:22px; flex-shrink:0; }
@@ -1952,6 +1972,11 @@ body.light-mode {
 .st-swatch[data-color="#F59E0B"] { background:#F59E0B; }
 .st-swatch[data-color="#EF4444"] { background:#EF4444; }
 .st-swatch[data-color="#EC4899"] { background:#EC4899; }
+.st-swatch[data-color="#e2d9ff"] { background:#e2d9ff; }
+.st-swatch[data-color="#ffffff"] { background:#ffffff; }
+.st-swatch[data-color="#94a3b8"] { background:#94a3b8; }
+.st-swatch[data-color="#fde68a"] { background:#fde68a; }
+.st-swatch[data-color="#bbf7d0"] { background:#bbf7d0; }
 
 /* Font chips */
 .st-font-chip {
@@ -1960,6 +1985,7 @@ body.light-mode {
   border-radius: 8px; padding: 4px 10px;
   font-size: 12px; color: var(--st-text);
   cursor: pointer; transition: background .15s, border-color .15s;
+  white-space: nowrap;
 }
 .st-font-chip:hover { background: rgba(255,255,255,0.1); }
 .st-font-chip.active {
@@ -1974,6 +2000,7 @@ body.light-mode {
   height: 4px; border-radius: 4px;
   background: rgba(255,255,255,0.12);
   outline: none; cursor: pointer;
+  min-width: 0;
 }
 .st-slider::-webkit-slider-thumb {
   -webkit-appearance: none; width: 16px; height: 16px;
@@ -1989,6 +2016,7 @@ body.light-mode {
   font-size: 12.5px; color: var(--st-text);
   cursor: pointer; transition: background .15s, border-color .15s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 .st-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.22); }
 .st-btn-danger {
@@ -2005,6 +2033,7 @@ body.light-mode {
   font-size: 12px; color: var(--st-text);
   cursor: pointer; transition: background .2s, border-color .2s, box-shadow .2s;
   white-space: nowrap; font-weight: 600;
+  flex-shrink: 0;
 }
 .st-theme-btn:hover {
   background: rgba(255,255,255,0.12);
