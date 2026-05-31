@@ -487,6 +487,44 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
     margin-bottom: 8px;
   }
 }
+
+/* ── To Do empty state ── */
+.todo-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 36px 16px;
+  pointer-events: none;
+  user-select: none;
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+.todo-empty-state.hidden { opacity: 0; }
+.todo-empty-icon {
+  font-size: 32px;
+  opacity: 0.35;
+}
+.todo-empty-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.25);
+  text-align: center;
+  line-height: 1.5;
+}
+body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
+
+/* ── Simplified floating hint bar ── */
+.floating-input-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 6px 0 2px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.35);
+}
+.floating-input-hint span { white-space: nowrap; }
+
 </style>
 </head>
 <body>
@@ -544,6 +582,16 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
         </div>
 
         <div class="ob-slide">
+          <div class="ob-illus rose">☁️</div>
+          <h2>Cloud Sync</h2>
+          <p>Sign in with Google via <strong>Tasky ▼ → ☁️ Sign in</strong> to sync tasks across all your devices. Works fully offline — changes queue locally and sync when you're back online.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🛡️ Your data</div>
+            No account needed to start. Sign in only when you want sync. Your tasks stay on-device otherwise.
+          </div>
+        </div>
+
+        <div class="ob-slide">
           <div class="ob-illus blue">📋</div>
           <h2>Workspaces</h2>
           <p>Keep different projects separate with <strong>Workspaces</strong>. Switch between them using the pill bar at the top. Each workspace has its own tasks, settings, and optional collaboration.</p>
@@ -555,31 +603,11 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
 
         <div class="ob-slide">
           <div class="ob-illus violet">⊞</div>
-          <h2>Task Groups</h2>
-          <p>Create reusable templates from <strong>Tasky ▼ → Task Groups</strong>. Add subtasks with priorities and choose <strong>To Do</strong> or <strong>Working On</strong>.</p>
+          <h2>Power Features</h2>
+          <p><strong>Task Groups</strong> let you save reusable templates — start typing a group name and hit <kbd>Enter</kbd> to expand the whole set instantly. <strong>Collaboration</strong> lets you share a board with teammates via a 6-character code from <strong>Tasky ▼</strong>.</p>
           <div class="ob-tip">
-            <div class="ob-tip-label">⚡ Instant expand</div>
-            Start typing a group name — matching suggestions appear. Press <kbd>Enter</kbd> to expand the whole group onto the board instantly.
-          </div>
-        </div>
-
-        <div class="ob-slide">
-          <div class="ob-illus rose">☁️</div>
-          <h2>Cloud Sync</h2>
-          <p>Sign in with Google via <strong>Tasky ▼ → ☁️ Sign in</strong> to sync data across devices. Works fully offline — changes queue locally and sync when you're back online.</p>
-          <div class="ob-tip">
-            <div class="ob-tip-label">🛡️ Your data</div>
-            Task Groups and Workspaces are preserved even after a data reset.
-          </div>
-        </div>
-
-        <div class="ob-slide">
-          <div class="ob-illus purple">👥</div>
-          <h2>Team Collaboration</h2>
-          <p>Sign in, then go to <strong>Tasky ▼ → Create Collaboration</strong>. Share the 6-character code with teammates. As supervisor you get a <strong>Team</strong> column to assign tasks in real-time. Members see assigned tasks appear instantly.</p>
-          <div class="ob-tip">
-            <div class="ob-tip-label">👤 Quick assign</div>
-            Type <code>task text to::handle priority::high date::20may</code> in the input for instant task assignment.
+            <div class="ob-tip-label">💡 You'll find everything in Tasky ▼</div>
+            Task Groups, Workspaces, Settings, Sign in — all accessible from the menu in the top-left corner.
           </div>
         </div>
 
@@ -594,7 +622,6 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
         <div class="ob-dot" onclick="deskGoToSlide(3)"></div>
         <div class="ob-dot" onclick="deskGoToSlide(4)"></div>
         <div class="ob-dot" onclick="deskGoToSlide(5)"></div>
-        <div class="ob-dot" onclick="deskGoToSlide(6)"></div>
       </div>
       <button class="ob-btn ob-btn-primary" id="desk-next-btn" onclick="deskNext()">Next →</button>
     </div>
@@ -617,27 +644,37 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
           <p>A three-column board — <strong>To Do</strong> · <strong>Working On</strong> · <strong>Done</strong> — built for speed. No sign-up needed, your data stays on your device.</p>
           <div class="ob-tip">
             <div class="ob-tip-label">⌨️ Quick start</div>
-            Press any key to open the task input. <kbd>Enter</kbd> saves, <kbd>Esc</kbd> cancels.
+            Tap <strong>＋</strong> to add a task. <kbd>Enter</kbd> saves, <kbd>Esc</kbd> cancels.
           </div>
         </div>
 
         <div class="ob-slide">
           <div class="ob-illus amber">⌨️</div>
           <h2>Adding Tasks</h2>
-          <p>Press any key to open the floating input. Type your task and hit <kbd>Enter</kbd> to save. Tasks land in <strong>To Do</strong> first.</p>
+          <p>Tap the <strong>＋</strong> button or press any key to open the floating input. Type your task and hit <kbd>Enter</kbd> to save. Tasks land in <strong>To Do</strong> first.</p>
           <div class="ob-tip">
             <div class="ob-tip-label">🎙️ Voice input</div>
-            Hold <kbd>Space</kbd> to dictate tasks hands-free.
+            Tap the mic button to dictate tasks hands-free.
           </div>
         </div>
 
         <div class="ob-slide">
           <div class="ob-illus green">🎯</div>
           <h2>Move &amp; Prioritize</h2>
-          <p>Swipe a task <strong>left</strong> to move to <strong>Working On</strong> or <strong>Done</strong>. Swipe <strong>right</strong> to move back. On desktop, select a task and use <kbd>←</kbd> <kbd>→</kbd>. <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> for priority.</p>
+          <p>Swipe a task <strong>left</strong> to move to <strong>Working On</strong> or <strong>Done</strong>. Swipe <strong>right</strong> to move back. Tap the priority badge to cycle <strong>High</strong> / <strong>Medium</strong> / <strong>Low</strong>.</p>
           <div class="ob-tip">
             <div class="ob-tip-label">💡 Pro tip</div>
-            A quick flick is enough — just 40px triggers the move. Tap the priority badge to cycle.
+            A quick flick is enough — just 40px triggers the move.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus rose">☁️</div>
+          <h2>Cloud Sync</h2>
+          <p>Sign in with Google via <strong>Tasky ▼ → ☁️ Sign in</strong> to sync tasks across all your devices. Works offline — changes queue and sync when you're back online.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🛡️ Your data</div>
+            No account needed to start. Sign in only when you want sync.
           </div>
         </div>
 
@@ -653,31 +690,11 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
 
         <div class="ob-slide">
           <div class="ob-illus violet">⊞</div>
-          <h2>Task Groups</h2>
-          <p>Create reusable templates from <strong>Tasky ▼ → Task Groups</strong>. Add subtasks, pick a column. Then type to expand them onto the board instantly.</p>
+          <h2>Power Features</h2>
+          <p><strong>Task Groups</strong> let you save reusable templates — start typing a group name and tap the suggestion to expand the whole set instantly. <strong>Collaboration</strong> lets you share a board via a 6-character code from <strong>Tasky ▼</strong>.</p>
           <div class="ob-tip">
-            <div class="ob-tip-label">⚡ Instant expand</div>
-            Start typing a group name — tap the suggestion to add all its tasks at once.
-          </div>
-        </div>
-
-        <div class="ob-slide">
-          <div class="ob-illus rose">☁️</div>
-          <h2>Cloud Sync</h2>
-          <p>Sign in with Google via <strong>Tasky ▼ → ☁️ Sign in</strong> to sync data across devices. Works offline — changes queue and sync when you're back online.</p>
-          <div class="ob-tip">
-            <div class="ob-tip-label">🛡️ Your data</div>
-            Task Groups &amp; Workspaces survive data reset.
-          </div>
-        </div>
-
-        <div class="ob-slide">
-          <div class="ob-illus purple">👥</div>
-          <h2>Collaboration</h2>
-          <p>Sign in and go to <strong>Tasky ▼ → Create Collaboration</strong>. Share the 6-character code with teammates. The supervisor gets a <strong>Team</strong> column to assign tasks in real-time.</p>
-          <div class="ob-tip">
-            <div class="ob-tip-label">👤 Quick assign</div>
-            Type <code>task to::handle priority::high date::20may</code> in the input for direct assignment.
+            <div class="ob-tip-label">💡 You'll find everything in Tasky ▼</div>
+            Task Groups, Workspaces, Settings, Sign in — all in the top-left menu.
           </div>
         </div>
 
@@ -692,7 +709,6 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
         <div class="ob-dot" onclick="mobGoToSlide(3)"></div>
         <div class="ob-dot" onclick="mobGoToSlide(4)"></div>
         <div class="ob-dot" onclick="mobGoToSlide(5)"></div>
-        <div class="ob-dot" onclick="mobGoToSlide(6)"></div>
       </div>
       <button class="ob-btn ob-btn-primary" id="mob-next-btn" onclick="mobNext()">Next →</button>
     </div>
@@ -949,7 +965,12 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
           </div>
           <span class="task-count" id="todo-count">0</span>
         </div>
-        <div class="task-list" id="todo-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+        <div class="task-list" id="todo-list" ondrop="drop(event)" ondragover="allowDrop(event)">
+          <div class="todo-empty-state" id="todo-empty-state">
+            <div class="todo-empty-icon">✏️</div>
+            <div class="todo-empty-text">Press any key to add your first task</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -997,10 +1018,6 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
     <span><kbd>Esc</kbd> to cancel</span>
     <span id="floating-group-hint" style="display:none;color:#a78bfa;">⊞ group match — <kbd>↑</kbd><kbd>↓</kbd> navigate, <kbd>Enter</kbd> expand</span>
     <span id="floating-assign-hint" style="display:none;color:#67e8f9;">👥 assign: <code>task text to::handle priority::high date::20may</code></span>
-    <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority (select task first)</span>
-    <span><kbd>←</kbd><kbd>→</kbd> move (select task first)</span>
-    <span><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd> select task</span>
-    <span><kbd>Alt</kbd>+<kbd>G</kbd> goto task</span>
   </div>
 </div>
 
@@ -1015,13 +1032,7 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
 <span class="enc-indicator" id="enc-indicator"></span>
 
 <div class="shortcuts-hint">
-  <span>Click task then: <kbd>←</kbd><kbd>→</kbd> move</span>
-  <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority</span>
-  <span><kbd>Del</kbd> delete</span>
-  <span><kbd>Esc</kbd> deselect</span>
-  <span><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd> select</span>
-  <span><kbd>Alt</kbd>+<kbd>G</kbd> goto</span>
-  <span>Hold <kbd>Space</kbd> voice input</span>
+  <span>Select task: <kbd>←</kbd><kbd>→</kbd> move · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority · <kbd>Del</kbd> delete · <kbd>Esc</kbd> deselect · Hold <kbd>Space</kbd> voice</span>
 </div>
 
 <!-- Voice overlay -->
@@ -1060,7 +1071,7 @@ function isMobile() { return window.matchMedia('(max-width:700px)').matches; }
 
 /* ── Desktop slides ── */
 var deskSlide = 0;
-var DESK_TOTAL = 7;
+var DESK_TOTAL = 6;
 
 function deskGoToSlide(n) {
   deskSlide = Math.max(0, Math.min(n, DESK_TOTAL - 1));
@@ -1089,7 +1100,7 @@ function deskPrev() {
 
 /* ── Mobile slides ── */
 var mobSlide = 0;
-var MOB_TOTAL = 7;
+var MOB_TOTAL = 6;
 
 function mobGoToSlide(n) {
   mobSlide = Math.max(0, Math.min(n, MOB_TOTAL - 1));
@@ -1137,6 +1148,31 @@ function dismissOnboarding() {
     setTimeout(function() { el.classList.remove('hidden'); }, 370);
   });
 }
+
+/* ── Empty state: show when To Do has no tasks ── */
+function updateTodoEmptyState() {
+  var list = document.getElementById('todo-list');
+  var es   = document.getElementById('todo-empty-state');
+  if (!list || !es) return;
+  // Count actual task cards (not the empty state div itself)
+  var taskCards = list.querySelectorAll('.task-card, [data-id], .task');
+  if (taskCards.length === 0) {
+    es.classList.remove('hidden');
+  } else {
+    es.classList.add('hidden');
+  }
+}
+
+// Observe todo-list for DOM changes to keep empty state in sync
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var list = document.getElementById('todo-list');
+    if (!list) return;
+    updateTodoEmptyState();
+    var obs = new MutationObserver(updateTodoEmptyState);
+    obs.observe(list, { childList: true, subtree: false });
+  });
+})();
 
 function showOnboarding() {
   localStorage.removeItem(STORAGE_KEY);
