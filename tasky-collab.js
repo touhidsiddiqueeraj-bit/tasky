@@ -2962,7 +2962,7 @@ function _mbInjectMemberControls(badgeEl) {
     if (mc) mc.remove();
     mc = document.createElement('div');
     mc.id = 'mb-member-controls';
-    mc.className = 'mb-member-controls';
+    mc.className = 'mb-member-controls mb-member-controls--topright';
     mc.innerHTML = `
         <button class="mb-member-board-btn" id="mb-member-board-btn" title="Message Board">
             💬 Board
@@ -2972,8 +2972,8 @@ function _mbInjectMemberControls(badgeEl) {
     mc.querySelector('#mb-member-board-btn').addEventListener('click', () => {
         _mbOpen ? closeMsgBoard() : openMsgBoard();
     });
-    // Insert after the badge (in top-menu)
-    badgeEl.parentNode && badgeEl.parentNode.insertBefore(mc, badgeEl.nextSibling);
+    // Always place at top-right of page (fixed), not inside badge
+    document.body.appendChild(mc);
     _mbSyncBadges();
 }
 
@@ -3242,7 +3242,7 @@ function _mbRenderFeed() {
                 ? `<a href="${a.dataUrl}" target="_blank"><img src="${a.dataUrl}" class="mb-attach-img" alt="${escHtml(a.name)}"></a>`
                 : `<a class="mb-file-link" href="${a.dataUrl}" download="${escHtml(a.name)}">📎 ${escHtml(a.name)}</a>`;
         }
-        const reactHtml=_mbReactionsHtml(msg.reactions||{},msg.id,false,null,me);
+        const reactHtml=''; // reactions removed
         const replyCount=msg.replyCount||(msg.replies?msg.replies.length:0);
         const isSup=isSupervisor;
         const canDel=isMine||isSup;
@@ -3257,9 +3257,7 @@ function _mbRenderFeed() {
             ${msg.text?`<div class="mb-msg-text">${escHtml(msg.text)}</div>`:''}
             ${attachHtml}
             <div class="mb-msg-footer">
-                <div class="mb-reaction-row" id="mb-reactions-${msg.id}">
-                    ${reactHtml}
-                    <button class="mb-react-add-btn" title="React">😊</button>
+                <div class="mb-reaction-row" id="mb-reactions-${msg.id}" style="display:none;">
                 </div>
                 <button class="mb-reply-toggle">💬 ${replyCount?replyCount+' repl'+(replyCount===1?'y':'ies'):'Reply'}</button>
             </div>
@@ -3273,14 +3271,13 @@ function _mbRenderFeed() {
             </div>`;
 
         if(canDel) card.querySelector('.mb-del-btn').addEventListener('click',()=>_mbDelete(msg.id,false,null));
-        card.querySelector('.mb-react-add-btn').addEventListener('click',e=>{e.stopPropagation();_mbShowEmojiPicker(msg.id,false,null,e.currentTarget);});
+        // reactions removed
         card.querySelector('.mb-reply-toggle').addEventListener('click',()=>{
             _mbReplyOpenId=(_mbReplyOpenId===msg.id)?null:msg.id;
             if(_mbReplyOpenId) _mbListenReplies(msg.id);
             _mbRenderFeed();
         });
-        card.querySelectorAll('.mb-reaction-btn').forEach(b=>b.addEventListener('click',()=>
-            _mbToggleReaction(msg.id,b.dataset.emoji,false,null)));
+        // reaction btn listeners removed
         feed.appendChild(card);
 
         if(_mbReplyOpenId===msg.id){
@@ -3305,7 +3302,7 @@ function _mbRenderReplies(msg) {
         const isMine=r.authorHandle===me, isSup=isSupervisor;
         const div=document.createElement('div');
         div.className='mb-reply'+(isMine?' mb-reply--mine':'');
-        const rh=_mbReactionsHtml(r.reactions||{},msg.id,true,r.id,me);
+        const rh=''; // reactions removed
         div.innerHTML=`
             <div class="mb-msg-meta">
                 <span class="mb-avatar-xs">${(r.authorHandle||'?')[0].toUpperCase()}</span>
@@ -3314,10 +3311,9 @@ function _mbRenderReplies(msg) {
                 ${(isMine||isSup)?'<button class="mb-del-btn">✕</button>':''}
             </div>
             <div class="mb-msg-text mb-reply-text">${escHtml(r.text||'')}</div>
-            <div class="mb-reaction-row">${rh}<button class="mb-react-add-btn">😊</button></div>`;
+            <div class="mb-reaction-row" style="display:none;">${rh}</div>`;
         if(isMine||isSup) div.querySelector('.mb-del-btn').addEventListener('click',()=>_mbDelete(msg.id,true,r.id));
-        div.querySelector('.mb-react-add-btn').addEventListener('click',e=>{e.stopPropagation();_mbShowEmojiPicker(msg.id,true,r.id,e.currentTarget);});
-        div.querySelectorAll('.mb-reaction-btn').forEach(b=>b.addEventListener('click',()=>_mbToggleReaction(msg.id,b.dataset.emoji,true,r.id)));
+        // reaction listeners removed
         container.appendChild(div);
     });
 }
