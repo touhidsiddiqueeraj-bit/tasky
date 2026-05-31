@@ -3137,6 +3137,103 @@ function _mbListenReplies(msgId) {
         });
 }
 
+// ─── Message board notifications ─────────────────────────────────────────
+async function _mbPushMessageNotif(text, authorHandle) {
+    if (!currentGroup || !currentUser) return;
+    const batch = db.batch();
+    const preview = (text || '').slice(0, 80);
+    currentGroup.members.forEach(m => {
+        // Don't notify the sender
+        if (m.uid === currentUser.uid) return;
+        const ref = db.collection('mb_notifications').doc();
+        batch.set(ref, {
+            toUid: m.uid,
+            groupCode: currentGroup.code,
+            groupName: currentGroup.name || '',
+            authorHandle: authorHandle || _mbMe(),
+            authorUid: currentUser.uid,
+            isSupervisor: isSupervisor,
+            text: preview,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            seen: false
+        });
+    });
+    try { await batch.commit(); } catch(e) { /* non-critical */ }
+}
+
+let _mbNotifListener = null;
+let _mbShownNotifIds = new Set();
+
+function _mbStartNotifListener() {
+    if (_mbNotifListener || !currentUser || !currentGroup) return;
+    _mbNotifListener = db.collection('mb_notifications')
+        .where('toUid', '==', currentUser.uid)
+        .where('groupCode', '==', currentGroup.code)
+        .where('seen', '==', false)
+        .orderBy('createdAt', 'desc')
+        .limit(10)
+        .onSnapshot(snap => {
+            snap.docChanges().forEach(change => {
+                if (change.type !== 'added') return;
+                const id = change.doc.id;
+                if (_mbShownNotifIds.has(id)) return;
+                const data = change.doc.data();
+                // Don't toast for your own messages
+                if (data.authorUid === currentUser.uid) return;
+                // Don't toast if board is already open
+                _mbShownNotifIds.add(id);
+                _mbShowNotifToast(id, data);
+                // Mark seen
+                db.collection('mb_notifications').doc(id).update({ seen: true }).catch(()=>{});
+            });
+        }, () => {});
+}
+
+function _mbStopNotifListener() {
+    if (_mbNotifListener) { _mbNotifListener(); _mbNotifListener = null; }
+    _mbShownNotifIds.clear();
+}
+
+function _mbShowNotifToast(id, data) {
+    // Remove any existing toast for same id
+    const existing = document.getElementById('mb-notif-' + id);
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'mb-notif-toast';
+    toast.id = 'mb-notif-' + id;
+
+    const initial = (data.authorHandle || '?').charAt(0).toUpperCase();
+    const isSup = data.isSupervisor;
+
+    toast.innerHTML = `
+        <div class="mb-notif-avatar${isSup ? ' sup' : ''}">${initial}</div>
+        <div class="mb-notif-body">
+            <div class="mb-notif-author">@${escHtml(data.authorHandle || '?')} · ${escHtml(data.groupName || '')}</div>
+            <div class="mb-notif-text">${escHtml(data.text || '')}</div>
+        </div>
+        <span class="mb-notif-label">Board 💬</span>
+    `;
+
+    toast.addEventListener('click', () => {
+        toast.remove();
+        if (!_mbOpen) openMsgBoard();
+    });
+
+    document.body.appendChild(toast);
+    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5000);
+
+    // Also use browser notification if permission granted and board closed
+    if (!_mbOpen && 'Notification' in window && Notification.permission === 'granted') {
+        try {
+            new Notification('💬 ' + (data.groupName || 'Message Board'), {
+                body: '@' + (data.authorHandle || '?') + ': ' + (data.text || '').slice(0, 80),
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">💬</text></svg>'
+            });
+        } catch(_) {}
+    }
+}
+
 // ─── Send ─────────────────────────────────────────────────────────────────
 async function _mbSend() {
     const input = document.getElementById('mb-input'); if (!input) return;
@@ -3153,7 +3250,9 @@ async function _mbSend() {
             reactions:{}, replyCount:0
         };
         if (_mbPendingFile) msg.attachment = _mbPendingFile;
-        await col.add(msg);
+        const newMsgRef = await col.add(msg);
+        // Push notification to all other members
+        _mbPushMessageNotif(msg.text || '📎 Attachment', msg.authorHandle);
         input.value=''; input.style.height='auto';
         _mbPendingFile=null;
         const pv=document.getElementById('mb-attach-preview');
@@ -3361,9 +3460,11 @@ renderGroupUI = function() {
             _mbLastSeen = _mbUnreadLS();
             _mbStartListener();
         }
+        _mbStartNotifListener();
         _mbSyncBadges();
     } else {
         _mbStopListener();
+        _mbStopNotifListener();
         _mbUnreadCount = 0;
         _mbOpen = false;
         const panel = document.getElementById('mb-panel');
