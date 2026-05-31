@@ -95,6 +95,7 @@
                 localStorage.removeItem('ws_counter_' + id);
             }
             saveWorkspacesMeta();
+            pushToCloud();
         }
         function switchWorkspace(id) {
             if (id === activeWorkspaceId) return;
@@ -747,14 +748,14 @@
                         if (c) cloudData['ws_counter_' + w.id] = parseInt(c);
                     });
                 }
-                // Fetch existing doc to detect stale ws_tasks_N / ws_counter_N fields
-                // left over from deleted workspaces, then explicitly null them out so
-                // { merge: true } removes them rather than leaving ghost workspaces.
+                // Fetch existing doc first so we can explicitly delete
+                // stale ws_tasks_N / ws_counter_N fields from deleted workspaces.
+                // merge:true alone never removes fields, causing deleted workspaces
+                // to resurrect on the next reload.
                 docRef.get().then(function(snap) {
                     if (snap.exists) {
-                        var existingKeys = Object.keys(snap.data());
                         var activeIds = new Set(workspaces.map(function(w) { return w.id; }));
-                        existingKeys.forEach(function(key) {
+                        Object.keys(snap.data()).forEach(function(key) {
                             var m = key.match(/^ws_(?:tasks|counter)_(\d+)$/);
                             if (m && !activeIds.has(parseInt(m[1]))) {
                                 cloudData[key] = firebase.firestore.FieldValue.delete();
