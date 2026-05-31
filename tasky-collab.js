@@ -2858,3 +2858,715 @@ if ('Notification' in window && Notification.permission === 'granted') {
     checkDueDateNotifications();
 }
 setInterval(checkDueDateNotifications, 60_000);
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  TASKY — MESSAGE BOARD  (collaboration workspaces only)
+//  Side-panel with: threaded replies, emoji reactions, file/image attachments
+//  Firestore path: groups/{code}/messages/{msgId}
+//                  groups/{code}/messages/{msgId}/replies/{replyId}
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── Message Board State ───────────────────────────────────────────────────
+let _mbOpen         = false;
+let _mbListener     = null;   // onSnapshot unsub for root messages
+let _mbReplyOpenId  = null;   // message id whose reply thread is expanded
+let _mbReplyListeners = {};   // { msgId: unsub }
+let _mbMessages     = [];     // local cache [ { id, ...data, replies:[] } ]
+let _mbUnreadCount  = 0;
+let _mbLastSeen     = 0;      // timestamp of last seen message
+
+const MB_REACTIONS = ['👍','❤️','😂','🎉','🔥','👀'];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+function _mbGroupCode() {
+    return currentGroup ? currentGroup.code : null;
+}
+
+function _mbMe() {
+    return currentHandle || (currentUser ? currentUser.uid.slice(0,8) : 'anon');
+}
+
+function _mbColRef() {
+    const code = _mbGroupCode();
+    if (!code) return null;
+    return db.collection('groups').doc(code).collection('messages');
+}
+
+function _mbFmtTime(ts) {
+    if (!ts) return '';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 60000) return 'just now';
+    if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    return d.toLocaleDateString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+}
+
+function _mbUnreadLS() {
+    const code = _mbGroupCode();
+    if (!code) return 0;
+    return parseInt(localStorage.getItem(`tasky_mb_seen_${code}`) || '0');
+}
+
+function _mbMarkSeen() {
+    const code = _mbGroupCode();
+    if (!code) return;
+    _mbLastSeen = Date.now();
+    localStorage.setItem(`tasky_mb_seen_${code}`, String(_mbLastSeen));
+    _mbUnreadCount = 0;
+    _mbUpdateBadge();
+}
+
+function _mbUpdateBadge() {
+    const btn = document.getElementById('mb-open-btn');
+    if (!btn) return;
+    const badge = btn.querySelector('.mb-btn-badge');
+    if (_mbUnreadCount > 0) {
+        if (badge) badge.textContent = _mbUnreadCount > 9 ? '9+' : _mbUnreadCount;
+        else {
+            const b = document.createElement('span');
+            b.className = 'mb-btn-badge';
+            b.textContent = _mbUnreadCount > 9 ? '9+' : _mbUnreadCount;
+            btn.appendChild(b);
+        }
+    } else {
+        if (badge) badge.remove();
+    }
+}
+
+// ─── Inject "Board" button into collab badge area ─────────────────────────
+function _mbInjectToggleBtn() {
+    if (document.getElementById('mb-open-btn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'mb-open-btn';
+    btn.className = 'mb-open-btn';
+    btn.title = 'Message Board';
+    btn.innerHTML = '💬 Board';
+    btn.addEventListener('click', () => _mbOpen ? closeMsgBoard() : openMsgBoard());
+    // Insert after collab badge
+    const badge = document.getElementById('collab-badge');
+    if (badge && badge.parentNode) {
+        badge.parentNode.insertBefore(btn, badge.nextSibling);
+    } else {
+        const menu = document.querySelector('.top-menu');
+        if (menu) menu.appendChild(btn);
+    }
+}
+
+// ─── Open / Close panel ───────────────────────────────────────────────────
+function openMsgBoard() {
+    if (!currentGroup) { _collabToast('⚠️ Join a collaboration to use the message board'); return; }
+    if (!currentUser || currentUser.isAnonymous) { _collabToast('⚠️ Sign in to post messages'); return; }
+
+    _mbOpen = true;
+
+    // Build panel if not exists
+    if (!document.getElementById('mb-panel')) _mbBuildPanel();
+
+    const panel = document.getElementById('mb-panel');
+    const overlay = document.getElementById('mb-overlay');
+    panel.classList.add('mb-panel--open');
+    if (overlay) overlay.classList.add('mb-overlay--visible');
+
+    _mbMarkSeen();
+    _mbStartListener();
+    setTimeout(() => document.getElementById('mb-input') && document.getElementById('mb-input').focus(), 200);
+}
+
+function closeMsgBoard() {
+    _mbOpen = false;
+    const panel = document.getElementById('mb-panel');
+    const overlay = document.getElementById('mb-overlay');
+    if (panel) panel.classList.remove('mb-panel--open');
+    if (overlay) overlay.classList.remove('mb-overlay--visible');
+}
+
+// ─── Build Panel DOM ───────────────────────────────────────────────────────
+function _mbBuildPanel() {
+    // Backdrop (mobile tap-to-close)
+    const overlay = document.createElement('div');
+    overlay.id = 'mb-overlay';
+    overlay.className = 'mb-overlay';
+    overlay.addEventListener('click', closeMsgBoard);
+    document.body.appendChild(overlay);
+
+    const panel = document.createElement('div');
+    panel.id = 'mb-panel';
+    panel.className = 'mb-panel';
+    panel.innerHTML = `
+        <div class="mb-header">
+            <div class="mb-header-left">
+                <span class="mb-header-icon">💬</span>
+                <div>
+                    <div class="mb-header-title">Message Board</div>
+                    <div class="mb-header-sub" id="mb-header-sub">
+                        ${currentGroup ? escHtml(currentGroup.name) : ''}
+                    </div>
+                </div>
+            </div>
+            <button class="mb-close-btn" id="mb-close-btn" title="Close">✕</button>
+        </div>
+
+        <div class="mb-feed" id="mb-feed">
+            <div class="mb-empty" id="mb-empty">
+                <div class="mb-empty-icon">💬</div>
+                <div>No messages yet</div>
+                <div class="mb-empty-sub">Be the first to post something</div>
+            </div>
+        </div>
+
+        <div class="mb-composer" id="mb-composer">
+            <div class="mb-composer-inner">
+                <div class="mb-avatar-sm">${_mbMe()[0].toUpperCase()}</div>
+                <div class="mb-composer-right">
+                    <textarea id="mb-input" class="mb-input" placeholder="Write a message…" rows="1" maxlength="1000"></textarea>
+                    <div class="mb-composer-actions">
+                        <label class="mb-attach-label" title="Attach image">
+                            📎
+                            <input type="file" id="mb-file-input" accept="image/*,application/pdf,.doc,.docx,.txt" style="display:none">
+                        </label>
+                        <div id="mb-attach-preview" class="mb-attach-preview" style="display:none;"></div>
+                        <button class="mb-send-btn" id="mb-send-btn">Send ↑</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    panel.querySelector('#mb-close-btn').addEventListener('click', closeMsgBoard);
+
+    // Textarea auto-expand
+    const textarea = panel.querySelector('#mb-input');
+    textarea.addEventListener('input', () => {
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+    });
+    textarea.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _mbSend(); }
+    });
+
+    // File attach
+    const fileInput = panel.querySelector('#mb-file-input');
+    fileInput.addEventListener('change', () => _mbHandleFileSelect(fileInput));
+
+    // Send
+    panel.querySelector('#mb-send-btn').addEventListener('click', _mbSend);
+
+    document.body.appendChild(panel);
+}
+
+// ─── Firestore listener ────────────────────────────────────────────────────
+function _mbStartListener() {
+    _mbStopListener();
+    const col = _mbColRef();
+    if (!col) return;
+    _mbMessages = [];
+
+    _mbListener = col.orderBy('createdAt', 'asc').onSnapshot(snap => {
+        const lastSeen = _mbUnreadLS();
+        let newCount = 0;
+
+        snap.docChanges().forEach(change => {
+            const id = change.doc.id;
+            const data = { id, ...change.doc.data(), replies: [] };
+
+            if (change.type === 'removed') {
+                _mbMessages = _mbMessages.filter(m => m.id !== id);
+                // Stop reply listener if open
+                if (_mbReplyListeners[id]) { _mbReplyListeners[id](); delete _mbReplyListeners[id]; }
+                return;
+            }
+
+            const existing = _mbMessages.findIndex(m => m.id === id);
+            if (existing >= 0) {
+                data.replies = _mbMessages[existing].replies || [];
+                _mbMessages[existing] = data;
+            } else {
+                _mbMessages.push(data);
+                // Count unread
+                const ts = data.createdAt ? (data.createdAt.toMillis ? data.createdAt.toMillis() : Date.now()) : 0;
+                if (ts > lastSeen && data.authorHandle !== _mbMe()) newCount++;
+            }
+        });
+
+        // Keep sorted
+        _mbMessages.sort((a, b) => {
+            const at = a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : 0) : 0;
+            const bt = b.createdAt ? (b.createdAt.toMillis ? b.createdAt.toMillis() : 0) : 0;
+            return at - bt;
+        });
+
+        if (!_mbOpen) {
+            _mbUnreadCount += newCount;
+            _mbUpdateBadge();
+        } else {
+            _mbMarkSeen();
+        }
+
+        _mbRenderFeed();
+
+        // Start reply listeners for any open thread
+        if (_mbReplyOpenId) _mbListenReplies(_mbReplyOpenId);
+    });
+}
+
+function _mbStopListener() {
+    if (_mbListener) { _mbListener(); _mbListener = null; }
+    Object.values(_mbReplyListeners).forEach(u => u());
+    _mbReplyListeners = {};
+}
+
+function _mbListenReplies(msgId) {
+    if (_mbReplyListeners[msgId]) return; // already listening
+    const col = _mbColRef();
+    if (!col) return;
+    _mbReplyListeners[msgId] = col.doc(msgId).collection('replies')
+        .orderBy('createdAt', 'asc')
+        .onSnapshot(snap => {
+            const msg = _mbMessages.find(m => m.id === msgId);
+            if (!msg) return;
+            snap.docChanges().forEach(change => {
+                const rid = change.doc.id;
+                const rdata = { id: rid, ...change.doc.data() };
+                if (change.type === 'removed') {
+                    msg.replies = msg.replies.filter(r => r.id !== rid);
+                } else {
+                    const ri = msg.replies.findIndex(r => r.id === rid);
+                    if (ri >= 0) msg.replies[ri] = rdata;
+                    else msg.replies.push(rdata);
+                }
+            });
+            msg.replies.sort((a, b) => {
+                const at = a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : 0) : 0;
+                const bt = b.createdAt ? (b.createdAt.toMillis ? b.createdAt.toMillis() : 0) : 0;
+                return at - bt;
+            });
+            _mbRenderFeed();
+        });
+}
+
+// ─── Send message ──────────────────────────────────────────────────────────
+let _mbPendingFile = null; // { name, type, dataUrl }
+
+async function _mbSend() {
+    const input = document.getElementById('mb-input');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text && !_mbPendingFile) return;
+
+    const col = _mbColRef();
+    if (!col) return;
+
+    const btn = document.getElementById('mb-send-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+
+    try {
+        const msgData = {
+            text: text || '',
+            authorHandle: _mbMe(),
+            authorUid: currentUser ? currentUser.uid : 'anon',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            reactions: {},
+            replyCount: 0
+        };
+
+        if (_mbPendingFile) {
+            msgData.attachment = {
+                name: _mbPendingFile.name,
+                type: _mbPendingFile.type,
+                dataUrl: _mbPendingFile.dataUrl
+            };
+        }
+
+        await col.add(msgData);
+
+        input.value = '';
+        input.style.height = 'auto';
+        _mbPendingFile = null;
+        const preview = document.getElementById('mb-attach-preview');
+        if (preview) { preview.innerHTML = ''; preview.style.display = 'none'; }
+        const fileInput = document.getElementById('mb-file-input');
+        if (fileInput) fileInput.value = '';
+
+    } catch(e) {
+        _collabToast('⚠️ Failed to send message');
+        console.error('[mb] send failed', e);
+    }
+
+    if (btn) { btn.disabled = false; btn.textContent = 'Send ↑'; }
+}
+
+// ─── Send reply ────────────────────────────────────────────────────────────
+async function _mbSendReply(msgId) {
+    const input = document.getElementById(`mb-reply-input-${msgId}`);
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+
+    const col = _mbColRef();
+    if (!col) return;
+
+    const btn = document.getElementById(`mb-reply-send-${msgId}`);
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+
+    try {
+        await col.doc(msgId).collection('replies').add({
+            text,
+            authorHandle: _mbMe(),
+            authorUid: currentUser ? currentUser.uid : 'anon',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        // Increment replyCount on parent
+        await col.doc(msgId).update({
+            replyCount: firebase.firestore.FieldValue.increment(1)
+        });
+        input.value = '';
+    } catch(e) {
+        _collabToast('⚠️ Failed to send reply');
+    }
+
+    if (btn) { btn.disabled = false; btn.textContent = '↑'; }
+}
+
+// ─── Reactions ────────────────────────────────────────────────────────────
+async function _mbToggleReaction(msgId, emoji, isReply, replyId) {
+    const col = _mbColRef();
+    if (!col) return;
+    const me = _mbMe();
+    const key = `reactions.${emoji}`;
+
+    let ref = col.doc(msgId);
+    if (isReply && replyId) ref = col.doc(msgId).collection('replies').doc(replyId);
+
+    try {
+        const snap = await ref.get();
+        if (!snap.exists) return;
+        const reactions = snap.data().reactions || {};
+        const users = reactions[emoji] || [];
+        if (users.includes(me)) {
+            await ref.update({ [key]: firebase.firestore.FieldValue.arrayRemove(me) });
+        } else {
+            await ref.update({ [key]: firebase.firestore.FieldValue.arrayUnion(me) });
+        }
+    } catch(e) { console.warn('[mb] reaction failed', e); }
+}
+
+// ─── Delete message ────────────────────────────────────────────────────────
+async function _mbDelete(msgId, isReply, replyId) {
+    const col = _mbColRef();
+    if (!col) return;
+    try {
+        if (isReply && replyId) {
+            await col.doc(msgId).collection('replies').doc(replyId).delete();
+            await col.doc(msgId).update({ replyCount: firebase.firestore.FieldValue.increment(-1) });
+        } else {
+            await col.doc(msgId).delete();
+        }
+    } catch(e) { _collabToast('⚠️ Failed to delete'); }
+}
+
+// ─── File handling ─────────────────────────────────────────────────────────
+function _mbHandleFileSelect(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+        _collabToast('⚠️ File too large (max 3 MB)');
+        input.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        _mbPendingFile = { name: file.name, type: file.type, dataUrl: e.target.result };
+        const preview = document.getElementById('mb-attach-preview');
+        if (!preview) return;
+        preview.style.display = 'flex';
+        const isImage = file.type.startsWith('image/');
+        preview.innerHTML = isImage
+            ? `<img src="${e.target.result}" class="mb-attach-thumb" alt="${escHtml(file.name)}">
+               <span class="mb-attach-name">${escHtml(file.name)}</span>
+               <button class="mb-attach-remove" title="Remove">✕</button>`
+            : `<span class="mb-attach-icon">📎</span>
+               <span class="mb-attach-name">${escHtml(file.name)}</span>
+               <button class="mb-attach-remove" title="Remove">✕</button>`;
+        preview.querySelector('.mb-attach-remove').addEventListener('click', () => {
+            _mbPendingFile = null;
+            preview.innerHTML = '';
+            preview.style.display = 'none';
+            input.value = '';
+        });
+    };
+    reader.readAsDataURL(file);
+}
+
+// ─── Render feed ──────────────────────────────────────────────────────────
+function _mbRenderFeed() {
+    const feed = document.getElementById('mb-feed');
+    if (!feed) return;
+
+    const empty = document.getElementById('mb-empty');
+    if (empty) empty.style.display = _mbMessages.length ? 'none' : 'flex';
+
+    // Remove old message cards (keep #mb-empty)
+    feed.querySelectorAll('.mb-msg').forEach(el => el.remove());
+
+    const me = _mbMe();
+    const isSup = isSupervisor;
+
+    _mbMessages.forEach(msg => {
+        const isMine = msg.authorHandle === me;
+        const card = document.createElement('div');
+        card.className = `mb-msg ${isMine ? 'mb-msg--mine' : ''}`;
+        card.dataset.id = msg.id;
+
+        // Attachment HTML
+        let attachHtml = '';
+        if (msg.attachment) {
+            const att = msg.attachment;
+            if (att.type && att.type.startsWith('image/')) {
+                attachHtml = `<a href="${att.dataUrl}" target="_blank" rel="noopener">
+                    <img src="${att.dataUrl}" class="mb-attach-img" alt="${escHtml(att.name)}">
+                </a>`;
+            } else {
+                attachHtml = `<a class="mb-file-link" href="${att.dataUrl}" download="${escHtml(att.name)}">
+                    📎 ${escHtml(att.name)}
+                </a>`;
+            }
+        }
+
+        // Reactions HTML
+        const reactionsHtml = _mbReactionsHtml(msg.reactions || {}, msg.id, false, null, me);
+
+        // Reply count
+        const replyCount = msg.replyCount || (msg.replies ? msg.replies.length : 0);
+        const replyLabel = replyCount
+            ? `${replyCount} repl${replyCount === 1 ? 'y' : 'ies'}`
+            : 'Reply';
+
+        card.innerHTML = `
+            <div class="mb-msg-meta">
+                <span class="mb-avatar-sm ${msg.authorUid === (currentGroup && currentGroup.supervisorUid) ? 'mb-avatar--sup' : ''}">
+                    ${msg.authorHandle ? msg.authorHandle[0].toUpperCase() : '?'}
+                </span>
+                <span class="mb-author">@${escHtml(msg.authorHandle || '?')}</span>
+                <span class="mb-time">${_mbFmtTime(msg.createdAt)}</span>
+                ${(isMine || isSup) ? `<button class="mb-del-btn" data-msgid="${msg.id}" title="Delete">✕</button>` : ''}
+            </div>
+            ${msg.text ? `<div class="mb-msg-text">${escHtml(msg.text)}</div>` : ''}
+            ${attachHtml}
+            <div class="mb-msg-footer">
+                <div class="mb-reaction-row" id="mb-reactions-${msg.id}">
+                    ${reactionsHtml}
+                    <button class="mb-react-add-btn" data-msgid="${msg.id}">😊</button>
+                </div>
+                <button class="mb-reply-toggle" data-msgid="${msg.id}">
+                    💬 ${replyLabel}
+                </button>
+            </div>
+            <div class="mb-thread" id="mb-thread-${msg.id}" style="display:${_mbReplyOpenId === msg.id ? 'block' : 'none'};">
+                <div class="mb-replies" id="mb-replies-${msg.id}"></div>
+                <div class="mb-reply-composer">
+                    <div class="mb-avatar-sm">${me[0].toUpperCase()}</div>
+                    <input type="text" id="mb-reply-input-${msg.id}" class="mb-reply-input" placeholder="Write a reply…" maxlength="500">
+                    <button class="mb-reply-send" id="mb-reply-send-${msg.id}">↑</button>
+                </div>
+            </div>
+        `;
+
+        // Wire reactions emoji picker
+        card.querySelector('.mb-react-add-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            _mbShowEmojiPicker(msg.id, false, null, e.currentTarget);
+        });
+
+        // Wire reaction toggles (delegated below via event delegation on feed)
+
+        // Wire delete
+        const delBtn = card.querySelector('.mb-del-btn');
+        if (delBtn) {
+            delBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _mbDelete(msg.id, false, null);
+            });
+        }
+
+        // Wire reply toggle
+        card.querySelector('.mb-reply-toggle').addEventListener('click', () => {
+            if (_mbReplyOpenId === msg.id) {
+                _mbReplyOpenId = null;
+            } else {
+                _mbReplyOpenId = msg.id;
+                _mbListenReplies(msg.id);
+            }
+            _mbRenderFeed();
+        });
+
+        feed.appendChild(card);
+
+        // Render replies if open
+        if (_mbReplyOpenId === msg.id) {
+            _mbRenderReplies(msg);
+            // Wire reply input
+            const ri = card.querySelector(`#mb-reply-input-${msg.id}`);
+            const rs = card.querySelector(`#mb-reply-send-${msg.id}`);
+            if (ri) ri.addEventListener('keydown', e => {
+                if (e.key === 'Enter') { e.preventDefault(); _mbSendReply(msg.id); }
+            });
+            if (rs) rs.addEventListener('click', () => _mbSendReply(msg.id));
+        }
+    });
+
+    // Delegate reaction button clicks on feed
+    feed.querySelectorAll('.mb-reaction-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const msgId  = btn.dataset.msgid;
+            const emoji  = btn.dataset.emoji;
+            const isReply = btn.dataset.isreply === 'true';
+            const replyId = btn.dataset.replyid || null;
+            _mbToggleReaction(msgId, emoji, isReply, replyId);
+        });
+    });
+
+    // Scroll to bottom on new messages if user was already near bottom
+    const scrollEl = feed;
+    const nearBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 120;
+    if (nearBottom) scrollEl.scrollTop = scrollEl.scrollHeight;
+}
+
+function _mbRenderReplies(msg) {
+    const container = document.getElementById(`mb-replies-${msg.id}`);
+    if (!container) return;
+    container.innerHTML = '';
+    const me = _mbMe();
+    const isSup = isSupervisor;
+
+    (msg.replies || []).forEach(r => {
+        const isMine = r.authorHandle === me;
+        const div = document.createElement('div');
+        div.className = `mb-reply ${isMine ? 'mb-reply--mine' : ''}`;
+        const reactHtml = _mbReactionsHtml(r.reactions || {}, msg.id, true, r.id, me);
+        div.innerHTML = `
+            <div class="mb-msg-meta">
+                <span class="mb-avatar-xs">${r.authorHandle ? r.authorHandle[0].toUpperCase() : '?'}</span>
+                <span class="mb-author">@${escHtml(r.authorHandle || '?')}</span>
+                <span class="mb-time">${_mbFmtTime(r.createdAt)}</span>
+                ${(isMine || isSup) ? `<button class="mb-del-btn" title="Delete">✕</button>` : ''}
+            </div>
+            <div class="mb-msg-text mb-reply-text">${escHtml(r.text || '')}</div>
+            <div class="mb-reaction-row">
+                ${reactHtml}
+                <button class="mb-react-add-btn" data-msgid="${msg.id}" data-replyid="${r.id}">😊</button>
+            </div>
+        `;
+        const delBtn = div.querySelector('.mb-del-btn');
+        if (delBtn) delBtn.addEventListener('click', () => _mbDelete(msg.id, true, r.id));
+        div.querySelector('.mb-react-add-btn').addEventListener('click', (e) => {
+            _mbShowEmojiPicker(msg.id, true, r.id, e.currentTarget);
+        });
+        div.querySelectorAll('.mb-reaction-btn').forEach(btn => {
+            btn.addEventListener('click', () =>
+                _mbToggleReaction(msg.id, btn.dataset.emoji, true, r.id));
+        });
+        container.appendChild(div);
+    });
+}
+
+function _mbReactionsHtml(reactions, msgId, isReply, replyId, me) {
+    return Object.entries(reactions)
+        .filter(([, users]) => users && users.length > 0)
+        .map(([emoji, users]) => {
+            const reacted = users.includes(me);
+            return `<button class="mb-reaction-btn ${reacted ? 'mb-reaction-btn--active' : ''}"
+                data-msgid="${msgId}" data-emoji="${emoji}"
+                data-isreply="${isReply}" data-replyid="${replyId || ''}"
+                title="${users.map(u => '@'+u).join(', ')}">
+                ${emoji} <span>${users.length}</span>
+            </button>`;
+        }).join('');
+}
+
+// ─── Emoji picker popup ────────────────────────────────────────────────────
+function _mbShowEmojiPicker(msgId, isReply, replyId, anchor) {
+    document.querySelectorAll('.mb-emoji-picker').forEach(p => p.remove());
+    const picker = document.createElement('div');
+    picker.className = 'mb-emoji-picker';
+    MB_REACTIONS.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.className = 'mb-emoji-opt';
+        btn.textContent = emoji;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            _mbToggleReaction(msgId, emoji, isReply, replyId);
+            picker.remove();
+        });
+        picker.appendChild(btn);
+    });
+    document.body.appendChild(picker);
+
+    // Position near anchor
+    const rect = anchor.getBoundingClientRect();
+    picker.style.top  = (rect.top + window.scrollY - picker.offsetHeight - 8) + 'px';
+    picker.style.left = (rect.left + window.scrollX) + 'px';
+    // Fix if offscreen
+    requestAnimationFrame(() => {
+        const pw = picker.offsetWidth;
+        const ph = picker.offsetHeight;
+        let left = rect.left + window.scrollX;
+        let top  = rect.top + window.scrollY - ph - 8;
+        if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+        if (top < 8) top = rect.bottom + window.scrollY + 8;
+        picker.style.left = left + 'px';
+        picker.style.top  = top + 'px';
+    });
+
+    setTimeout(() => {
+        const dismiss = (e) => {
+            if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', dismiss); }
+        };
+        document.addEventListener('click', dismiss);
+    }, 10);
+}
+
+// ─── Hook into renderGroupUI ───────────────────────────────────────────────
+// After the collab badge renders, inject the board button and start listening
+// for unread count when the panel is closed.
+const _origRenderGroupUI = renderGroupUI;
+renderGroupUI = function() {
+    _origRenderGroupUI();
+
+    if (currentGroup && currentUser && !currentUser.isAnonymous) {
+        _mbInjectToggleBtn();
+        // If panel is closed but we're in a group, listen quietly for unread
+        if (!_mbOpen && !_mbListener) {
+            _mbLastSeen = _mbUnreadLS();
+            const col = _mbColRef();
+            if (col) {
+                _mbListener = col.orderBy('createdAt', 'asc').onSnapshot(snap => {
+                    if (_mbOpen) return; // panel handles its own rendering
+                    const lastSeen = _mbLastSeen;
+                    snap.docChanges().forEach(change => {
+                        if (change.type !== 'added') return;
+                        const data = change.doc.data();
+                        const ts = data.createdAt ? (data.createdAt.toMillis ? data.createdAt.toMillis() : 0) : 0;
+                        if (ts > lastSeen && data.authorHandle !== _mbMe()) _mbUnreadCount++;
+                    });
+                    _mbUpdateBadge();
+                });
+            }
+        }
+    } else {
+        // Remove button and panel when no collab
+        const btn = document.getElementById('mb-open-btn');
+        if (btn) btn.remove();
+        _mbStopListener();
+        _mbOpen = false;
+        const panel = document.getElementById('mb-panel');
+        if (panel) panel.remove();
+        const ov = document.getElementById('mb-overlay');
+        if (ov) ov.remove();
+    }
+};
+
+// Expose globally
+window.openMsgBoard  = openMsgBoard;
+window.closeMsgBoard = closeMsgBoard;
