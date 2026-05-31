@@ -129,6 +129,7 @@
             border-radius: 50%;
             filter: blur(80px);
             opacity: 0.3;
+            will-change: transform;
         }
 
         .orb-1 {
@@ -1172,7 +1173,7 @@
             font-size: 11px;
             z-index: 50;
             pointer-events: none;
-            opacity: 0.6;
+            opacity: 0;
             transition: opacity .3s;
         }
         .enc-indicator.active {
