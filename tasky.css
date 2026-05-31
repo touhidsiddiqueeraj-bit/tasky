@@ -3552,3 +3552,11 @@ body.light-mode .mb-btn-badge { border-color: #f8f5ff; }
 .mb-react-add-btn,
 .mb-reaction-btn,
 .mb-emoji-picker { display: none !important; }
+
+/* ── Board button — wider ── */
+.tc-board-btn,
+.mb-member-board-btn {
+    min-width: 100px;
+    padding: 6px 18px !important;
+    justify-content: center;
+}
