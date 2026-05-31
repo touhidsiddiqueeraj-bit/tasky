@@ -69,7 +69,11 @@
             }
         }
         function createWorkspace(name, collabCode) {
-            var id = nextWorkspaceId++;
+            // Find the lowest available workspace number >= 2
+            var usedNumbers = workspaces.map(function(w) { return w.id; });
+            var id = 2;
+            while (usedNumbers.indexOf(id) !== -1) id++;
+            nextWorkspaceId = Math.max(nextWorkspaceId, id + 1);
             var ws = { id: id, name: name || 'Workspace ' + id, collabCode: collabCode || null };
             workspaces.push(ws);
             if (_encKey && _allWorkspaceData) {
