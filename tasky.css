@@ -3530,3 +3530,25 @@ body.light-mode .mb-input::placeholder { color: rgba(0,0,0,.3); }
 body.light-mode .mb-emoji-picker { background: #fff; border-color: rgba(0,0,0,.12); }
 body.light-mode .tc-board-badge,
 body.light-mode .mb-btn-badge { border-color: #f8f5ff; }
+
+/* ── Member board button — fixed top-right for non-supervisors ── */
+.mb-member-controls--topright {
+    position: fixed;
+    top: 54px;
+    right: 14px;
+    z-index: 300;
+    display: inline-flex;
+    align-items: center;
+}
+@media (max-width: 768px) {
+    .mb-member-controls--topright {
+        top: 50px;
+        right: 10px;
+    }
+}
+
+/* Reactions removed from message board */
+.mb-reaction-row,
+.mb-react-add-btn,
+.mb-reaction-btn,
+.mb-emoji-picker { display: none !important; }
