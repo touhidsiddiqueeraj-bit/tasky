@@ -1672,7 +1672,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
           <span class="st-row-icon">🎨</span>
           <span>Accent Colour</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <div class="st-swatch" data-color="#8B5CF6" title="Purple (default)" onclick="stSetAccent(this)"></div>
           <div class="st-swatch" data-color="#3B82F6" title="Blue" onclick="stSetAccent(this)"></div>
           <div class="st-swatch" data-color="#10B981" title="Green" onclick="stSetAccent(this)"></div>
@@ -1709,6 +1709,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
             oninput="setCardOpacity(this.value);document.getElementById('st-opacity-val').textContent=this.value+'%'">
           <span id="st-opacity-val" style="font-size:12px;color:var(--st-muted);min-width:36px;text-align:right;">100%</span>
         </div>
+      </div>
 
     <div class="st-separator"></div>
     <div class="st-group-label">✏️ Typography</div>
@@ -1748,7 +1749,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
           <span class="st-row-icon">🖊️</span>
           <span>Task Text Colour</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <div class="st-swatch" data-color="#e2d9ff" title="Lavender (default)" onclick="stSetTextColor(this)" style="background:#e2d9ff;"></div>
           <div class="st-swatch" data-color="#ffffff" title="White" onclick="stSetTextColor(this)" style="background:#ffffff;"></div>
           <div class="st-swatch" data-color="#94a3b8" title="Slate" onclick="stSetTextColor(this)" style="background:#94a3b8;"></div>
@@ -1758,6 +1759,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
             style="width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);
             background:none;cursor:pointer;padding:0;overflow:hidden;" title="Custom colour">
         </div>
+      </div>
 
     <div class="st-separator"></div>
     <div class="st-group-label">🔧 System</div>
@@ -1801,6 +1803,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
           <span style="color:#f87171;">Reset All Data</span>
         </div>
         <button class="st-btn st-btn-danger" onclick="resetAllData()">Reset</button>
+      </div>
 
   </div><!-- /settings-body -->
 </div><!-- /settings-panel -->
@@ -1837,6 +1840,7 @@ body.light-mode {
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
   box-shadow: -12px 0 48px rgba(0,0,0,0.45);
+  overflow: hidden;
 }
 #settings-panel.open { transform: translateX(0); }
 
@@ -1856,6 +1860,7 @@ body.light-mode {
 
 #settings-body {
   overflow-y: scroll;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 8px 0 32px;
@@ -1891,6 +1896,8 @@ body.light-mode {
   min-height: 46px;
   background: transparent;
   transition: background .12s;
+  overflow: hidden;
+  min-width: 0;
 }
 .st-row:hover { background: var(--st-hover); }
 .st-row--stack {
@@ -1900,7 +1907,9 @@ body.light-mode {
 }
 .st-row-label {
   display: flex; align-items: center; gap: 8px;
-  font-size: 13.5px; color: var(--st-text); flex-shrink: 0;
+  font-size: 13.5px; color: var(--st-text);
+  flex-shrink: 0; min-width: 0;
+  white-space: nowrap;
 }
 .st-row-icon { font-size: 15px; }
 
