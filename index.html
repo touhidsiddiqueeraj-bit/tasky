@@ -13,14 +13,12 @@
 <meta property="og:title" content="Tasky — Keyboard-first Task Tracker">
 <meta property="og:description" content="Three columns. Zero friction. Keyboard shortcuts, voice input, drag-and-drop, cloud sync.">
 <meta property="og:type" content="website">
+<link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a0a1a'/><rect x='4' y='5' width='24' height='6' rx='3' fill='%238B5CF6'/><rect x='4' y='13' width='17' height='6' rx='3' fill='%23F59E0B'/><rect x='4' y='21' width='12' height='6' rx='3' fill='%2310B981'/><path d='M7 8 L9.2 10.2 L12.5 6.5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" 
-      onload="this.onload=null;this.rel='stylesheet'">
-<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap"></noscript>
-<link rel="preload" as="style" href="tasky.css" onload="this.onload=null;this.rel='stylesheet'">
-<noscript><link rel="stylesheet" href="tasky.css"></noscript>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="tasky.css">
 <style>
 /* ═══════════════════════════════════════════════════════════
    ONBOARDING — GLASSMORPHISM
@@ -1014,7 +1012,7 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
 </div>
 
 <div class="sync-status" id="sync-status"></div>
-<span class="enc-indicator" id="enc-indicator" title="Encryption: Off">🔓</span>
+<span class="enc-indicator" id="enc-indicator"></span>
 
 <div class="shortcuts-hint">
   <span>Click task then: <kbd>←</kbd><kbd>→</kbd> move</span>
@@ -1051,6 +1049,12 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
    ONBOARDING
    ============================================================ */
 const STORAGE_KEY = 'tasky_onboarding_seen_v4';
+// Migration: users who dismissed on v3 should not see onboarding again
+(function _migrateOnboardingKey() {
+  if (!localStorage.getItem(STORAGE_KEY) && localStorage.getItem('tasky_onboarding_seen_v3')) {
+    localStorage.setItem(STORAGE_KEY, '1');
+  }
+})();
 
 function isMobile() { return window.matchMedia('(max-width:700px)').matches; }
 
@@ -1784,9 +1788,12 @@ function showConfirm(title, body, okLabel = 'Delete') {
       <div class="st-row" id="st-enc-row">
         <div class="st-row-label">
           <span class="st-row-icon" id="st-enc-icon">🔓</span>
-          <span id="st-enc-label">Local Encryption: <strong>Off</strong></span>
+          <div style="display:flex;flex-direction:column;gap:1px;">
+            <span id="st-enc-label">Local Encryption</span>
+            <span id="st-enc-sublabel" style="font-size:11px;color:var(--st-muted);">Off — data stored as plaintext</span>
+          </div>
         </div>
-        <button class="st-btn" id="st-enc-btn" onclick="openEncryptionModal()">Set Passphrase</button>
+        <button class="st-btn" id="st-enc-btn" onclick="openEncryptionModal()">Enable</button>
       </div>
 
       <div class="st-row">
@@ -2078,12 +2085,22 @@ function _stSyncUI() {
 
 function _stSyncEncryptionUI() {
     const hasEnc = !!localStorage.getItem('_encSalt');
-    const icon = document.getElementById('st-enc-icon');
-    const label = document.getElementById('st-enc-label');
-    const btn = document.getElementById('st-enc-btn');
-    if (icon) icon.textContent = hasEnc ? '🔒' : '🔓';
-    if (label) label.innerHTML = 'Local Encryption: <strong>' + (hasEnc ? 'Active' : 'Off') + '</strong>';
-    if (btn) btn.textContent = hasEnc ? 'Change Passphrase' : 'Set Passphrase';
+    const icon     = document.getElementById('st-enc-icon');
+    const label    = document.getElementById('st-enc-label');
+    const sublabel = document.getElementById('st-enc-sublabel');
+    const btn      = document.getElementById('st-enc-btn');
+    if (icon)     icon.textContent = hasEnc ? '🔒' : '🔓';
+    if (label)    label.textContent = 'Local Encryption';
+    if (sublabel) sublabel.textContent = hasEnc ? 'Active — data is encrypted' : 'Off — data stored as plaintext';
+    if (btn) {
+        if (hasEnc) {
+            btn.textContent = 'Change / Disable';
+            btn.classList.remove('st-btn-danger');
+        } else {
+            btn.textContent = 'Enable';
+            btn.classList.remove('st-btn-danger');
+        }
+    }
 }
 
 // Theme
@@ -2347,8 +2364,8 @@ async function submitEncryptionChange() {
     if (typeof showToast === 'function') showToast('🔐 Passphrase changed', function(){});
 }
 
-function disableEncryption() {
-    if (!confirm('Disable encryption? All task data will be stored as plaintext in your browser.')) return;
+async function disableEncryption() {
+    if (!await showConfirm('Disable Encryption', 'All task data will be stored as plaintext in your browser. This cannot be undone.', 'Disable')) return;
     localStorage.removeItem('_encSalt');
     localStorage.removeItem('_enc_verify');
     localStorage.removeItem('_enc_data');
