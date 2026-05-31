@@ -3553,10 +3553,84 @@ body.light-mode .mb-btn-badge { border-color: #f8f5ff; }
 .mb-reaction-btn,
 .mb-emoji-picker { display: none !important; }
 
-/* ── Board button — wider ── */
+/* ── Board button — bigger ── */
 .tc-board-btn,
 .mb-member-board-btn {
-    min-width: 100px;
-    padding: 6px 18px !important;
+    min-width: 130px;
+    padding: 9px 22px !important;
+    font-size: 13px !important;
+    border-radius: 22px !important;
     justify-content: center;
+    letter-spacing: 0.02em;
+}
+
+/* ── Message board notification toast ── */
+.mb-notif-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 8000;
+    background: rgba(20, 18, 38, 0.96);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(139,92,246,0.35);
+    border-radius: 16px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 300px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(139,92,246,0.15);
+    animation: mbNotifIn 0.3s cubic-bezier(.34,1.46,.64,1), mbNotifOut 0.3s ease 4.7s forwards;
+    cursor: pointer;
+}
+body.light-mode .mb-notif-toast {
+    background: rgba(255,255,255,0.96);
+    border-color: rgba(109,40,217,0.25);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.mb-notif-avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #8B5CF6, #6d28d9);
+    color: #fff;
+    font-size: 14px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.mb-notif-avatar.sup { background: linear-gradient(135deg, #8B5CF6, #ec4899); }
+.mb-notif-body { flex: 1; min-width: 0; }
+.mb-notif-author {
+    font-size: 12px; font-weight: 700; color: #c4b5fd;
+    margin-bottom: 2px;
+}
+body.light-mode .mb-notif-author { color: #6d28d9; }
+.mb-notif-text {
+    font-size: 12.5px; color: rgba(255,255,255,0.8);
+    overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
+}
+body.light-mode .mb-notif-text { color: rgba(0,0,0,0.7); }
+.mb-notif-label {
+    font-size: 10px; color: rgba(139,92,246,0.7);
+    font-weight: 600; letter-spacing: .04em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+@keyframes mbNotifIn {
+    from { opacity: 0; transform: translateX(24px) scale(0.95); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes mbNotifOut {
+    from { opacity: 1; transform: translateX(0); }
+    to   { opacity: 0; transform: translateX(24px); }
+}
+@media (max-width: 768px) {
+    .mb-notif-toast {
+        top: auto;
+        bottom: 90px;
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
 }
