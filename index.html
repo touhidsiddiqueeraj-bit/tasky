@@ -1502,10 +1502,7 @@ function tgExpandGroup(id, mouseEvent) {
 
   const existing = new Set();
   if (typeof STATE !== 'undefined' && STATE.tasks) {
-    const allTasks = Array.isArray(STATE.tasks)
-      ? STATE.tasks
-      : Object.values(STATE.tasks).flat();
-    allTasks.forEach(t => existing.add(t.text.toLowerCase()));
+    STATE.tasks.forEach(t => existing.add(t.text.toLowerCase()));
   } else {
     document.querySelectorAll('.task-item').forEach(el => {
       const txt = el.querySelector('.task-text');
