@@ -1683,9 +1683,11 @@ function showConfirm(title, body, okLabel = 'Delete') {
           <div class="st-swatch" data-color="#F59E0B" title="Amber" onclick="stSetAccent(this)"></div>
           <div class="st-swatch" data-color="#EF4444" title="Red" onclick="stSetAccent(this)"></div>
           <div class="st-swatch" data-color="#EC4899" title="Pink" onclick="stSetAccent(this)"></div>
-          <input type="color" id="st-accent-custom" title="Custom colour" oninput="stSetAccentRaw(this.value)"
-            style="width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);
-            background:none;cursor:pointer;padding:0;overflow:hidden;flex-shrink:0;">
+          <div class="st-swatch" id="st-accent-custom-swatch" title="Custom colour"
+            onclick="document.getElementById('st-accent-custom').click()"
+            style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);border-style:dashed;"></div>
+          <input type="color" id="st-accent-custom" oninput="stSetAccentRaw(this.value);document.getElementById('st-accent-custom-swatch').style.background=this.value;"
+            style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;">
         </div>
       </div>
 
@@ -1759,9 +1761,11 @@ function showConfirm(title, body, okLabel = 'Delete') {
           <div class="st-swatch" data-color="#94a3b8" title="Slate" onclick="stSetTextColor(this)"></div>
           <div class="st-swatch" data-color="#fde68a" title="Yellow" onclick="stSetTextColor(this)"></div>
           <div class="st-swatch" data-color="#bbf7d0" title="Mint" onclick="stSetTextColor(this)"></div>
-          <input type="color" id="st-textcolor-custom" value="#e2d9ff" oninput="stSetTextColorRaw(this.value)"
-            style="width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);
-            background:none;cursor:pointer;padding:0;overflow:hidden;flex-shrink:0;" title="Custom colour">
+          <div class="st-swatch" id="st-textcolor-custom-swatch" title="Custom colour"
+            onclick="document.getElementById('st-textcolor-custom').click()"
+            style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);border-style:dashed;"></div>
+          <input type="color" id="st-textcolor-custom" value="#e2d9ff" oninput="stSetTextColorRaw(this.value);document.getElementById('st-textcolor-custom-swatch').style.background=this.value;"
+            style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;">
         </div>
       </div>
 
@@ -1920,7 +1924,6 @@ body.light-mode {
   padding-bottom: 8px;
   min-height: unset;
 }
-/* flex-basis acts as HEIGHT in column layout — reset it */
 .st-row--stack .st-row-label,
 .st-row--wrap .st-row-label {
   flex-basis: auto;
@@ -2085,6 +2088,7 @@ function _stSyncUI() {
         s.classList.toggle('active', s.dataset.color === accentNow);
     });
     document.getElementById('st-accent-custom').value = accentNow;
+    document.getElementById('st-accent-custom-swatch').style.background = accentNow;
 
     // Font chips
     const fontNow = localStorage.getItem('st_font') || 'system';
@@ -2103,6 +2107,7 @@ function _stSyncUI() {
         s.classList.toggle('active', s.dataset.color === tcNow);
     });
     document.getElementById('st-textcolor-custom').value = tcNow;
+    document.getElementById('st-textcolor-custom-swatch').style.background = tcNow;
 
     // Background status
     const hasBg = !!localStorage.getItem('customBg');
@@ -2187,6 +2192,7 @@ function stSetAccent(el) {
     document.querySelectorAll('#settings-panel .st-swatch[data-color]').forEach(s => s.classList.remove('active'));
     el.classList.add('active');
     document.getElementById('st-accent-custom').value = color;
+    document.getElementById('st-accent-custom-swatch').style.background = color;
     _applyAccent(color);
 }
 function stSetAccentRaw(color) {
