@@ -6,34 +6,41 @@
         let taskCounter = 0;
 
         // ─── Workspace init & migration ────────────────────────────────────────────
-        (function initWorkspaces() {
+        // NOTE: workspace data is fully populated in boot() below, which handles both
+        // encrypted and plaintext paths. These defaults are overwritten before first render.
+        (function initWorkspacesDefaults() {
+            // Set up minimal defaults so the app has a valid state if boot() is delayed
             var meta = localStorage.getItem('workspaces_meta');
             if (meta) {
-                workspaces = JSON.parse(meta);
-                activeWorkspaceId = parseInt(localStorage.getItem('ws_active')) || (workspaces[0] ? workspaces[0].id : 1);
-                nextWorkspaceId = workspaces.reduce(function(max, w) { return Math.max(max, w.id); }, 0) + 1;
+                try {
+                    workspaces = JSON.parse(meta);
+                    activeWorkspaceId = parseInt(localStorage.getItem('ws_active')) || (workspaces[0] ? workspaces[0].id : 1);
+                    nextWorkspaceId = workspaces.reduce(function(max, w) { return Math.max(max, w.id); }, 0) + 1;
+                    var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
+                    if (ws) {
+                        var saved = localStorage.getItem('ws_tasks_' + ws.id);
+                        if (saved) tasks = JSON.parse(saved);
+                        var cnt = localStorage.getItem('ws_counter_' + ws.id);
+                        if (cnt) taskCounter = parseInt(cnt);
+                    }
+                } catch(e) { /* will be fixed by boot() */ }
+            } else if (localStorage.getItem('_encSalt')) {
+                // Encrypted mode — boot() will handle decryption; skip here
             } else {
-                var oldTasks = JSON.parse(localStorage.getItem('tasks'));
-                var oldCounter = parseInt(localStorage.getItem('taskCounter')) || 0;
-                var oldCode = localStorage.getItem('tasky_groupCode') || null;
-                tasks = oldTasks || { todo: [], working: [], done: [] };
-                taskCounter = oldCounter;
-                workspaces = [{ id: 1, name: 'Personal', collabCode: oldCode }];
-                activeWorkspaceId = 1;
-                nextWorkspaceId = 2;
-                localStorage.setItem('ws_tasks_1', JSON.stringify(tasks));
-                localStorage.setItem('ws_counter_1', String(taskCounter));
-                localStorage.setItem('workspaces_meta', JSON.stringify(workspaces));
-                // Clean up old keys
-                var oldKeys = ['tasks', 'taskCounter', 'tasks_local', 'taskCounter_local', 'tasky_groupCode'];
-                oldKeys.forEach(function(k) { localStorage.removeItem(k); });
-            }
-            var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
-            if (ws) {
-                var saved = localStorage.getItem('ws_tasks_' + ws.id);
-                if (saved) tasks = JSON.parse(saved);
-                var cnt = localStorage.getItem('ws_counter_' + ws.id);
-                if (cnt) taskCounter = parseInt(cnt);
+                // First-ever launch: migrate legacy keys if present
+                var oldTasks = localStorage.getItem('tasks');
+                if (oldTasks) {
+                    var oldCounter = parseInt(localStorage.getItem('taskCounter')) || 0;
+                    var oldCode = localStorage.getItem('tasky_groupCode') || null;
+                    tasks = JSON.parse(oldTasks);
+                    taskCounter = oldCounter;
+                    workspaces = [{ id: 1, name: 'Personal', collabCode: oldCode }];
+                    activeWorkspaceId = 1; nextWorkspaceId = 2;
+                    localStorage.setItem('ws_tasks_1', oldTasks);
+                    localStorage.setItem('ws_counter_1', String(taskCounter));
+                    localStorage.setItem('workspaces_meta', JSON.stringify(workspaces));
+                    ['tasks','taskCounter','tasks_local','taskCounter_local','tasky_groupCode'].forEach(function(k){localStorage.removeItem(k);});
+                }
             }
         })();
 
@@ -216,7 +223,8 @@
                 });
             });
             if (dirty) {
-                localStorage.setItem('tasks', JSON.stringify(tasks));
+                // Save to the correct workspace key (not the old 'tasks' key)
+                localStorage.setItem('ws_tasks_' + activeWorkspaceId, JSON.stringify(tasks));
             }
         })();
         let voiceRecognition = null;
@@ -434,9 +442,9 @@
                 el.className = 'enc-indicator active';
                 el.title = 'Encryption: Active';
             } else {
-                el.textContent = '🔓';
+                el.textContent = '';
                 el.className = 'enc-indicator';
-                el.title = 'Encryption: Off';
+                el.title = '';
             }
         }
 
@@ -654,15 +662,7 @@
 
             tasks = { todo: [], working: [], done: [] };
             taskCounter = 0;
-            if (_encKey && _allWorkspaceData) {
-                _allWorkspaceData['ws_tasks_' + activeWorkspaceId] = { todo: [], working: [], done: [] };
-                _allWorkspaceData['ws_counter_' + activeWorkspaceId] = 0;
-            } else {
-                localStorage.setItem('tasks',             JSON.stringify(tasks));
-                localStorage.setItem('taskCounter',       '0');
-                localStorage.setItem('tasks_local',       JSON.stringify(tasks));
-                localStorage.setItem('taskCounter_local', '0');
-            }
+            saveCurrentWorkspaceData();
             renderAllColumns();
 
             firebase.auth(app).signOut().catch(() => {});
