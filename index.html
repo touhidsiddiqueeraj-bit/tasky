@@ -1890,19 +1890,19 @@ body.light-mode {
 .st-group-label {
   font-size: 11px; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; color: var(--st-muted);
-  padding: 10px 20px 4px;
+  padding: 8px 20px 3px;
 }
 .st-separator {
   height: 1px;
   background: var(--st-border);
-  margin: 2px 0;
+  margin: 1px 0;
 }
 .st-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 20px;
+  padding: 7px 20px;
   border-bottom: 1px solid var(--st-border);
   gap: 10px;
-  min-height: 40px;
+  min-height: 36px;
   background: transparent;
   transition: background .12s;
   box-sizing: border-box;
@@ -1911,14 +1911,16 @@ body.light-mode {
 .st-row--stack {
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-  padding-bottom: 10px;
+  gap: 6px;
+  padding-bottom: 8px;
+  min-height: unset;
 }
 /* rows that have multiline right-side content (swatches, font chips) */
 .st-row--wrap {
   align-items: flex-start;
   flex-wrap: wrap;
-  padding-bottom: 10px;
+  padding-bottom: 8px;
+  min-height: unset;
 }
 .st-row-label {
   display: flex; align-items: center; gap: 8px;
