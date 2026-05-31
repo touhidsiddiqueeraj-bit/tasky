@@ -643,11 +643,17 @@ function renderCollabBadge() {
         badge.innerHTML = `
             <span class="collab-badge-dot ${isSupervisor ? 'supervisor' : 'member'}"></span>
             <span>${currentGroup.name}</span>
-            <span class="collab-badge-code">${currentGroup.code}</span>
-            ${isSupervisor ? '<span class="collab-badge-role">Supervisor</span>' : ''}
         `;
+        // For members (no team panel), inject Board button + notification bell
+        // right inside the badge itself so it stays visible
+        if (!isSupervisor) {
+            _mbInjectMemberControls(badge);
+        }
     } else {
         badge.style.display = 'none';
+        // Remove member controls if collab ended
+        const mc = document.getElementById('mb-member-controls');
+        if (mc) mc.remove();
     }
 }
 
@@ -659,19 +665,38 @@ function buildTeamColumn() {
         <div class="column-ring collab-ring"></div>
         <div class="column-ring-inner collab-ring-inner"></div>
         <div class="column" id="team-column-inner">
-            <div class="column-header">
-                <div class="column-header-left">
+            <div class="column-header" style="flex-direction:column;align-items:stretch;gap:8px;padding-bottom:10px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
                     <h2 class="column-title">👥 Team</h2>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <button class="tc-board-btn" id="tc-board-btn" title="Message Board">
+                            💬 Board
+                            <span class="tc-board-badge" id="tc-board-badge" style="display:none;"></span>
+                        </button>
+                        <button class="assign-quick-btn" id="assign-quick-btn" title="Assign a task to a member">+ Assign</button>
+                        <span class="task-count" id="team-member-count">0</span>
+                    </div>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <button class="assign-quick-btn" id="assign-quick-btn" title="Assign a task to a member">+ Assign</button>
-                    <span class="task-count" id="team-member-count">0</span>
+                <div class="tc-meta-row">
+                    <span class="tc-code-chip" id="tc-code-chip" title="Collaboration code — click to copy"></span>
+                    <span class="tc-role-chip">👑 Supervisor</span>
                 </div>
             </div>
             <div class="task-list" id="team-list" style="overflow-y:auto;"></div>
         </div>
     `;
     wrapper.querySelector('#assign-quick-btn').addEventListener('click', () => openAssignModal(null));
+    wrapper.querySelector('#tc-board-btn').addEventListener('click', () => {
+        _mbOpen ? closeMsgBoard() : openMsgBoard();
+    });
+    // Fill code chip
+    const chip = wrapper.querySelector('#tc-code-chip');
+    if (chip && currentGroup) {
+        chip.textContent = currentGroup.code;
+        chip.addEventListener('click', () => {
+            navigator.clipboard.writeText(currentGroup.code).then(() => _collabToast('📋 Code copied!'));
+        });
+    }
     return wrapper;
 }
 
@@ -2861,135 +2886,134 @@ setInterval(checkDueDateNotifications, 60_000);
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  TASKY — MESSAGE BOARD  (collaboration workspaces only)
-//  Side-panel with: threaded replies, emoji reactions, file/image attachments
-//  Firestore path: groups/{code}/messages/{msgId}
-//                  groups/{code}/messages/{msgId}/replies/{replyId}
+//  Side-panel: full thread replies, emoji reactions, file attachments
+//  Notifications: real-time unread badge via Firestore onSnapshot
+//  Firestore: groups/{code}/messages/{id}  +  .../replies/{id}
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ─── Message Board State ───────────────────────────────────────────────────
-let _mbOpen         = false;
-let _mbListener     = null;   // onSnapshot unsub for root messages
-let _mbReplyOpenId  = null;   // message id whose reply thread is expanded
-let _mbReplyListeners = {};   // { msgId: unsub }
-let _mbMessages     = [];     // local cache [ { id, ...data, replies:[] } ]
-let _mbUnreadCount  = 0;
-let _mbLastSeen     = 0;      // timestamp of last seen message
+let _mbOpen           = false;
+let _mbListener       = null;
+let _mbReplyOpenId    = null;
+let _mbReplyListeners = {};
+let _mbMessages       = [];
+let _mbUnreadCount    = 0;
+let _mbLastSeen       = 0;
+let _mbPendingFile    = null;
 
 const MB_REACTIONS = ['👍','❤️','😂','🎉','🔥','👀'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
-function _mbGroupCode() {
-    return currentGroup ? currentGroup.code : null;
-}
-
-function _mbMe() {
-    return currentHandle || (currentUser ? currentUser.uid.slice(0,8) : 'anon');
-}
-
 function _mbColRef() {
-    const code = _mbGroupCode();
-    if (!code) return null;
-    return db.collection('groups').doc(code).collection('messages');
+    return (currentGroup && db)
+        ? db.collection('groups').doc(currentGroup.code).collection('messages')
+        : null;
 }
+function _mbMe() { return currentHandle || (currentUser ? currentUser.uid.slice(0,8) : 'anon'); }
 
 function _mbFmtTime(ts) {
     if (!ts) return '';
     const d = ts.toDate ? ts.toDate() : new Date(ts);
-    const now = new Date();
-    const diff = now - d;
+    const now = new Date(), diff = now - d;
     if (diff < 60000) return 'just now';
-    if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
-    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    return d.toLocaleDateString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+    if (d.toDateString() === now.toDateString())
+        return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    return d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 }
 
 function _mbUnreadLS() {
-    const code = _mbGroupCode();
-    if (!code) return 0;
-    return parseInt(localStorage.getItem(`tasky_mb_seen_${code}`) || '0');
+    const code = currentGroup ? currentGroup.code : null;
+    return code ? parseInt(localStorage.getItem('tasky_mb_seen_' + code) || '0') : 0;
 }
-
 function _mbMarkSeen() {
-    const code = _mbGroupCode();
+    const code = currentGroup ? currentGroup.code : null;
     if (!code) return;
     _mbLastSeen = Date.now();
-    localStorage.setItem(`tasky_mb_seen_${code}`, String(_mbLastSeen));
+    localStorage.setItem('tasky_mb_seen_' + code, String(_mbLastSeen));
     _mbUnreadCount = 0;
-    _mbUpdateBadge();
+    _mbSyncBadges();
 }
-
-function _mbUpdateBadge() {
-    const btn = document.getElementById('mb-open-btn');
-    if (!btn) return;
-    const badge = btn.querySelector('.mb-btn-badge');
-    if (_mbUnreadCount > 0) {
-        if (badge) badge.textContent = _mbUnreadCount > 9 ? '9+' : _mbUnreadCount;
-        else {
-            const b = document.createElement('span');
-            b.className = 'mb-btn-badge';
+function _mbSyncBadges() {
+    // Team column badge (supervisor)
+    const b = document.getElementById('tc-board-badge');
+    if (b) {
+        if (_mbUnreadCount > 0) {
             b.textContent = _mbUnreadCount > 9 ? '9+' : _mbUnreadCount;
-            btn.appendChild(b);
+            b.style.display = '';
+        } else {
+            b.style.display = 'none';
         }
-    } else {
-        if (badge) badge.remove();
+    }
+    // Member controls badge
+    const mb = document.getElementById('mb-member-badge');
+    if (mb) {
+        if (_mbUnreadCount > 0) {
+            mb.textContent = _mbUnreadCount > 9 ? '9+' : _mbUnreadCount;
+            mb.style.display = '';
+        } else {
+            mb.style.display = 'none';
+        }
     }
 }
 
-// ─── Inject "Board" button into collab badge area ─────────────────────────
-function _mbInjectToggleBtn() {
-    if (document.getElementById('mb-open-btn')) return;
-    const btn = document.createElement('button');
-    btn.id = 'mb-open-btn';
-    btn.className = 'mb-open-btn';
-    btn.title = 'Message Board';
-    btn.innerHTML = '💬 Board';
-    btn.addEventListener('click', () => _mbOpen ? closeMsgBoard() : openMsgBoard());
-    // Insert after collab badge
-    const badge = document.getElementById('collab-badge');
-    if (badge && badge.parentNode) {
-        badge.parentNode.insertBefore(btn, badge.nextSibling);
-    } else {
-        const menu = document.querySelector('.top-menu');
-        if (menu) menu.appendChild(btn);
-    }
+// ─── Member controls (Board btn + notif bell, injected for non-supervisors) ─
+function _mbInjectMemberControls(badgeEl) {
+    let mc = document.getElementById('mb-member-controls');
+    if (mc) mc.remove();
+    mc = document.createElement('div');
+    mc.id = 'mb-member-controls';
+    mc.className = 'mb-member-controls';
+    mc.innerHTML = `
+        <button class="mb-member-board-btn" id="mb-member-board-btn" title="Message Board">
+            💬 Board
+            <span class="mb-btn-badge" id="mb-member-badge" style="display:none;"></span>
+        </button>
+    `;
+    mc.querySelector('#mb-member-board-btn').addEventListener('click', () => {
+        _mbOpen ? closeMsgBoard() : openMsgBoard();
+    });
+    // Insert after the badge (in top-menu)
+    badgeEl.parentNode && badgeEl.parentNode.insertBefore(mc, badgeEl.nextSibling);
+    _mbSyncBadges();
 }
 
-// ─── Open / Close panel ───────────────────────────────────────────────────
+// ─── Open / Close ─────────────────────────────────────────────────────────
 function openMsgBoard() {
     if (!currentGroup) { _collabToast('⚠️ Join a collaboration to use the message board'); return; }
     if (!currentUser || currentUser.isAnonymous) { _collabToast('⚠️ Sign in to post messages'); return; }
-
     _mbOpen = true;
-
-    // Build panel if not exists
     if (!document.getElementById('mb-panel')) _mbBuildPanel();
-
-    const panel = document.getElementById('mb-panel');
-    const overlay = document.getElementById('mb-overlay');
-    panel.classList.add('mb-panel--open');
-    if (overlay) overlay.classList.add('mb-overlay--visible');
-
+    document.getElementById('mb-panel').classList.add('mb-panel--open');
+    const ov = document.getElementById('mb-overlay');
+    if (ov) ov.classList.add('mb-overlay--visible');
     _mbMarkSeen();
     _mbStartListener();
-    setTimeout(() => document.getElementById('mb-input') && document.getElementById('mb-input').focus(), 200);
+    // Update board button states
+    const tcBtn = document.getElementById('tc-board-btn');
+    if (tcBtn) tcBtn.classList.add('tc-board-btn--active');
+    const mBtn = document.getElementById('mb-member-board-btn');
+    if (mBtn) mBtn.classList.add('tc-board-btn--active');
+    setTimeout(() => { const i = document.getElementById('mb-input'); if (i) i.focus(); }, 200);
 }
-
 function closeMsgBoard() {
     _mbOpen = false;
     const panel = document.getElementById('mb-panel');
-    const overlay = document.getElementById('mb-overlay');
     if (panel) panel.classList.remove('mb-panel--open');
-    if (overlay) overlay.classList.remove('mb-overlay--visible');
+    const ov = document.getElementById('mb-overlay');
+    if (ov) ov.classList.remove('mb-overlay--visible');
+    const tcBtn = document.getElementById('tc-board-btn');
+    if (tcBtn) tcBtn.classList.remove('tc-board-btn--active');
+    const mBtn = document.getElementById('mb-member-board-btn');
+    if (mBtn) mBtn.classList.remove('tc-board-btn--active');
 }
 
-// ─── Build Panel DOM ───────────────────────────────────────────────────────
+// ─── Build panel DOM ───────────────────────────────────────────────────────
 function _mbBuildPanel() {
-    // Backdrop (mobile tap-to-close)
-    const overlay = document.createElement('div');
-    overlay.id = 'mb-overlay';
-    overlay.className = 'mb-overlay';
-    overlay.addEventListener('click', closeMsgBoard);
-    document.body.appendChild(overlay);
+    const ov = document.createElement('div');
+    ov.id = 'mb-overlay';
+    ov.className = 'mb-overlay';
+    ov.addEventListener('click', closeMsgBoard);
+    document.body.appendChild(ov);
 
     const panel = document.createElement('div');
     panel.id = 'mb-panel';
@@ -3000,14 +3024,11 @@ function _mbBuildPanel() {
                 <span class="mb-header-icon">💬</span>
                 <div>
                     <div class="mb-header-title">Message Board</div>
-                    <div class="mb-header-sub" id="mb-header-sub">
-                        ${currentGroup ? escHtml(currentGroup.name) : ''}
-                    </div>
+                    <div class="mb-header-sub">${currentGroup ? escHtml(currentGroup.name) : ''}</div>
                 </div>
             </div>
-            <button class="mb-close-btn" id="mb-close-btn" title="Close">✕</button>
+            <button class="mb-close-btn" id="mb-close-btn">✕</button>
         </div>
-
         <div class="mb-feed" id="mb-feed">
             <div class="mb-empty" id="mb-empty">
                 <div class="mb-empty-icon">💬</div>
@@ -3015,17 +3036,13 @@ function _mbBuildPanel() {
                 <div class="mb-empty-sub">Be the first to post something</div>
             </div>
         </div>
-
-        <div class="mb-composer" id="mb-composer">
+        <div class="mb-composer">
             <div class="mb-composer-inner">
                 <div class="mb-avatar-sm">${_mbMe()[0].toUpperCase()}</div>
                 <div class="mb-composer-right">
-                    <textarea id="mb-input" class="mb-input" placeholder="Write a message…" rows="1" maxlength="1000"></textarea>
+                    <textarea id="mb-input" class="mb-input" placeholder="Write a message… (Enter to send)" rows="1" maxlength="1000"></textarea>
                     <div class="mb-composer-actions">
-                        <label class="mb-attach-label" title="Attach image">
-                            📎
-                            <input type="file" id="mb-file-input" accept="image/*,application/pdf,.doc,.docx,.txt" style="display:none">
-                        </label>
+                        <label class="mb-attach-label" title="Attach image or file">📎<input type="file" id="mb-file-input" accept="image/*,.pdf,.doc,.docx,.txt" style="display:none"></label>
                         <div id="mb-attach-preview" class="mb-attach-preview" style="display:none;"></div>
                         <button class="mb-send-btn" id="mb-send-btn">Send ↑</button>
                     </div>
@@ -3033,267 +3050,172 @@ function _mbBuildPanel() {
             </div>
         </div>
     `;
-
     panel.querySelector('#mb-close-btn').addEventListener('click', closeMsgBoard);
-
-    // Textarea auto-expand
-    const textarea = panel.querySelector('#mb-input');
-    textarea.addEventListener('input', () => {
-        textarea.style.height = 'auto';
-        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-    });
-    textarea.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _mbSend(); }
-    });
-
-    // File attach
-    const fileInput = panel.querySelector('#mb-file-input');
-    fileInput.addEventListener('change', () => _mbHandleFileSelect(fileInput));
-
-    // Send
+    const ta = panel.querySelector('#mb-input');
+    ta.addEventListener('input', () => { ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,120)+'px'; });
+    ta.addEventListener('keydown', e => { if (e.key==='Enter'&&!e.shiftKey){e.preventDefault();_mbSend();} });
+    panel.querySelector('#mb-file-input').addEventListener('change', e => _mbHandleFile(e.target));
     panel.querySelector('#mb-send-btn').addEventListener('click', _mbSend);
-
     document.body.appendChild(panel);
 }
 
-// ─── Firestore listener ────────────────────────────────────────────────────
+// ─── Firestore listener (also drives notification count) ──────────────────
 function _mbStartListener() {
-    _mbStopListener();
+    if (_mbListener) return; // already running
     const col = _mbColRef();
     if (!col) return;
     _mbMessages = [];
+    _mbLastSeen = _mbUnreadLS();
 
-    _mbListener = col.orderBy('createdAt', 'asc').onSnapshot(snap => {
-        const lastSeen = _mbUnreadLS();
-        let newCount = 0;
-
+    _mbListener = col.orderBy('createdAt','asc').onSnapshot(snap => {
         snap.docChanges().forEach(change => {
             const id = change.doc.id;
             const data = { id, ...change.doc.data(), replies: [] };
-
             if (change.type === 'removed') {
                 _mbMessages = _mbMessages.filter(m => m.id !== id);
-                // Stop reply listener if open
                 if (_mbReplyListeners[id]) { _mbReplyListeners[id](); delete _mbReplyListeners[id]; }
                 return;
             }
-
-            const existing = _mbMessages.findIndex(m => m.id === id);
-            if (existing >= 0) {
-                data.replies = _mbMessages[existing].replies || [];
-                _mbMessages[existing] = data;
+            const ei = _mbMessages.findIndex(m => m.id === id);
+            if (ei >= 0) {
+                data.replies = _mbMessages[ei].replies || [];
+                _mbMessages[ei] = data;
             } else {
                 _mbMessages.push(data);
-                // Count unread
-                const ts = data.createdAt ? (data.createdAt.toMillis ? data.createdAt.toMillis() : Date.now()) : 0;
-                if (ts > lastSeen && data.authorHandle !== _mbMe()) newCount++;
+                // Count unread: new message from someone else, newer than last seen
+                const ts = data.createdAt ? (data.createdAt.toMillis ? data.createdAt.toMillis() : 0) : 0;
+                if (ts > _mbLastSeen && data.authorHandle !== _mbMe()) {
+                    _mbUnreadCount++;
+                    // Browser push notification
+                    if (!_mbOpen && 'Notification' in window && Notification.permission === 'granted') {
+                        try {
+                            new Notification('Tasky — New Message', {
+                                body: `@${data.authorHandle || '?'}: ${(data.text||'').slice(0,80)}`,
+                                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%238B5CF6"/><text x="16" y="22" text-anchor="middle" font-size="18" fill="white">💬</text></svg>'
+                            });
+                        } catch(_) {}
+                    }
+                }
             }
         });
-
-        // Keep sorted
-        _mbMessages.sort((a, b) => {
+        _mbMessages.sort((a,b) => {
             const at = a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : 0) : 0;
             const bt = b.createdAt ? (b.createdAt.toMillis ? b.createdAt.toMillis() : 0) : 0;
             return at - bt;
         });
-
-        if (!_mbOpen) {
-            _mbUnreadCount += newCount;
-            _mbUpdateBadge();
-        } else {
-            _mbMarkSeen();
-        }
-
-        _mbRenderFeed();
-
-        // Start reply listeners for any open thread
+        if (_mbOpen) { _mbMarkSeen(); _mbRenderFeed(); }
+        else { _mbSyncBadges(); }
         if (_mbReplyOpenId) _mbListenReplies(_mbReplyOpenId);
     });
 }
-
 function _mbStopListener() {
     if (_mbListener) { _mbListener(); _mbListener = null; }
     Object.values(_mbReplyListeners).forEach(u => u());
     _mbReplyListeners = {};
+    _mbMessages = [];
 }
-
 function _mbListenReplies(msgId) {
-    if (_mbReplyListeners[msgId]) return; // already listening
-    const col = _mbColRef();
-    if (!col) return;
+    if (_mbReplyListeners[msgId]) return;
+    const col = _mbColRef(); if (!col) return;
     _mbReplyListeners[msgId] = col.doc(msgId).collection('replies')
-        .orderBy('createdAt', 'asc')
-        .onSnapshot(snap => {
-            const msg = _mbMessages.find(m => m.id === msgId);
-            if (!msg) return;
+        .orderBy('createdAt','asc').onSnapshot(snap => {
+            const msg = _mbMessages.find(m => m.id === msgId); if (!msg) return;
             snap.docChanges().forEach(change => {
-                const rid = change.doc.id;
-                const rdata = { id: rid, ...change.doc.data() };
-                if (change.type === 'removed') {
-                    msg.replies = msg.replies.filter(r => r.id !== rid);
-                } else {
-                    const ri = msg.replies.findIndex(r => r.id === rid);
-                    if (ri >= 0) msg.replies[ri] = rdata;
-                    else msg.replies.push(rdata);
-                }
+                const rid = change.doc.id, rd = {id:rid,...change.doc.data()};
+                if (change.type==='removed') { msg.replies=msg.replies.filter(r=>r.id!==rid); return; }
+                const ri = msg.replies.findIndex(r=>r.id===rid);
+                if (ri>=0) msg.replies[ri]=rd; else msg.replies.push(rd);
             });
-            msg.replies.sort((a, b) => {
-                const at = a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : 0) : 0;
-                const bt = b.createdAt ? (b.createdAt.toMillis ? b.createdAt.toMillis() : 0) : 0;
-                return at - bt;
+            msg.replies.sort((a,b)=>{
+                const at=a.createdAt?(a.createdAt.toMillis?a.createdAt.toMillis():0):0;
+                const bt=b.createdAt?(b.createdAt.toMillis?b.createdAt.toMillis():0):0;
+                return at-bt;
             });
-            _mbRenderFeed();
+            if (_mbOpen) _mbRenderFeed();
         });
 }
 
-// ─── Send message ──────────────────────────────────────────────────────────
-let _mbPendingFile = null; // { name, type, dataUrl }
-
+// ─── Send ─────────────────────────────────────────────────────────────────
 async function _mbSend() {
-    const input = document.getElementById('mb-input');
-    if (!input) return;
+    const input = document.getElementById('mb-input'); if (!input) return;
     const text = input.value.trim();
     if (!text && !_mbPendingFile) return;
-
-    const col = _mbColRef();
-    if (!col) return;
-
+    const col = _mbColRef(); if (!col) return;
     const btn = document.getElementById('mb-send-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '…'; }
-
+    if (btn) { btn.disabled=true; btn.textContent='…'; }
     try {
-        const msgData = {
-            text: text || '',
-            authorHandle: _mbMe(),
-            authorUid: currentUser ? currentUser.uid : 'anon',
+        const msg = {
+            text: text||'', authorHandle:_mbMe(),
+            authorUid: currentUser?currentUser.uid:'anon',
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            reactions: {},
-            replyCount: 0
+            reactions:{}, replyCount:0
         };
-
-        if (_mbPendingFile) {
-            msgData.attachment = {
-                name: _mbPendingFile.name,
-                type: _mbPendingFile.type,
-                dataUrl: _mbPendingFile.dataUrl
-            };
-        }
-
-        await col.add(msgData);
-
-        input.value = '';
-        input.style.height = 'auto';
-        _mbPendingFile = null;
-        const preview = document.getElementById('mb-attach-preview');
-        if (preview) { preview.innerHTML = ''; preview.style.display = 'none'; }
-        const fileInput = document.getElementById('mb-file-input');
-        if (fileInput) fileInput.value = '';
-
-    } catch(e) {
-        _collabToast('⚠️ Failed to send message');
-        console.error('[mb] send failed', e);
-    }
-
-    if (btn) { btn.disabled = false; btn.textContent = 'Send ↑'; }
+        if (_mbPendingFile) msg.attachment = _mbPendingFile;
+        await col.add(msg);
+        input.value=''; input.style.height='auto';
+        _mbPendingFile=null;
+        const pv=document.getElementById('mb-attach-preview');
+        if(pv){pv.innerHTML='';pv.style.display='none';}
+        const fi=document.getElementById('mb-file-input'); if(fi) fi.value='';
+    } catch(e) { _collabToast('⚠️ Failed to send'); }
+    if (btn) { btn.disabled=false; btn.textContent='Send ↑'; }
 }
-
-// ─── Send reply ────────────────────────────────────────────────────────────
 async function _mbSendReply(msgId) {
-    const input = document.getElementById(`mb-reply-input-${msgId}`);
-    if (!input) return;
-    const text = input.value.trim();
-    if (!text) return;
-
-    const col = _mbColRef();
-    if (!col) return;
-
-    const btn = document.getElementById(`mb-reply-send-${msgId}`);
-    if (btn) { btn.disabled = true; btn.textContent = '…'; }
-
+    const input=document.getElementById('mb-reply-input-'+msgId); if(!input) return;
+    const text=input.value.trim(); if(!text) return;
+    const col=_mbColRef(); if(!col) return;
+    const btn=document.getElementById('mb-reply-send-'+msgId);
+    if(btn){btn.disabled=true;btn.textContent='…';}
     try {
         await col.doc(msgId).collection('replies').add({
-            text,
-            authorHandle: _mbMe(),
-            authorUid: currentUser ? currentUser.uid : 'anon',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            text, authorHandle:_mbMe(), authorUid:currentUser?currentUser.uid:'anon',
+            createdAt:firebase.firestore.FieldValue.serverTimestamp(), reactions:{}
         });
-        // Increment replyCount on parent
-        await col.doc(msgId).update({
-            replyCount: firebase.firestore.FieldValue.increment(1)
-        });
-        input.value = '';
-    } catch(e) {
-        _collabToast('⚠️ Failed to send reply');
-    }
-
-    if (btn) { btn.disabled = false; btn.textContent = '↑'; }
+        await col.doc(msgId).update({replyCount:firebase.firestore.FieldValue.increment(1)});
+        input.value='';
+    } catch(e){_collabToast('⚠️ Reply failed');}
+    if(btn){btn.disabled=false;btn.textContent='↑';}
 }
 
 // ─── Reactions ────────────────────────────────────────────────────────────
-async function _mbToggleReaction(msgId, emoji, isReply, replyId) {
-    const col = _mbColRef();
-    if (!col) return;
-    const me = _mbMe();
-    const key = `reactions.${emoji}`;
-
-    let ref = col.doc(msgId);
-    if (isReply && replyId) ref = col.doc(msgId).collection('replies').doc(replyId);
-
+async function _mbToggleReaction(msgId,emoji,isReply,replyId) {
+    const col=_mbColRef(); if(!col) return;
+    const me=_mbMe(), key='reactions.'+emoji;
+    let ref = isReply&&replyId ? col.doc(msgId).collection('replies').doc(replyId) : col.doc(msgId);
     try {
-        const snap = await ref.get();
-        if (!snap.exists) return;
-        const reactions = snap.data().reactions || {};
-        const users = reactions[emoji] || [];
-        if (users.includes(me)) {
-            await ref.update({ [key]: firebase.firestore.FieldValue.arrayRemove(me) });
-        } else {
-            await ref.update({ [key]: firebase.firestore.FieldValue.arrayUnion(me) });
-        }
-    } catch(e) { console.warn('[mb] reaction failed', e); }
+        const snap=await ref.get(); if(!snap.exists) return;
+        const users=(snap.data().reactions||{})[emoji]||[];
+        if(users.includes(me)) await ref.update({[key]:firebase.firestore.FieldValue.arrayRemove(me)});
+        else await ref.update({[key]:firebase.firestore.FieldValue.arrayUnion(me)});
+    } catch(e){}
 }
 
-// ─── Delete message ────────────────────────────────────────────────────────
-async function _mbDelete(msgId, isReply, replyId) {
-    const col = _mbColRef();
-    if (!col) return;
+// ─── Delete ───────────────────────────────────────────────────────────────
+async function _mbDelete(msgId,isReply,replyId) {
+    const col=_mbColRef(); if(!col) return;
     try {
-        if (isReply && replyId) {
+        if(isReply&&replyId){
             await col.doc(msgId).collection('replies').doc(replyId).delete();
-            await col.doc(msgId).update({ replyCount: firebase.firestore.FieldValue.increment(-1) });
-        } else {
-            await col.doc(msgId).delete();
-        }
-    } catch(e) { _collabToast('⚠️ Failed to delete'); }
+            await col.doc(msgId).update({replyCount:firebase.firestore.FieldValue.increment(-1)});
+        } else { await col.doc(msgId).delete(); }
+    } catch(e){_collabToast('⚠️ Delete failed');}
 }
 
-// ─── File handling ─────────────────────────────────────────────────────────
-function _mbHandleFileSelect(input) {
-    const file = input.files[0];
-    if (!file) return;
-    if (file.size > 3 * 1024 * 1024) {
-        _collabToast('⚠️ File too large (max 3 MB)');
-        input.value = '';
-        return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        _mbPendingFile = { name: file.name, type: file.type, dataUrl: e.target.result };
-        const preview = document.getElementById('mb-attach-preview');
-        if (!preview) return;
-        preview.style.display = 'flex';
-        const isImage = file.type.startsWith('image/');
-        preview.innerHTML = isImage
-            ? `<img src="${e.target.result}" class="mb-attach-thumb" alt="${escHtml(file.name)}">
-               <span class="mb-attach-name">${escHtml(file.name)}</span>
-               <button class="mb-attach-remove" title="Remove">✕</button>`
-            : `<span class="mb-attach-icon">📎</span>
-               <span class="mb-attach-name">${escHtml(file.name)}</span>
-               <button class="mb-attach-remove" title="Remove">✕</button>`;
-        preview.querySelector('.mb-attach-remove').addEventListener('click', () => {
-            _mbPendingFile = null;
-            preview.innerHTML = '';
-            preview.style.display = 'none';
-            input.value = '';
+// ─── File attach ──────────────────────────────────────────────────────────
+function _mbHandleFile(input) {
+    const file=input.files[0]; if(!file) return;
+    if(file.size>3*1024*1024){_collabToast('⚠️ Max 3 MB');input.value='';return;}
+    const reader=new FileReader();
+    reader.onload=e=>{
+        _mbPendingFile={name:file.name,type:file.type,dataUrl:e.target.result};
+        const pv=document.getElementById('mb-attach-preview'); if(!pv) return;
+        pv.style.display='flex';
+        const isImg=file.type.startsWith('image/');
+        pv.innerHTML=isImg
+            ? `<img src="${e.target.result}" class="mb-attach-thumb" alt="${escHtml(file.name)}"><span class="mb-attach-name">${escHtml(file.name)}</span><button class="mb-attach-remove">✕</button>`
+            : `<span class="mb-attach-icon">📎</span><span class="mb-attach-name">${escHtml(file.name)}</span><button class="mb-attach-remove">✕</button>`;
+        pv.querySelector('.mb-attach-remove').addEventListener('click',()=>{
+            _mbPendingFile=null;pv.innerHTML='';pv.style.display='none';input.value='';
         });
     };
     reader.readAsDataURL(file);
@@ -3301,272 +3223,159 @@ function _mbHandleFileSelect(input) {
 
 // ─── Render feed ──────────────────────────────────────────────────────────
 function _mbRenderFeed() {
-    const feed = document.getElementById('mb-feed');
-    if (!feed) return;
+    const feed=document.getElementById('mb-feed'); if(!feed) return;
+    const empty=document.getElementById('mb-empty');
+    if(empty) empty.style.display=_mbMessages.length?'none':'flex';
+    feed.querySelectorAll('.mb-msg').forEach(e=>e.remove());
+    const me=_mbMe();
 
-    const empty = document.getElementById('mb-empty');
-    if (empty) empty.style.display = _mbMessages.length ? 'none' : 'flex';
+    _mbMessages.forEach(msg=>{
+        const isMine=msg.authorHandle===me;
+        const card=document.createElement('div');
+        card.className='mb-msg'+(isMine?' mb-msg--mine':'');
+        card.dataset.id=msg.id;
 
-    // Remove old message cards (keep #mb-empty)
-    feed.querySelectorAll('.mb-msg').forEach(el => el.remove());
-
-    const me = _mbMe();
-    const isSup = isSupervisor;
-
-    _mbMessages.forEach(msg => {
-        const isMine = msg.authorHandle === me;
-        const card = document.createElement('div');
-        card.className = `mb-msg ${isMine ? 'mb-msg--mine' : ''}`;
-        card.dataset.id = msg.id;
-
-        // Attachment HTML
-        let attachHtml = '';
-        if (msg.attachment) {
-            const att = msg.attachment;
-            if (att.type && att.type.startsWith('image/')) {
-                attachHtml = `<a href="${att.dataUrl}" target="_blank" rel="noopener">
-                    <img src="${att.dataUrl}" class="mb-attach-img" alt="${escHtml(att.name)}">
-                </a>`;
-            } else {
-                attachHtml = `<a class="mb-file-link" href="${att.dataUrl}" download="${escHtml(att.name)}">
-                    📎 ${escHtml(att.name)}
-                </a>`;
-            }
+        let attachHtml='';
+        if(msg.attachment){
+            const a=msg.attachment;
+            attachHtml=a.type&&a.type.startsWith('image/')
+                ? `<a href="${a.dataUrl}" target="_blank"><img src="${a.dataUrl}" class="mb-attach-img" alt="${escHtml(a.name)}"></a>`
+                : `<a class="mb-file-link" href="${a.dataUrl}" download="${escHtml(a.name)}">📎 ${escHtml(a.name)}</a>`;
         }
+        const reactHtml=_mbReactionsHtml(msg.reactions||{},msg.id,false,null,me);
+        const replyCount=msg.replyCount||(msg.replies?msg.replies.length:0);
+        const isSup=isSupervisor;
+        const canDel=isMine||isSup;
 
-        // Reactions HTML
-        const reactionsHtml = _mbReactionsHtml(msg.reactions || {}, msg.id, false, null, me);
-
-        // Reply count
-        const replyCount = msg.replyCount || (msg.replies ? msg.replies.length : 0);
-        const replyLabel = replyCount
-            ? `${replyCount} repl${replyCount === 1 ? 'y' : 'ies'}`
-            : 'Reply';
-
-        card.innerHTML = `
+        card.innerHTML=`
             <div class="mb-msg-meta">
-                <span class="mb-avatar-sm ${msg.authorUid === (currentGroup && currentGroup.supervisorUid) ? 'mb-avatar--sup' : ''}">
-                    ${msg.authorHandle ? msg.authorHandle[0].toUpperCase() : '?'}
-                </span>
-                <span class="mb-author">@${escHtml(msg.authorHandle || '?')}</span>
+                <span class="mb-avatar-sm ${msg.authorUid===(currentGroup&&currentGroup.supervisorUid)?'mb-avatar--sup':''}">${(msg.authorHandle||'?')[0].toUpperCase()}</span>
+                <span class="mb-author">@${escHtml(msg.authorHandle||'?')}</span>
                 <span class="mb-time">${_mbFmtTime(msg.createdAt)}</span>
-                ${(isMine || isSup) ? `<button class="mb-del-btn" data-msgid="${msg.id}" title="Delete">✕</button>` : ''}
+                ${canDel?`<button class="mb-del-btn" title="Delete">✕</button>`:''}
             </div>
-            ${msg.text ? `<div class="mb-msg-text">${escHtml(msg.text)}</div>` : ''}
+            ${msg.text?`<div class="mb-msg-text">${escHtml(msg.text)}</div>`:''}
             ${attachHtml}
             <div class="mb-msg-footer">
                 <div class="mb-reaction-row" id="mb-reactions-${msg.id}">
-                    ${reactionsHtml}
-                    <button class="mb-react-add-btn" data-msgid="${msg.id}">😊</button>
+                    ${reactHtml}
+                    <button class="mb-react-add-btn" title="React">😊</button>
                 </div>
-                <button class="mb-reply-toggle" data-msgid="${msg.id}">
-                    💬 ${replyLabel}
-                </button>
+                <button class="mb-reply-toggle">💬 ${replyCount?replyCount+' repl'+(replyCount===1?'y':'ies'):'Reply'}</button>
             </div>
-            <div class="mb-thread" id="mb-thread-${msg.id}" style="display:${_mbReplyOpenId === msg.id ? 'block' : 'none'};">
+            <div class="mb-thread" id="mb-thread-${msg.id}" style="display:${_mbReplyOpenId===msg.id?'block':'none'};">
                 <div class="mb-replies" id="mb-replies-${msg.id}"></div>
                 <div class="mb-reply-composer">
-                    <div class="mb-avatar-sm">${me[0].toUpperCase()}</div>
-                    <input type="text" id="mb-reply-input-${msg.id}" class="mb-reply-input" placeholder="Write a reply…" maxlength="500">
+                    <div class="mb-avatar-xs">${me[0].toUpperCase()}</div>
+                    <input type="text" id="mb-reply-input-${msg.id}" class="mb-reply-input" placeholder="Reply…" maxlength="500">
                     <button class="mb-reply-send" id="mb-reply-send-${msg.id}">↑</button>
                 </div>
-            </div>
-        `;
+            </div>`;
 
-        // Wire reactions emoji picker
-        card.querySelector('.mb-react-add-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            _mbShowEmojiPicker(msg.id, false, null, e.currentTarget);
-        });
-
-        // Wire reaction toggles (delegated below via event delegation on feed)
-
-        // Wire delete
-        const delBtn = card.querySelector('.mb-del-btn');
-        if (delBtn) {
-            delBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                _mbDelete(msg.id, false, null);
-            });
-        }
-
-        // Wire reply toggle
-        card.querySelector('.mb-reply-toggle').addEventListener('click', () => {
-            if (_mbReplyOpenId === msg.id) {
-                _mbReplyOpenId = null;
-            } else {
-                _mbReplyOpenId = msg.id;
-                _mbListenReplies(msg.id);
-            }
+        if(canDel) card.querySelector('.mb-del-btn').addEventListener('click',()=>_mbDelete(msg.id,false,null));
+        card.querySelector('.mb-react-add-btn').addEventListener('click',e=>{e.stopPropagation();_mbShowEmojiPicker(msg.id,false,null,e.currentTarget);});
+        card.querySelector('.mb-reply-toggle').addEventListener('click',()=>{
+            _mbReplyOpenId=(_mbReplyOpenId===msg.id)?null:msg.id;
+            if(_mbReplyOpenId) _mbListenReplies(msg.id);
             _mbRenderFeed();
         });
-
+        card.querySelectorAll('.mb-reaction-btn').forEach(b=>b.addEventListener('click',()=>
+            _mbToggleReaction(msg.id,b.dataset.emoji,false,null)));
         feed.appendChild(card);
 
-        // Render replies if open
-        if (_mbReplyOpenId === msg.id) {
+        if(_mbReplyOpenId===msg.id){
             _mbRenderReplies(msg);
-            // Wire reply input
-            const ri = card.querySelector(`#mb-reply-input-${msg.id}`);
-            const rs = card.querySelector(`#mb-reply-send-${msg.id}`);
-            if (ri) ri.addEventListener('keydown', e => {
-                if (e.key === 'Enter') { e.preventDefault(); _mbSendReply(msg.id); }
-            });
-            if (rs) rs.addEventListener('click', () => _mbSendReply(msg.id));
+            const ri=card.querySelector('#mb-reply-input-'+msg.id);
+            const rs=card.querySelector('#mb-reply-send-'+msg.id);
+            if(ri) ri.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_mbSendReply(msg.id);}});
+            if(rs) rs.addEventListener('click',()=>_mbSendReply(msg.id));
         }
     });
 
-    // Delegate reaction button clicks on feed
-    feed.querySelectorAll('.mb-reaction-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const msgId  = btn.dataset.msgid;
-            const emoji  = btn.dataset.emoji;
-            const isReply = btn.dataset.isreply === 'true';
-            const replyId = btn.dataset.replyid || null;
-            _mbToggleReaction(msgId, emoji, isReply, replyId);
-        });
-    });
-
-    // Scroll to bottom on new messages if user was already near bottom
-    const scrollEl = feed;
-    const nearBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 120;
-    if (nearBottom) scrollEl.scrollTop = scrollEl.scrollHeight;
+    // Auto-scroll if near bottom
+    const nearBottom=feed.scrollHeight-feed.scrollTop-feed.clientHeight<120;
+    if(nearBottom) feed.scrollTop=feed.scrollHeight;
 }
 
 function _mbRenderReplies(msg) {
-    const container = document.getElementById(`mb-replies-${msg.id}`);
-    if (!container) return;
-    container.innerHTML = '';
-    const me = _mbMe();
-    const isSup = isSupervisor;
-
-    (msg.replies || []).forEach(r => {
-        const isMine = r.authorHandle === me;
-        const div = document.createElement('div');
-        div.className = `mb-reply ${isMine ? 'mb-reply--mine' : ''}`;
-        const reactHtml = _mbReactionsHtml(r.reactions || {}, msg.id, true, r.id, me);
-        div.innerHTML = `
+    const container=document.getElementById('mb-replies-'+msg.id); if(!container) return;
+    container.innerHTML='';
+    const me=_mbMe();
+    (msg.replies||[]).forEach(r=>{
+        const isMine=r.authorHandle===me, isSup=isSupervisor;
+        const div=document.createElement('div');
+        div.className='mb-reply'+(isMine?' mb-reply--mine':'');
+        const rh=_mbReactionsHtml(r.reactions||{},msg.id,true,r.id,me);
+        div.innerHTML=`
             <div class="mb-msg-meta">
-                <span class="mb-avatar-xs">${r.authorHandle ? r.authorHandle[0].toUpperCase() : '?'}</span>
-                <span class="mb-author">@${escHtml(r.authorHandle || '?')}</span>
+                <span class="mb-avatar-xs">${(r.authorHandle||'?')[0].toUpperCase()}</span>
+                <span class="mb-author">@${escHtml(r.authorHandle||'?')}</span>
                 <span class="mb-time">${_mbFmtTime(r.createdAt)}</span>
-                ${(isMine || isSup) ? `<button class="mb-del-btn" title="Delete">✕</button>` : ''}
+                ${(isMine||isSup)?'<button class="mb-del-btn">✕</button>':''}
             </div>
-            <div class="mb-msg-text mb-reply-text">${escHtml(r.text || '')}</div>
-            <div class="mb-reaction-row">
-                ${reactHtml}
-                <button class="mb-react-add-btn" data-msgid="${msg.id}" data-replyid="${r.id}">😊</button>
-            </div>
-        `;
-        const delBtn = div.querySelector('.mb-del-btn');
-        if (delBtn) delBtn.addEventListener('click', () => _mbDelete(msg.id, true, r.id));
-        div.querySelector('.mb-react-add-btn').addEventListener('click', (e) => {
-            _mbShowEmojiPicker(msg.id, true, r.id, e.currentTarget);
-        });
-        div.querySelectorAll('.mb-reaction-btn').forEach(btn => {
-            btn.addEventListener('click', () =>
-                _mbToggleReaction(msg.id, btn.dataset.emoji, true, r.id));
-        });
+            <div class="mb-msg-text mb-reply-text">${escHtml(r.text||'')}</div>
+            <div class="mb-reaction-row">${rh}<button class="mb-react-add-btn">😊</button></div>`;
+        if(isMine||isSup) div.querySelector('.mb-del-btn').addEventListener('click',()=>_mbDelete(msg.id,true,r.id));
+        div.querySelector('.mb-react-add-btn').addEventListener('click',e=>{e.stopPropagation();_mbShowEmojiPicker(msg.id,true,r.id,e.currentTarget);});
+        div.querySelectorAll('.mb-reaction-btn').forEach(b=>b.addEventListener('click',()=>_mbToggleReaction(msg.id,b.dataset.emoji,true,r.id)));
         container.appendChild(div);
     });
 }
 
-function _mbReactionsHtml(reactions, msgId, isReply, replyId, me) {
-    return Object.entries(reactions)
-        .filter(([, users]) => users && users.length > 0)
-        .map(([emoji, users]) => {
-            const reacted = users.includes(me);
-            return `<button class="mb-reaction-btn ${reacted ? 'mb-reaction-btn--active' : ''}"
-                data-msgid="${msgId}" data-emoji="${emoji}"
-                data-isreply="${isReply}" data-replyid="${replyId || ''}"
-                title="${users.map(u => '@'+u).join(', ')}">
-                ${emoji} <span>${users.length}</span>
-            </button>`;
-        }).join('');
+function _mbReactionsHtml(reactions,msgId,isReply,replyId,me) {
+    return Object.entries(reactions).filter(([,u])=>u&&u.length>0).map(([emoji,users])=>{
+        const active=users.includes(me);
+        return `<button class="mb-reaction-btn${active?' mb-reaction-btn--active':''}"
+            data-msgid="${msgId}" data-emoji="${emoji}" data-isreply="${isReply}" data-replyid="${replyId||''}"
+            title="${users.map(u=>'@'+u).join(', ')}">${emoji} <span>${users.length}</span></button>`;
+    }).join('');
 }
 
-// ─── Emoji picker popup ────────────────────────────────────────────────────
-function _mbShowEmojiPicker(msgId, isReply, replyId, anchor) {
-    document.querySelectorAll('.mb-emoji-picker').forEach(p => p.remove());
-    const picker = document.createElement('div');
-    picker.className = 'mb-emoji-picker';
-    MB_REACTIONS.forEach(emoji => {
-        const btn = document.createElement('button');
-        btn.className = 'mb-emoji-opt';
-        btn.textContent = emoji;
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            _mbToggleReaction(msgId, emoji, isReply, replyId);
-            picker.remove();
-        });
+function _mbShowEmojiPicker(msgId,isReply,replyId,anchor) {
+    document.querySelectorAll('.mb-emoji-picker').forEach(p=>p.remove());
+    const picker=document.createElement('div'); picker.className='mb-emoji-picker';
+    MB_REACTIONS.forEach(emoji=>{
+        const btn=document.createElement('button'); btn.className='mb-emoji-opt'; btn.textContent=emoji;
+        btn.addEventListener('click',e=>{e.stopPropagation();_mbToggleReaction(msgId,emoji,isReply,replyId);picker.remove();});
         picker.appendChild(btn);
     });
     document.body.appendChild(picker);
-
-    // Position near anchor
-    const rect = anchor.getBoundingClientRect();
-    picker.style.top  = (rect.top + window.scrollY - picker.offsetHeight - 8) + 'px';
-    picker.style.left = (rect.left + window.scrollX) + 'px';
-    // Fix if offscreen
-    requestAnimationFrame(() => {
-        const pw = picker.offsetWidth;
-        const ph = picker.offsetHeight;
-        let left = rect.left + window.scrollX;
-        let top  = rect.top + window.scrollY - ph - 8;
-        if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
-        if (top < 8) top = rect.bottom + window.scrollY + 8;
-        picker.style.left = left + 'px';
-        picker.style.top  = top + 'px';
+    requestAnimationFrame(()=>{
+        const rect=anchor.getBoundingClientRect(),pw=picker.offsetWidth,ph=picker.offsetHeight;
+        let top=rect.top+window.scrollY-ph-8,left=rect.left+window.scrollX;
+        if(left+pw>window.innerWidth-8) left=window.innerWidth-pw-8;
+        if(top<8) top=rect.bottom+window.scrollY+8;
+        picker.style.top=top+'px'; picker.style.left=left+'px';
     });
-
-    setTimeout(() => {
-        const dismiss = (e) => {
-            if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', dismiss); }
-        };
-        document.addEventListener('click', dismiss);
-    }, 10);
+    setTimeout(()=>{
+        const dismiss=e=>{if(!picker.contains(e.target)){picker.remove();document.removeEventListener('click',dismiss);}};
+        document.addEventListener('click',dismiss);
+    },10);
 }
 
-// ─── Hook into renderGroupUI ───────────────────────────────────────────────
-// After the collab badge renders, inject the board button and start listening
-// for unread count when the panel is closed.
-const _origRenderGroupUI = renderGroupUI;
+// ─── Hook renderGroupUI to start/stop listener & update controls ──────────
+const _origRenderGroupUI_mb = renderGroupUI;
 renderGroupUI = function() {
-    _origRenderGroupUI();
-
+    _origRenderGroupUI_mb();
     if (currentGroup && currentUser && !currentUser.isAnonymous) {
-        _mbInjectToggleBtn();
-        // If panel is closed but we're in a group, listen quietly for unread
-        if (!_mbOpen && !_mbListener) {
+        // Start background listener for unread count if not already running
+        if (!_mbListener) {
             _mbLastSeen = _mbUnreadLS();
-            const col = _mbColRef();
-            if (col) {
-                _mbListener = col.orderBy('createdAt', 'asc').onSnapshot(snap => {
-                    if (_mbOpen) return; // panel handles its own rendering
-                    const lastSeen = _mbLastSeen;
-                    snap.docChanges().forEach(change => {
-                        if (change.type !== 'added') return;
-                        const data = change.doc.data();
-                        const ts = data.createdAt ? (data.createdAt.toMillis ? data.createdAt.toMillis() : 0) : 0;
-                        if (ts > lastSeen && data.authorHandle !== _mbMe()) _mbUnreadCount++;
-                    });
-                    _mbUpdateBadge();
-                });
-            }
+            _mbStartListener();
         }
+        _mbSyncBadges();
     } else {
-        // Remove button and panel when no collab
-        const btn = document.getElementById('mb-open-btn');
-        if (btn) btn.remove();
         _mbStopListener();
+        _mbUnreadCount = 0;
         _mbOpen = false;
         const panel = document.getElementById('mb-panel');
         if (panel) panel.remove();
         const ov = document.getElementById('mb-overlay');
         if (ov) ov.remove();
+        const mc = document.getElementById('mb-member-controls');
+        if (mc) mc.remove();
     }
 };
 
-// Expose globally
 window.openMsgBoard  = openMsgBoard;
 window.closeMsgBoard = closeMsgBoard;
