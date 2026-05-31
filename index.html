@@ -1847,9 +1847,13 @@ body.light-mode {
   transform: translateX(100%);
   transition: transform .28s cubic-bezier(.4,0,.2,1);
   box-shadow: -12px 0 48px rgba(0,0,0,0.45);
-  overflow: hidden;
+  overflow: hidden;   /* keeps slide animation clean */
 }
-#settings-panel.open { transform: translateX(0); }
+/* Once open, let the scrollable body handle all clipping */
+#settings-panel.open {
+  transform: translateX(0);
+  overflow: visible;
+}
 
 #settings-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -1867,7 +1871,7 @@ body.light-mode {
 
 #settings-body {
   overflow-y: scroll;
-  overflow-x: hidden;
+  overflow-x: clip;    /* clip instead of hidden — avoids creating scroll context that clips children */
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 8px 0 32px;
@@ -1897,13 +1901,13 @@ body.light-mode {
 }
 .st-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 11px 20px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--st-border);
-  gap: 12px;
-  min-height: 46px;
+  gap: 10px;
+  height: auto;         /* always grow to fit content */
+  min-height: 48px;
   background: transparent;
   transition: background .12s;
-  /* removed overflow:hidden so swatch rows can breathe */
   box-sizing: border-box;
   width: 100%;
 }
@@ -1912,20 +1916,20 @@ body.light-mode {
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
+  padding-bottom: 14px;
 }
 /* rows that have multiline right-side content (swatches, font chips) */
 .st-row--wrap {
   align-items: flex-start;
   flex-wrap: wrap;
+  padding-bottom: 14px;
 }
 .st-row-label {
   display: flex; align-items: center; gap: 8px;
   font-size: 13.5px; color: var(--st-text);
-  /* allow shrinking so the right side isn't crushed */
   flex-shrink: 1;
   min-width: 0;
   white-space: nowrap;
-  /* give labels a stable minimum so they don't collapse */
   flex-basis: 130px;
 }
 .st-row-icon { font-size: 15px; flex-shrink: 0; }
@@ -2001,6 +2005,7 @@ body.light-mode {
   background: rgba(255,255,255,0.12);
   outline: none; cursor: pointer;
   min-width: 0;
+  width: 100%;
 }
 .st-slider::-webkit-slider-thumb {
   -webkit-appearance: none; width: 16px; height: 16px;
