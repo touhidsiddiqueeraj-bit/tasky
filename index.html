@@ -1652,8 +1652,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
   <div id="settings-body">
 
     <!-- ── APPEARANCE ── -->
-    <div class="st-section">
-      <div class="st-section-title">🎨 Appearance</div>
+    <div class="st-group-label">🎨 Appearance</div>
 
       <!-- Theme toggle -->
       <div class="st-row">
@@ -1687,7 +1686,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
       </div>
 
       <!-- Background image -->
-      <div class="st-row" style="align-items:flex-start;flex-direction:column;gap:10px;">
+      <div class="st-row st-row--stack">
         <div class="st-row-label">
           <span class="st-row-icon">🖼️</span>
           <span>Background Image</span>
@@ -1700,7 +1699,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
       </div>
 
       <!-- Card opacity -->
-      <div class="st-row" style="align-items:flex-start;flex-direction:column;gap:8px;">
+      <div class="st-row st-row--stack">
         <div class="st-row-label">
           <span class="st-row-icon">🪟</span>
           <span>Card Opacity</span>
@@ -1710,15 +1709,12 @@ function showConfirm(title, body, okLabel = 'Delete') {
             oninput="setCardOpacity(this.value);document.getElementById('st-opacity-val').textContent=this.value+'%'">
           <span id="st-opacity-val" style="font-size:12px;color:var(--st-muted);min-width:36px;text-align:right;">100%</span>
         </div>
-      </div>
-    </div>
 
-    <!-- ── TYPOGRAPHY ── -->
-    <div class="st-section">
-      <div class="st-section-title">✏️ Typography</div>
+    <div class="st-separator"></div>
+    <div class="st-group-label">✏️ Typography</div>
 
       <!-- Font family -->
-      <div class="st-row" style="align-items:flex-start;flex-direction:column;gap:8px;">
+      <div class="st-row st-row--stack">
         <div class="st-row-label">
           <span class="st-row-icon">🔤</span>
           <span>Font Family</span>
@@ -1734,7 +1730,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
       </div>
 
       <!-- Font size -->
-      <div class="st-row" style="align-items:flex-start;flex-direction:column;gap:8px;">
+      <div class="st-row st-row--stack">
         <div class="st-row-label">
           <span class="st-row-icon">🔡</span>
           <span>Font Size — Task Text</span>
@@ -1762,12 +1758,9 @@ function showConfirm(title, body, okLabel = 'Delete') {
             style="width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);
             background:none;cursor:pointer;padding:0;overflow:hidden;" title="Custom colour">
         </div>
-      </div>
-    </div>
 
-    <!-- ── SYSTEM ── -->
-    <div class="st-section">
-      <div class="st-section-title">🔧 System</div>
+    <div class="st-separator"></div>
+    <div class="st-group-label">🔧 System</div>
 
       <div class="st-row">
         <div class="st-row-label">
@@ -1802,14 +1795,12 @@ function showConfirm(title, body, okLabel = 'Delete') {
         <button class="st-btn" onclick="showShortcuts()">Open</button>
       </div>
 
-      <div class="st-row" style="margin-top:4px;">
+      <div class="st-row">
         <div class="st-row-label">
           <span class="st-row-icon">🗑️</span>
           <span style="color:#f87171;">Reset All Data</span>
         </div>
         <button class="st-btn st-btn-danger" onclick="resetAllData()">Reset</button>
-      </div>
-    </div>
 
   </div><!-- /settings-body -->
 </div><!-- /settings-panel -->
@@ -1867,8 +1858,8 @@ body.light-mode {
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 16px 16px 32px;
-  display: flex; flex-direction: column; gap: 14px;
+  padding: 8px 0 32px;
+  display: flex; flex-direction: column; gap: 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(139,92,246,0.4) transparent;
 }
@@ -1882,25 +1873,31 @@ body.light-mode {
   background: rgba(139,92,246,0.65);
 }
 
-.st-section {
-  background: var(--st-section);
-  border: 1px solid var(--st-border);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.st-section-title {
+.st-group-label {
   font-size: 11px; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; color: var(--st-muted);
-  padding: 12px 16px 8px;
+  padding: 14px 20px 6px;
+}
+.st-separator {
+  height: 1px;
+  background: var(--st-border);
+  margin: 6px 0;
 }
 .st-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px;
-  border-top: 1px solid var(--st-border);
+  padding: 11px 20px;
+  border-bottom: 1px solid var(--st-border);
   gap: 12px;
-  min-height: 44px;
+  min-height: 46px;
+  background: transparent;
+  transition: background .12s;
 }
-.st-row:first-of-type { border-top: none; }
+.st-row:hover { background: var(--st-hover); }
+.st-row--stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
 .st-row-label {
   display: flex; align-items: center; gap: 8px;
   font-size: 13.5px; color: var(--st-text); flex-shrink: 0;
