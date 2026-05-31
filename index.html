@@ -1683,9 +1683,10 @@ function showConfirm(title, body, okLabel = 'Delete') {
           <div class="st-swatch" data-color="#F59E0B" title="Amber" onclick="stSetAccent(this)"></div>
           <div class="st-swatch" data-color="#EF4444" title="Red" onclick="stSetAccent(this)"></div>
           <div class="st-swatch" data-color="#EC4899" title="Pink" onclick="stSetAccent(this)"></div>
-          <input type="color" id="st-accent-custom" title="Custom colour" oninput="stSetAccentRaw(this.value)"
-            style="width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);
-            background:none;cursor:pointer;padding:0;overflow:hidden;flex-shrink:0;">
+          <div style="position:relative;flex-shrink:0;width:26px;height:26px;">
+            <input type="color" id="st-accent-custom" title="Custom colour" oninput="stSetAccentRaw(this.value)"
+              style="position:absolute;right:0;top:0;width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);background:none;cursor:pointer;padding:0;overflow:hidden;">
+          </div>
         </div>
       </div>
 
@@ -1759,9 +1760,10 @@ function showConfirm(title, body, okLabel = 'Delete') {
           <div class="st-swatch" data-color="#94a3b8" title="Slate" onclick="stSetTextColor(this)"></div>
           <div class="st-swatch" data-color="#fde68a" title="Yellow" onclick="stSetTextColor(this)"></div>
           <div class="st-swatch" data-color="#bbf7d0" title="Mint" onclick="stSetTextColor(this)"></div>
-          <input type="color" id="st-textcolor-custom" value="#e2d9ff" oninput="stSetTextColorRaw(this.value)"
-            style="width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);
-            background:none;cursor:pointer;padding:0;overflow:hidden;flex-shrink:0;" title="Custom colour">
+          <div style="position:relative;flex-shrink:0;width:26px;height:26px;">
+            <input type="color" id="st-textcolor-custom" value="#e2d9ff" oninput="stSetTextColorRaw(this.value)"
+              style="position:absolute;right:0;top:0;width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,0.15);background:none;cursor:pointer;padding:0;overflow:hidden;" title="Custom colour">
+          </div>
         </div>
       </div>
 
@@ -1870,7 +1872,7 @@ body.light-mode {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 8px 0 32px;
+  padding: 4px 0 32px;
   display: block;
   scrollbar-width: thin;
   scrollbar-color: rgba(139,92,246,0.4) transparent;
@@ -1888,19 +1890,19 @@ body.light-mode {
 .st-group-label {
   font-size: 11px; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; color: var(--st-muted);
-  padding: 14px 20px 6px;
+  padding: 10px 20px 4px;
 }
 .st-separator {
   height: 1px;
   background: var(--st-border);
-  margin: 6px 0;
+  margin: 2px 0;
 }
 .st-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 20px;
+  padding: 8px 20px;
   border-bottom: 1px solid var(--st-border);
   gap: 10px;
-  min-height: 48px;
+  min-height: 40px;
   background: transparent;
   transition: background .12s;
   box-sizing: border-box;
@@ -1909,14 +1911,14 @@ body.light-mode {
 .st-row--stack {
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
-  padding-bottom: 14px;
+  gap: 8px;
+  padding-bottom: 10px;
 }
 /* rows that have multiline right-side content (swatches, font chips) */
 .st-row--wrap {
   align-items: flex-start;
   flex-wrap: wrap;
-  padding-bottom: 14px;
+  padding-bottom: 10px;
 }
 .st-row-label {
   display: flex; align-items: center; gap: 8px;
