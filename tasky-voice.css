@@ -1,30 +1,35 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   TASKY — VOICE CALL STYLES  (append to tasky.css or load after it)
+   TASKY — VOICE CALL STYLES
+   Load after tasky.css. The call buttons reuse .tc-board-btn /
+   .mb-member-board-btn base styles from tasky.css — we only add states.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ─── Call Button — sits inline beside 💬 Board button ──────────────────── */
-/* Inherits .tc-board-btn / .mb-member-board-btn base styles from tasky.css  */
-/* We only add the state variants here.                                       */
+/* ─── Call button state variants ─────────────────────────────────────────── */
+/* Base shape/colour comes from .tc-board-btn / .mb-member-board-btn         */
 
 .vc-call-btn--active {
-    background: rgba(239, 68, 68, 0.18) !important;
+    background:   rgba(239, 68, 68, 0.18) !important;
     border-color: rgba(239, 68, 68, 0.55) !important;
     color: #fca5a5 !important;
 }
+.vc-call-btn--active:hover {
+    background: rgba(239, 68, 68, 0.28) !important;
+}
 .vc-call-btn--ringing {
-    background: rgba(245, 158, 11, 0.18) !important;
+    background:   rgba(245, 158, 11, 0.18) !important;
     border-color: rgba(245, 158, 11, 0.55) !important;
     color: #fcd34d !important;
-    animation: vc-ring-shake 0.5s ease infinite;
+    animation: vc-ring-shake 0.45s ease infinite;
 }
 @keyframes vc-ring-shake {
-    0%,100% { transform: translateX(0)   rotate(0deg); }
-    20%      { transform: translateX(-2px) rotate(-4deg); }
-    40%      { transform: translateX(2px)  rotate( 4deg); }
-    60%      { transform: translateX(-2px) rotate(-3deg); }
-    80%      { transform: translateX(1px)  rotate( 2deg); }
+    0%,100% { transform: translateX(0)    rotate(0deg); }
+    20%     { transform: translateX(-2px) rotate(-5deg); }
+    40%     { transform: translateX( 2px) rotate( 5deg); }
+    60%     { transform: translateX(-2px) rotate(-3deg); }
+    80%     { transform: translateX( 1px) rotate( 2deg); }
 }
 
+/* Live pulse dot shown inside the button when in-call */
 .vc-btn-pulse {
     width: 7px; height: 7px;
     border-radius: 50%;
@@ -34,11 +39,11 @@
     animation: vc-pulse 1.4s ease-in-out infinite;
 }
 @keyframes vc-pulse {
-    0%,100% { opacity: 1; transform: scale(1);   }
-    50%     { opacity: 0.5; transform: scale(0.7); }
+    0%,100% { opacity: 1;   transform: scale(1);   }
+    50%     { opacity: 0.5; transform: scale(0.65); }
 }
 
-/* ─── Incoming Call Modal ─────────────────────────────────────────────────── */
+/* ─── Incoming call modal ─────────────────────────────────────────────────── */
 .vc-incoming-modal {
     position: fixed;
     inset: 0;
@@ -46,11 +51,12 @@
     align-items: center;
     justify-content: center;
     z-index: 2000;
-    background: rgba(5, 3, 15, 0.72);
-    backdrop-filter: blur(6px);
+    background: rgba(5, 3, 15, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     opacity: 0;
-    transition: opacity 0.25s ease;
     pointer-events: none;
+    transition: opacity 0.22s ease;
 }
 .vc-incoming-modal--visible {
     opacity: 1;
@@ -58,25 +64,25 @@
 }
 .vc-incoming-inner {
     background: #13111f;
-    border: 1.5px solid rgba(139, 92, 246, 0.4);
+    border: 1.5px solid rgba(139, 92, 246, 0.42);
     border-radius: 22px;
-    padding: 36px 32px 28px;
+    padding: 38px 34px 30px;
     text-align: center;
-    min-width: 260px;
+    min-width: 270px;
     max-width: 320px;
-    box-shadow: 0 16px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(139,92,246,0.1);
-    animation: vc-modal-bounce 0.35s cubic-bezier(0.34,1.56,0.64,1);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.65), 0 0 0 1px rgba(139,92,246,0.1);
+    animation: vc-modal-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
-@keyframes vc-modal-bounce {
-    from { transform: scale(0.88) translateY(12px); opacity: 0; }
+@keyframes vc-modal-pop {
+    from { transform: scale(0.85) translateY(16px); opacity: 0; }
     to   { transform: scale(1)    translateY(0);    opacity: 1; }
 }
 
-/* Ripple rings */
+/* Ripple ring animation */
 .vc-incoming-ring-anim {
     position: relative;
     width: 80px; height: 80px;
-    margin: 0 auto 18px;
+    margin: 0 auto 20px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -84,100 +90,100 @@
 .vc-ring-circle {
     position: absolute;
     border-radius: 50%;
-    border: 2px solid rgba(139, 92, 246, 0.4);
-    animation: vc-ring-expand 1.8s ease-out infinite;
+    border: 2px solid rgba(139, 92, 246, 0.45);
+    animation: vc-ripple 1.9s ease-out infinite;
 }
-.vc-ring-c1 { width: 80px;  height: 80px;  animation-delay: 0s;    }
-.vc-ring-c2 { width: 100px; height: 100px; animation-delay: 0.5s;  }
-.vc-ring-c3 { width: 120px; height: 120px; animation-delay: 1s;    }
-@keyframes vc-ring-expand {
-    0%   { opacity: 0.8; transform: scale(0.7); }
-    100% { opacity: 0;   transform: scale(1.4); }
+.vc-ring-c1 { width:  80px; height:  80px; animation-delay: 0s;   }
+.vc-ring-c2 { width: 106px; height: 106px; animation-delay: 0.55s; }
+.vc-ring-c3 { width: 132px; height: 132px; animation-delay: 1.1s;  }
+@keyframes vc-ripple {
+    0%   { opacity: 0.75; transform: scale(0.72); }
+    100% { opacity: 0;    transform: scale(1.35); }
 }
 .vc-incoming-avatar {
-    width: 56px; height: 56px;
+    width: 58px; height: 58px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #8B5CF6, #6d28d9);
+    background: linear-gradient(135deg, #8B5CF6 0%, #6d28d9 100%);
     color: #fff;
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
     z-index: 1;
-    box-shadow: 0 0 0 4px rgba(139,92,246,0.25);
+    box-shadow: 0 0 0 4px rgba(139,92,246,0.28), 0 4px 16px rgba(109,40,217,0.45);
 }
 
 .vc-incoming-label {
-    font-size: 11.5px;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: rgba(196,181,253,0.5);
-    margin-bottom: 6px;
+    letter-spacing: 0.12em;
+    color: rgba(196, 181, 253, 0.5);
+    margin-bottom: 7px;
+    font-weight: 600;
 }
 .vc-incoming-caller {
-    font-size: 20px;
+    font-size: 21px;
     font-weight: 700;
     color: #e2d9ff;
     margin-bottom: 4px;
+    word-break: break-all;
 }
 .vc-incoming-group {
     font-size: 12px;
-    color: rgba(196,181,253,0.5);
-    margin-bottom: 24px;
-    white-space: nowrap;
+    color: rgba(196, 181, 253, 0.48);
+    margin-bottom: 26px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .vc-incoming-btns {
     display: flex;
     gap: 10px;
-    justify-content: center;
 }
 .vc-incoming-btn {
     flex: 1;
-    padding: 11px 8px;
-    border-radius: 12px;
-    font-size: 13px;
+    padding: 12px 6px;
+    border-radius: 14px;
+    font-size: 13.5px;
     font-weight: 700;
     cursor: pointer;
     border: none;
-    transition: transform 0.12s, opacity 0.12s;
+    transition: transform 0.13s, filter 0.13s;
 }
-.vc-incoming-btn:hover   { transform: translateY(-2px); opacity: 0.92; }
-.vc-incoming-btn:active  { transform: scale(0.97); }
+.vc-incoming-btn:hover  { transform: translateY(-2px); filter: brightness(1.1); }
+.vc-incoming-btn:active { transform: scale(0.96); }
 .vc-incoming-btn--decline {
-    background: rgba(239,68,68,0.18);
+    background: rgba(239, 68, 68, 0.16);
     color: #fca5a5;
-    border: 1.5px solid rgba(239,68,68,0.4);
+    border: 1.5px solid rgba(239, 68, 68, 0.38);
 }
 .vc-incoming-btn--accept {
-    background: linear-gradient(135deg, #22c55e, #16a34a);
+    background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
     color: #fff;
-    box-shadow: 0 3px 14px rgba(34,197,94,0.35);
+    box-shadow: 0 4px 16px rgba(34, 197, 94, 0.38);
 }
 
-/* ─── Floating Call Panel ────────────────────────────────────────────────── */
+/* ─── Floating call panel ────────────────────────────────────────────────── */
 .vc-panel {
     position: fixed;
-    bottom: 24px;
-    right: 24px;
-    width: 290px;
+    bottom: 24px; right: 24px;
+    width: 292px;
     max-height: 460px;
     background: #13111f;
-    border: 1.5px solid rgba(139,92,246,0.35);
+    border: 1.5px solid rgba(139, 92, 246, 0.36);
     border-radius: 16px;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.55);
+    box-shadow: 0 10px 44px rgba(0,0,0,0.58), 0 0 0 1px rgba(139,92,246,0.08);
     display: flex;
     flex-direction: column;
     overflow: hidden;
     z-index: 1100;
-    animation: vc-panel-in 0.22s cubic-bezier(0.34,1.56,0.64,1);
+    animation: vc-panel-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 @keyframes vc-panel-in {
-    from { opacity: 0; transform: translateY(20px) scale(0.95); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
+    from { opacity: 0; transform: translateY(22px) scale(0.94); }
+    to   { opacity: 1; transform: translateY(0)    scale(1); }
 }
 .vc-panel--minimized { display: none; }
 
@@ -188,42 +194,34 @@
     padding: 11px 13px 9px;
     border-bottom: 1px solid rgba(255,255,255,0.06);
     gap: 6px;
+    flex-shrink: 0;
 }
 .vc-panel-title {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     font-size: 13px;
     font-weight: 700;
     color: #e2d9ff;
+    min-width: 0;
 }
 .vc-group-name {
     font-size: 11px;
-    color: rgba(196,181,253,0.6);
-    background: rgba(139,92,246,0.12);
+    color: rgba(196, 181, 253, 0.58);
+    background: rgba(139, 92, 246, 0.12);
     border-radius: 5px;
-    padding: 1px 6px;
-    max-width: 80px;
+    padding: 1px 7px;
+    max-width: 88px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex-shrink: 1;
 }
 .vc-header-right {
     display: flex;
     align-items: center;
     gap: 7px;
-}
-.vc-call-status {
-    font-size: 11px;
-    color: #fcd34d;
-    font-weight: 600;
-    animation: vc-pulse 1.5s ease infinite;
-}
-.vc-duration {
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: rgba(196,181,253,0.65);
-    font-weight: 600;
+    flex-shrink: 0;
 }
 .vc-live-dot {
     width: 8px; height: 8px;
@@ -232,19 +230,32 @@
     flex-shrink: 0;
     animation: vc-pulse 1.4s ease-in-out infinite;
 }
+.vc-call-status {
+    font-size: 11px;
+    font-weight: 600;
+    color: #fcd34d;
+    animation: vc-pulse 1.6s ease-in-out infinite;
+    white-space: nowrap;
+}
+.vc-duration {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: rgba(196, 181, 253, 0.62);
+    font-weight: 600;
+    white-space: nowrap;
+}
 .vc-close-btn {
     background: none; border: none;
-    color: rgba(196,181,253,0.45);
+    color: rgba(196, 181, 253, 0.4);
     cursor: pointer;
-    font-size: 16px;
+    font-size: 15px; line-height: 1;
     padding: 0 3px;
     border-radius: 4px;
-    line-height: 1;
     transition: color 0.15s, background 0.15s;
 }
-.vc-close-btn:hover { color: #e2d9ff; background: rgba(255,255,255,0.06); }
+.vc-close-btn:hover { color: #e2d9ff; background: rgba(255,255,255,0.07); }
 
-/* Participants list */
+/* Participants */
 .vc-participants {
     flex: 1;
     overflow-y: auto;
@@ -253,13 +264,16 @@
     flex-direction: column;
     gap: 5px;
     scrollbar-width: thin;
-    scrollbar-color: rgba(139,92,246,0.3) transparent;
+    scrollbar-color: rgba(139,92,246,0.28) transparent;
 }
+.vc-participants::-webkit-scrollbar { width: 4px; }
+.vc-participants::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.28); border-radius: 4px; }
+
 .vc-empty {
     font-size: 12px;
-    color: rgba(196,181,253,0.4);
+    color: rgba(196, 181, 253, 0.38);
     text-align: center;
-    padding: 18px 0;
+    padding: 20px 0;
 }
 .vc-p-card {
     display: flex;
@@ -272,19 +286,16 @@
     transition: border-color 0.2s, background 0.2s;
 }
 .vc-p-card--speaking {
-    border-color: rgba(34,197,94,0.45);
-    background: rgba(34,197,94,0.06);
+    border-color: rgba(34, 197, 94, 0.44);
+    background: rgba(34, 197, 94, 0.06);
 }
 .vc-p-avatar {
     width: 34px; height: 34px;
     border-radius: 50%;
-    background: rgba(139,92,246,0.22);
+    background: rgba(139, 92, 246, 0.22);
     color: #c4b5fd;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
     flex-shrink: 0;
     border: 2px solid transparent;
     transition: border-color 0.2s, box-shadow 0.2s;
@@ -292,129 +303,135 @@
 .vc-p-avatar--speaking {
     border-color: #22c55e;
     box-shadow: 0 0 0 3px rgba(34,197,94,0.2);
-    animation: vc-speaking-ring 0.65s ease-in-out infinite alternate;
+    animation: vc-speaking-ring 0.7s ease-in-out infinite alternate;
 }
 @keyframes vc-speaking-ring {
-    from { box-shadow: 0 0 0 3px rgba(34,197,94,0.18); }
+    from { box-shadow: 0 0 0 2px rgba(34,197,94,0.22); }
     to   { box-shadow: 0 0 0 6px rgba(34,197,94,0.04); }
 }
-.vc-p-avatar--sup { background: rgba(245,158,11,0.2); color: #fcd34d; }
+.vc-p-avatar--sup { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+
 .vc-p-info { flex: 1; min-width: 0; }
 .vc-p-name {
     display: block;
-    font-size: 12.5px;
-    font-weight: 600;
+    font-size: 12.5px; font-weight: 600;
     color: #e2d9ff;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.vc-p-status { display: flex; gap: 3px; margin-top: 2px; }
+.vc-p-status { display: flex; gap: 3px; margin-top: 2px; flex-wrap: wrap; }
 .vc-status-chip {
-    font-size: 11px;
-    padding: 0 4px;
-    border-radius: 4px;
+    font-size: 11px; padding: 0 4px; border-radius: 4px;
 }
-.vc-status-chip.muted      { background: rgba(239,68,68,0.13); color: #fca5a5; }
-.vc-status-chip.speaking   { background: rgba(34,197,94,0.13); color: #86efac; }
+.vc-status-chip.muted      { background: rgba(239,68,68,0.13);  color: #fca5a5; }
+.vc-status-chip.speaking   { background: rgba(34,197,94,0.13);  color: #86efac; }
 .vc-status-chip.connecting { background: rgba(245,158,11,0.13); color: #fcd34d; }
+
 .vc-p-actions { flex-shrink: 0; }
 .vc-kick-btn {
     background: none;
-    border: 1px solid rgba(239,68,68,0.28);
-    color: rgba(239,68,68,0.55);
-    border-radius: 5px;
-    width: 20px; height: 20px;
+    border: 1px solid rgba(239,68,68,0.28); color: rgba(239,68,68,0.52);
+    border-radius: 5px; width: 20px; height: 20px;
     display: flex; align-items: center; justify-content: center;
     font-size: 9px; cursor: pointer;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.vc-kick-btn:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.55); color: #fca5a5; }
+.vc-kick-btn:hover { background: rgba(239,68,68,0.16); border-color: rgba(239,68,68,0.55); color: #fca5a5; }
 
-/* Controls */
+/* Controls bar */
 .vc-controls {
-    display: flex;
-    gap: 5px;
-    padding: 8px 10px 11px;
+    display: flex; gap: 5px;
+    padding: 8px 10px 12px;
     border-top: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
 }
 .vc-ctrl-btn {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 3px;
     padding: 8px 4px 6px;
     border-radius: 10px;
     border: 1.5px solid rgba(255,255,255,0.07);
     background: rgba(255,255,255,0.04);
-    color: rgba(196,181,253,0.7);
-    cursor: pointer;
-    font-size: 17px;
+    color: rgba(196,181,253,0.72);
+    cursor: pointer; font-size: 18px;
     transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .vc-ctrl-btn span {
-    font-size: 9px;
-    font-weight: 600;
-    color: rgba(196,181,253,0.45);
+    font-size: 9px; font-weight: 600;
+    color: rgba(196,181,253,0.44);
     letter-spacing: 0.02em;
 }
-.vc-ctrl-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(139,92,246,0.4); color: #e2d9ff; }
+.vc-ctrl-btn:hover { background: rgba(255,255,255,0.09); border-color: rgba(139,92,246,0.4); color: #e2d9ff; }
+.vc-ctrl-btn:hover span { color: rgba(196,181,253,0.7); }
 .vc-ctrl-btn--active { background: rgba(239,68,68,0.14); border-color: rgba(239,68,68,0.38); color: #fca5a5; }
-.vc-ctrl-btn--active span { color: rgba(252,165,165,0.65); }
+.vc-ctrl-btn--active span { color: rgba(252,165,165,0.62); }
 .vc-ctrl-btn--leave { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.28); color: #fca5a5; }
-.vc-ctrl-btn--leave:hover { background: rgba(239,68,68,0.22); border-color: rgba(239,68,68,0.55); }
-.vc-ctrl-btn--leave span { color: rgba(252,165,165,0.65); }
+.vc-ctrl-btn--leave:hover { background: rgba(239,68,68,0.24); border-color: rgba(239,68,68,0.55); }
+.vc-ctrl-btn--leave span { color: rgba(252,165,165,0.62); }
 
-/* ─── Mini bar ───────────────────────────────────────────────────────────── */
+/* ─── Mini bar (minimised state) ─────────────────────────────────────────── */
 .vc-mini-bar {
     position: fixed;
     bottom: 14px; right: 14px;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 6px 11px;
+    display: flex; align-items: center; gap: 7px;
+    padding: 6px 12px;
     background: #13111f;
-    border: 1.5px solid rgba(139,92,246,0.38);
+    border: 1.5px solid rgba(139,92,246,0.4);
     border-radius: 24px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 22px rgba(0,0,0,0.42);
     z-index: 1100;
-    font-size: 12px;
-    color: #c4b5fd;
-    font-weight: 600;
-    animation: vc-panel-in 0.2s ease;
+    font-size: 12.5px; color: #c4b5fd; font-weight: 600;
+    animation: vc-panel-in 0.2s ease both;
 }
 .vc-mini-bar button {
-    background: none; border: none;
-    cursor: pointer; font-size: 13px;
+    background: none; border: none; cursor: pointer;
+    font-size: 14px; line-height: 1;
     padding: 1px 3px; border-radius: 5px;
     color: rgba(196,181,253,0.65);
-    transition: color 0.15s, background 0.15s; line-height: 1;
+    transition: color 0.15s, background 0.15s;
 }
-.vc-mini-bar button:hover { color: #e2d9ff; background: rgba(255,255,255,0.07); }
-.vc-mini-leave:hover { color: #fca5a5 !important; }
+.vc-mini-bar button:hover  { color: #e2d9ff; background: rgba(255,255,255,0.07); }
+.vc-mini-leave:hover       { color: #fca5a5 !important; }
 
-/* ─── Fallback toast ─────────────────────────────────────────────────────── */
+/* ─── Fallback toast (if _collabToast unavailable) ───────────────────────── */
 .vc-toast {
-    position: fixed;
-    bottom: 72px; left: 50%;
+    position: fixed; bottom: 72px; left: 50%;
     transform: translateX(-50%);
     background: rgba(19,17,31,0.96);
-    border: 1px solid rgba(139,92,246,0.3);
-    color: #c4b5fd;
-    padding: 7px 15px;
-    border-radius: 9px;
-    font-size: 13px;
-    font-weight: 600;
-    z-index: 1200;
-    pointer-events: none;
-    white-space: nowrap;
-    animation: vc-panel-in 0.18s ease;
+    border: 1px solid rgba(139,92,246,0.32);
+    color: #c4b5fd; padding: 8px 16px;
+    border-radius: 9px; font-size: 13px; font-weight: 600;
+    z-index: 1200; pointer-events: none; white-space: nowrap;
+    animation: vc-panel-in 0.18s ease both;
 }
 
+/* ─── Light mode overrides ───────────────────────────────────────────────── */
+body.light-mode .vc-panel,
+body.light-mode .vc-incoming-inner,
+body.light-mode .vc-mini-bar {
+    background: #ffffff;
+    border-color: rgba(109, 40, 217, 0.22);
+}
+body.light-mode .vc-panel-title,
+body.light-mode .vc-incoming-caller,
+body.light-mode .vc-p-name { color: #1e1b4b; }
+body.light-mode .vc-p-card { background: rgba(0,0,0,0.03); }
+body.light-mode .vc-p-card--speaking { background: rgba(34,197,94,0.07); }
+body.light-mode .vc-ctrl-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: #4c1d95; }
+body.light-mode .vc-ctrl-btn:hover { background: rgba(109,40,217,0.1); }
+body.light-mode .vc-duration,
+body.light-mode .vc-group-name,
+body.light-mode .vc-incoming-group,
+body.light-mode .vc-incoming-label { color: rgba(109,40,217,0.55); }
+body.light-mode .vc-empty { color: rgba(109,40,217,0.4); }
+body.light-mode .vc-mini-bar { color: #4c1d95; }
+body.light-mode .vc-close-btn { color: rgba(109,40,217,0.4); }
+body.light-mode .vc-close-btn:hover { background: rgba(109,40,217,0.08); color: #4c1d95; }
+
 /* ─── Responsive ─────────────────────────────────────────────────────────── */
-@media (max-width: 480px) {
-    .vc-panel      { right: 8px; bottom: 8px; width: calc(100vw - 16px); max-height: 52vh; }
-    .vc-mini-bar   { right: 8px; bottom: 8px; }
-    .vc-incoming-inner { padding: 28px 20px 22px; min-width: 240px; }
+@media (max-width: 520px) {
+    .vc-panel { right: 8px; bottom: 8px; width: calc(100vw - 16px); max-height: 54vh; border-radius: 14px; }
+    .vc-mini-bar { right: 8px; bottom: 8px; }
+    .vc-incoming-inner { padding: 30px 22px 24px; min-width: 240px; }
+    .vc-incoming-caller { font-size: 18px; }
 }
