@@ -1,210 +1,305 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   TASKY — VOICE CALL STYLES  (tasky-voice.css)
-   Append to tasky.css or load as separate stylesheet after tasky.css
+   TASKY — VOICE CALL STYLES  (append to tasky.css or load after it)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ─── Call Button ────────────────────────────────────────────────────────── */
-.vc-call-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 11px;
-    font-size: 11.5px;
-    font-weight: 600;
-    border-radius: 8px;
-    border: 1.5px solid rgba(139, 92, 246, 0.45);
-    background: rgba(139, 92, 246, 0.13);
-    color: #c4b5fd;
-    cursor: pointer;
-    transition: background 0.18s, border-color 0.18s, color 0.18s;
-    position: relative;
-    white-space: nowrap;
-}
-.vc-call-btn:hover {
-    background: rgba(139, 92, 246, 0.26);
-    border-color: rgba(139, 92, 246, 0.7);
-    color: #ede9fe;
-}
+/* ─── Call Button — sits inline beside 💬 Board button ──────────────────── */
+/* Inherits .tc-board-btn / .mb-member-board-btn base styles from tasky.css  */
+/* We only add the state variants here.                                       */
+
 .vc-call-btn--active {
-    background: rgba(239, 68, 68, 0.18);
-    border-color: rgba(239, 68, 68, 0.6);
-    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.18) !important;
+    border-color: rgba(239, 68, 68, 0.55) !important;
+    color: #fca5a5 !important;
 }
-.vc-call-btn--active:hover {
-    background: rgba(239, 68, 68, 0.28);
+.vc-call-btn--ringing {
+    background: rgba(245, 158, 11, 0.18) !important;
+    border-color: rgba(245, 158, 11, 0.55) !important;
+    color: #fcd34d !important;
+    animation: vc-ring-shake 0.5s ease infinite;
 }
-.vc-call-btn--member {
-    font-size: 11px;
-    padding: 4px 9px;
+@keyframes vc-ring-shake {
+    0%,100% { transform: translateX(0)   rotate(0deg); }
+    20%      { transform: translateX(-2px) rotate(-4deg); }
+    40%      { transform: translateX(2px)  rotate( 4deg); }
+    60%      { transform: translateX(-2px) rotate(-3deg); }
+    80%      { transform: translateX(1px)  rotate( 2deg); }
 }
 
-/* Pulse animation on active call button */
 .vc-btn-pulse {
     width: 7px; height: 7px;
     border-radius: 50%;
     background: #ef4444;
     display: inline-block;
-    animation: vc-pulse 1.4s ease-in-out infinite;
     flex-shrink: 0;
+    animation: vc-pulse 1.4s ease-in-out infinite;
 }
 @keyframes vc-pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50%       { opacity: 0.5; transform: scale(0.7); }
+    0%,100% { opacity: 1; transform: scale(1);   }
+    50%     { opacity: 0.5; transform: scale(0.7); }
 }
 
-/* ─── Floating Panel ─────────────────────────────────────────────────────── */
+/* ─── Incoming Call Modal ─────────────────────────────────────────────────── */
+.vc-incoming-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    background: rgba(5, 3, 15, 0.72);
+    backdrop-filter: blur(6px);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+}
+.vc-incoming-modal--visible {
+    opacity: 1;
+    pointer-events: all;
+}
+.vc-incoming-inner {
+    background: #13111f;
+    border: 1.5px solid rgba(139, 92, 246, 0.4);
+    border-radius: 22px;
+    padding: 36px 32px 28px;
+    text-align: center;
+    min-width: 260px;
+    max-width: 320px;
+    box-shadow: 0 16px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(139,92,246,0.1);
+    animation: vc-modal-bounce 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes vc-modal-bounce {
+    from { transform: scale(0.88) translateY(12px); opacity: 0; }
+    to   { transform: scale(1)    translateY(0);    opacity: 1; }
+}
+
+/* Ripple rings */
+.vc-incoming-ring-anim {
+    position: relative;
+    width: 80px; height: 80px;
+    margin: 0 auto 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.vc-ring-circle {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid rgba(139, 92, 246, 0.4);
+    animation: vc-ring-expand 1.8s ease-out infinite;
+}
+.vc-ring-c1 { width: 80px;  height: 80px;  animation-delay: 0s;    }
+.vc-ring-c2 { width: 100px; height: 100px; animation-delay: 0.5s;  }
+.vc-ring-c3 { width: 120px; height: 120px; animation-delay: 1s;    }
+@keyframes vc-ring-expand {
+    0%   { opacity: 0.8; transform: scale(0.7); }
+    100% { opacity: 0;   transform: scale(1.4); }
+}
+.vc-incoming-avatar {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #8B5CF6, #6d28d9);
+    color: #fff;
+    font-size: 24px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 0 0 4px rgba(139,92,246,0.25);
+}
+
+.vc-incoming-label {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(196,181,253,0.5);
+    margin-bottom: 6px;
+}
+.vc-incoming-caller {
+    font-size: 20px;
+    font-weight: 700;
+    color: #e2d9ff;
+    margin-bottom: 4px;
+}
+.vc-incoming-group {
+    font-size: 12px;
+    color: rgba(196,181,253,0.5);
+    margin-bottom: 24px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.vc-incoming-btns {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+.vc-incoming-btn {
+    flex: 1;
+    padding: 11px 8px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: transform 0.12s, opacity 0.12s;
+}
+.vc-incoming-btn:hover   { transform: translateY(-2px); opacity: 0.92; }
+.vc-incoming-btn:active  { transform: scale(0.97); }
+.vc-incoming-btn--decline {
+    background: rgba(239,68,68,0.18);
+    color: #fca5a5;
+    border: 1.5px solid rgba(239,68,68,0.4);
+}
+.vc-incoming-btn--accept {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: #fff;
+    box-shadow: 0 3px 14px rgba(34,197,94,0.35);
+}
+
+/* ─── Floating Call Panel ────────────────────────────────────────────────── */
 .vc-panel {
     position: fixed;
     bottom: 24px;
     right: 24px;
-    width: 300px;
-    max-height: 480px;
+    width: 290px;
+    max-height: 460px;
     background: #13111f;
-    border: 1.5px solid rgba(139, 92, 246, 0.35);
+    border: 1.5px solid rgba(139,92,246,0.35);
     border-radius: 16px;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(139,92,246,0.1);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.55);
     display: flex;
     flex-direction: column;
     overflow: hidden;
     z-index: 1100;
-    animation: vc-panel-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: vc-panel-in 0.22s cubic-bezier(0.34,1.56,0.64,1);
 }
 @keyframes vc-panel-in {
-    from { opacity: 0; transform: translateY(20px) scale(0.96); }
-    to   { opacity: 1; transform: translateY(0)   scale(1);    }
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-.vc-panel--minimized {
-    display: none;
-}
+.vc-panel--minimized { display: none; }
 
-/* Header */
 .vc-panel-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 14px 10px;
+    padding: 11px 13px 9px;
     border-bottom: 1px solid rgba(255,255,255,0.06);
-    gap: 8px;
+    gap: 6px;
 }
 .vc-panel-title {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
     font-size: 13px;
     font-weight: 700;
     color: #e2d9ff;
 }
 .vc-group-name {
     font-size: 11px;
-    font-weight: 500;
-    color: rgba(196, 181, 253, 0.65);
-    background: rgba(139, 92, 246, 0.12);
+    color: rgba(196,181,253,0.6);
+    background: rgba(139,92,246,0.12);
     border-radius: 5px;
     padding: 1px 6px;
-    max-width: 90px;
+    max-width: 80px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.vc-header-right {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.vc-call-status {
+    font-size: 11px;
+    color: #fcd34d;
+    font-weight: 600;
+    animation: vc-pulse 1.5s ease infinite;
+}
+.vc-duration {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: rgba(196,181,253,0.65);
+    font-weight: 600;
 }
 .vc-live-dot {
     width: 8px; height: 8px;
     border-radius: 50%;
     background: #22c55e;
-    display: inline-block;
-    animation: vc-pulse 1.4s ease-in-out infinite;
     flex-shrink: 0;
-}
-.vc-header-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.vc-duration {
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: rgba(196, 181, 253, 0.7);
-    font-weight: 600;
+    animation: vc-pulse 1.4s ease-in-out infinite;
 }
 .vc-close-btn {
-    background: none;
-    border: none;
-    color: rgba(196, 181, 253, 0.5);
+    background: none; border: none;
+    color: rgba(196,181,253,0.45);
     cursor: pointer;
-    font-size: 14px;
-    padding: 2px 4px;
-    border-radius: 5px;
-    transition: color 0.15s, background 0.15s;
+    font-size: 16px;
+    padding: 0 3px;
+    border-radius: 4px;
     line-height: 1;
+    transition: color 0.15s, background 0.15s;
 }
 .vc-close-btn:hover { color: #e2d9ff; background: rgba(255,255,255,0.06); }
 
-/* ─── Participants ───────────────────────────────────────────────────────── */
+/* Participants list */
 .vc-participants {
     flex: 1;
     overflow-y: auto;
     padding: 8px 10px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
     scrollbar-width: thin;
     scrollbar-color: rgba(139,92,246,0.3) transparent;
 }
 .vc-empty {
     font-size: 12px;
-    color: rgba(196, 181, 253, 0.45);
+    color: rgba(196,181,253,0.4);
     text-align: center;
-    padding: 20px 0;
+    padding: 18px 0;
 }
-
 .vc-p-card {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
+    gap: 9px;
+    padding: 7px 9px;
     border-radius: 10px;
     background: rgba(255,255,255,0.04);
     border: 1.5px solid transparent;
     transition: border-color 0.2s, background 0.2s;
 }
 .vc-p-card--speaking {
-    border-color: rgba(34, 197, 94, 0.5);
-    background: rgba(34, 197, 94, 0.07);
+    border-color: rgba(34,197,94,0.45);
+    background: rgba(34,197,94,0.06);
 }
-
-/* Avatar */
 .vc-p-avatar {
-    width: 36px; height: 36px;
+    width: 34px; height: 34px;
     border-radius: 50%;
-    background: rgba(139, 92, 246, 0.25);
+    background: rgba(139,92,246,0.22);
     color: #c4b5fd;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 15px;
+    font-size: 14px;
     flex-shrink: 0;
     border: 2px solid transparent;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 .vc-p-avatar--speaking {
     border-color: #22c55e;
-    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
-    animation: vc-speaking-ring 0.6s ease-in-out infinite alternate;
+    box-shadow: 0 0 0 3px rgba(34,197,94,0.2);
+    animation: vc-speaking-ring 0.65s ease-in-out infinite alternate;
 }
 @keyframes vc-speaking-ring {
-    from { box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2); }
-    to   { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.05); }
+    from { box-shadow: 0 0 0 3px rgba(34,197,94,0.18); }
+    to   { box-shadow: 0 0 0 6px rgba(34,197,94,0.04); }
 }
-.vc-p-avatar--sup {
-    background: rgba(245, 158, 11, 0.2);
-    color: #fcd34d;
-}
-
-/* Info */
-.vc-p-info {
-    flex: 1;
-    min-width: 0;
-}
+.vc-p-avatar--sup { background: rgba(245,158,11,0.2); color: #fcd34d; }
+.vc-p-info { flex: 1; min-width: 0; }
 .vc-p-name {
     display: block;
     font-size: 12.5px;
@@ -214,49 +309,33 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.vc-p-status {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 3px;
-}
-
+.vc-p-status { display: flex; gap: 3px; margin-top: 2px; }
 .vc-status-chip {
-    font-size: 10px;
-    padding: 1px 6px;
+    font-size: 11px;
+    padding: 0 4px;
     border-radius: 4px;
-    font-weight: 600;
 }
-.vc-status-chip.muted      { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
-.vc-status-chip.speaking   { background: rgba(34, 197, 94, 0.15); color: #86efac; }
-.vc-status-chip.connecting { background: rgba(245, 158, 11, 0.15); color: #fcd34d; }
-
-/* Kick button */
+.vc-status-chip.muted      { background: rgba(239,68,68,0.13); color: #fca5a5; }
+.vc-status-chip.speaking   { background: rgba(34,197,94,0.13); color: #86efac; }
+.vc-status-chip.connecting { background: rgba(245,158,11,0.13); color: #fcd34d; }
 .vc-p-actions { flex-shrink: 0; }
 .vc-kick-btn {
     background: none;
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    color: rgba(239, 68, 68, 0.6);
-    border-radius: 6px;
-    width: 22px; height: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    cursor: pointer;
+    border: 1px solid rgba(239,68,68,0.28);
+    color: rgba(239,68,68,0.55);
+    border-radius: 5px;
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; cursor: pointer;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.vc-kick-btn:hover {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.6);
-    color: #fca5a5;
-}
+.vc-kick-btn:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.55); color: #fca5a5; }
 
-/* ─── Controls Bar ───────────────────────────────────────────────────────── */
+/* Controls */
 .vc-controls {
     display: flex;
-    gap: 6px;
-    padding: 10px 12px 12px;
+    gap: 5px;
+    padding: 8px 10px 11px;
     border-top: 1px solid rgba(255,255,255,0.06);
 }
 .vc-ctrl-btn {
@@ -267,101 +346,75 @@
     gap: 3px;
     padding: 8px 4px 6px;
     border-radius: 10px;
-    border: 1.5px solid rgba(255,255,255,0.08);
+    border: 1.5px solid rgba(255,255,255,0.07);
     background: rgba(255,255,255,0.04);
-    color: rgba(196, 181, 253, 0.75);
+    color: rgba(196,181,253,0.7);
     cursor: pointer;
-    font-size: 18px;
+    font-size: 17px;
     transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .vc-ctrl-btn span {
-    font-size: 9.5px;
+    font-size: 9px;
     font-weight: 600;
-    letter-spacing: 0.01em;
-    color: rgba(196, 181, 253, 0.55);
+    color: rgba(196,181,253,0.45);
+    letter-spacing: 0.02em;
 }
-.vc-ctrl-btn:hover {
-    background: rgba(255,255,255,0.08);
-    border-color: rgba(139,92,246,0.4);
-    color: #e2d9ff;
-}
-.vc-ctrl-btn--active {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.4);
-    color: #fca5a5;
-}
-.vc-ctrl-btn--active span { color: rgba(252, 165, 165, 0.7); }
-.vc-ctrl-btn--leave {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.3);
-    color: #fca5a5;
-}
-.vc-ctrl-btn--leave:hover {
-    background: rgba(239, 68, 68, 0.25);
-    border-color: rgba(239, 68, 68, 0.6);
-}
-.vc-ctrl-btn--leave span { color: rgba(252, 165, 165, 0.7); }
+.vc-ctrl-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(139,92,246,0.4); color: #e2d9ff; }
+.vc-ctrl-btn--active { background: rgba(239,68,68,0.14); border-color: rgba(239,68,68,0.38); color: #fca5a5; }
+.vc-ctrl-btn--active span { color: rgba(252,165,165,0.65); }
+.vc-ctrl-btn--leave { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.28); color: #fca5a5; }
+.vc-ctrl-btn--leave:hover { background: rgba(239,68,68,0.22); border-color: rgba(239,68,68,0.55); }
+.vc-ctrl-btn--leave span { color: rgba(252,165,165,0.65); }
 
-/* ─── Mini Bar (minimized state) ─────────────────────────────────────────── */
+/* ─── Mini bar ───────────────────────────────────────────────────────────── */
 .vc-mini-bar {
     position: fixed;
-    bottom: 16px;
-    right: 16px;
+    bottom: 14px; right: 14px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 7px 12px;
+    gap: 7px;
+    padding: 6px 11px;
     background: #13111f;
-    border: 1.5px solid rgba(139,92,246,0.4);
+    border: 1.5px solid rgba(139,92,246,0.38);
     border-radius: 24px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     z-index: 1100;
-    animation: vc-panel-in 0.2s ease;
-    font-size: 12.5px;
+    font-size: 12px;
     color: #c4b5fd;
     font-weight: 600;
+    animation: vc-panel-in 0.2s ease;
 }
 .vc-mini-bar button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 2px 4px;
-    border-radius: 6px;
-    color: rgba(196,181,253,0.7);
-    transition: color 0.15s, background 0.15s;
-    line-height: 1;
+    background: none; border: none;
+    cursor: pointer; font-size: 13px;
+    padding: 1px 3px; border-radius: 5px;
+    color: rgba(196,181,253,0.65);
+    transition: color 0.15s, background 0.15s; line-height: 1;
 }
 .vc-mini-bar button:hover { color: #e2d9ff; background: rgba(255,255,255,0.07); }
 .vc-mini-leave:hover { color: #fca5a5 !important; }
 
-/* ─── Toast (standalone fallback, only if _collabToast isn't present) ────── */
+/* ─── Fallback toast ─────────────────────────────────────────────────────── */
 .vc-toast {
     position: fixed;
-    bottom: 80px;
-    left: 50%;
+    bottom: 72px; left: 50%;
     transform: translateX(-50%);
-    background: rgba(19,17,31,0.95);
-    border: 1px solid rgba(139,92,246,0.35);
+    background: rgba(19,17,31,0.96);
+    border: 1px solid rgba(139,92,246,0.3);
     color: #c4b5fd;
-    padding: 8px 16px;
-    border-radius: 10px;
+    padding: 7px 15px;
+    border-radius: 9px;
     font-size: 13px;
     font-weight: 600;
     z-index: 1200;
     pointer-events: none;
-    animation: vc-panel-in 0.2s ease;
     white-space: nowrap;
+    animation: vc-panel-in 0.18s ease;
 }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 480px) {
-    .vc-panel {
-        right: 8px;
-        bottom: 8px;
-        width: calc(100vw - 16px);
-        max-height: 55vh;
-        border-radius: 14px;
-    }
-    .vc-mini-bar { right: 8px; bottom: 8px; }
+    .vc-panel      { right: 8px; bottom: 8px; width: calc(100vw - 16px); max-height: 52vh; }
+    .vc-mini-bar   { right: 8px; bottom: 8px; }
+    .vc-incoming-inner { padding: 28px 20px 22px; min-width: 240px; }
 }
