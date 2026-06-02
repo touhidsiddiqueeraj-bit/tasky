@@ -19,7 +19,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="tasky.css">
-<link rel="stylesheet" href="tasky-calendar.css">
 <style>
 /* ═══════════════════════════════════════════════════════════
    ONBOARDING — GLASSMORPHISM
@@ -903,6 +902,10 @@ body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
       <span>Task Groups</span>
     </button>
     <div class="dropdown-divider"></div>
+    <button class="dropdown-item" onclick="openHowToUse()">
+      <span>❓</span>
+      <span>How to Use</span>
+    </button>
     <button class="dropdown-item" onclick="openSettings()">
       <span>⚙️</span>
       <span>Settings</span>
@@ -1065,7 +1068,6 @@ body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
 <script defer src="tasky.js"></script>
 <script defer src="tasky-collab.js"></script>
 <script defer src="tasky-features.js"></script>
-<script defer src="tasky-calendar.js"></script>
 
 <script>
 /* ============================================================
@@ -2490,23 +2492,355 @@ async function disableEncryption() {
 }
 </script>
 
-<div class="shortcuts-overlay" id="shortcuts-overlay" onclick="closeShortcuts()">
-  <div class="shortcuts-card" onclick="event.stopPropagation()">
-    <button class="shortcuts-close" onclick="closeShortcuts()">✕</button>
-    <h3>⌨️ Keyboard Shortcuts</h3>
-    <div class="shortcuts-grid">
-      <div><kbd>←</kbd><kbd>→</kbd><span>Move task between columns</span></div>
-      <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><span>Set priority (High / Medium / Low)</span></div>
-      <div><kbd>Del</kbd><span>Delete selected task</span></div>
-      <div><kbd>Esc</kbd><span>Deselect task / Undo last action</span></div>
-      <div><kbd>Space</kbd><span>Hold for voice input</span></div>
-      <div><kbd>Alt</kbd>+<kbd>G</kbd><span>Go to task by number</span></div>
-      <div><kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>9</kbd><span>Jump to task 1–9</span></div>
-      <div><kbd>Tab</kbd><span>Next workspace</span></div>
-      <div><kbd>Shift</kbd>+<kbd>Tab</kbd><span>Previous workspace</span></div>
+<!-- ═══════════════════════════════════════════════
+     HOW TO USE MODAL
+     ═══════════════════════════════════════════════ -->
+<div id="htu-overlay" onclick="if(event.target===this)closeHowToUse()"
+  style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(6,5,10,0.82);
+         backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+         align-items:center;justify-content:center;padding:16px;box-sizing:border-box;">
+<div id="htu-modal">
+
+  <!-- Header -->
+  <div class="htu-header">
+    <div class="htu-title-row">
+      <span class="htu-logo">✅</span>
+      <div>
+        <div class="htu-title">Tasky — How to Use</div>
+        <div class="htu-subtitle">Keyboard-first task board · Three columns · Zero friction</div>
+      </div>
+    </div>
+    <button class="htu-close" onclick="closeHowToUse()">✕</button>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="htu-tabs" id="htu-tabs">
+    <button class="htu-tab active" data-tab="basics"    onclick="htuTab('basics')">🚀 Basics</button>
+    <button class="htu-tab"        data-tab="keyboard"  onclick="htuTab('keyboard')">⌨️ Shortcuts</button>
+    <button class="htu-tab"        data-tab="voice"     onclick="htuTab('voice')">🎙️ Voice</button>
+    <button class="htu-tab"        data-tab="features"  onclick="htuTab('features')">⚡ Features</button>
+    <button class="htu-tab"        data-tab="collab"    onclick="htuTab('collab')">👥 Collab</button>
+    <button class="htu-tab"        data-tab="tips"      onclick="htuTab('tips')">💡 Pro Tips</button>
+  </div>
+
+  <!-- Tab bodies -->
+  <div class="htu-body" id="htu-body">
+
+    <!-- ── BASICS ─────────────────────────────────────────────────────────── -->
+    <div class="htu-pane active" id="htu-pane-basics">
+      <div class="htu-section-title">The Three Columns</div>
+      <div class="htu-columns-row">
+        <div class="htu-col-card todo">
+          <div class="htu-col-icon">📝</div>
+          <div class="htu-col-name">To Do</div>
+          <div class="htu-col-desc">New tasks land here. Your backlog and upcoming items.</div>
+        </div>
+        <div class="htu-col-card working">
+          <div class="htu-col-icon">⚡</div>
+          <div class="htu-col-name">Working On</div>
+          <div class="htu-col-desc">Active tasks. WIP limit of 3 keeps you focused.</div>
+        </div>
+        <div class="htu-col-card done">
+          <div class="htu-col-icon">✅</div>
+          <div class="htu-col-name">Done</div>
+          <div class="htu-col-desc">Completed tasks. Clear them anytime with one click.</div>
+        </div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Adding Tasks</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num">1</span><div><strong>Press any letter/number key</strong> — the floating input appears at the bottom of the screen.</div></div>
+        <div class="htu-step"><span class="htu-step-num">2</span><div><strong>Type your task</strong> — up to 120 characters. Assign syntax: <code>task to::handle priority::high date::2025-06-10</code></div></div>
+        <div class="htu-step"><span class="htu-step-num">3</span><div><strong>Press Enter</strong> to save, or <strong>Esc</strong> to cancel. Task lands in To Do.</div></div>
+        <div class="htu-step"><span class="htu-step-num">4</span><div>On mobile, tap the <strong>＋</strong> button in the bottom bar instead.</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Moving Tasks</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num htu-kc">click</span><div>Click a task to <strong>select</strong> it (highlighted border).</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">← →</span><div>Arrow keys move it left or right between columns.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">drag</span><div>Drag &amp; drop between columns — drop zones light up on hover.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">swipe</span><div>On mobile, swipe a card left (forward) or right (back) 40px to move it.</div></div>
+      </div>
+    </div>
+
+    <!-- ── KEYBOARD ───────────────────────────────────────────────────────── -->
+    <div class="htu-pane" id="htu-pane-keyboard">
+      <div class="htu-section-title">Task Actions <span class="htu-badge">Select a task first</span></div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>←</kbd><kbd>→</kbd></div><div class="htu-kb-desc">Move task to previous / next column</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>1</kbd></div><div class="htu-kb-desc">Set priority → <span class="htu-pri high">● High</span></div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>2</kbd></div><div class="htu-kb-desc">Set priority → <span class="htu-pri med">● Medium</span></div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>3</kbd></div><div class="htu-kb-desc">Set priority → <span class="htu-pri low">● Low</span></div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Del</kbd></div><div class="htu-kb-desc">Delete selected task (with undo toast)</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Esc</kbd></div><div class="htu-kb-desc">Deselect task — or undo last action</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Navigation &amp; Input</div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Any key</kbd></div><div class="htu-kb-desc">Open floating input to add a new task</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Enter</kbd></div><div class="htu-kb-desc">Save task (in floating input)</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Esc</kbd></div><div class="htu-kb-desc">Cancel / close floating input</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Space</kbd> hold</div><div class="htu-kb-desc">Hold to activate voice input (release to save)</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Tab</kbd></div><div class="htu-kb-desc">Switch to next workspace</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Shift</kbd>+<kbd>Tab</kbd></div><div class="htu-kb-desc">Switch to previous workspace</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Quick Jump</div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Alt</kbd>+<kbd>G</kbd></div><div class="htu-kb-desc">Open task selector — type a task number to jump to it</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Alt</kbd>+<kbd>1–9</kbd></div><div class="htu-kb-desc">Jump directly to task #1–#9</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Calendar View</div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>←</kbd><kbd>→</kbd></div><div class="htu-kb-desc">Navigate days (or prev/next period)</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>↑</kbd><kbd>↓</kbd></div><div class="htu-kb-desc">Jump 7 days back / forward</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>M</kbd></div><div class="htu-kb-desc">Switch to Month view</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>W</kbd></div><div class="htu-kb-desc">Switch to Week view</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>T</kbd></div><div class="htu-kb-desc">Jump to today</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Esc</kbd></div><div class="htu-kb-desc">Close calendar</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Task Groups Dropdown</div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>↑</kbd><kbd>↓</kbd></div><div class="htu-kb-desc">Navigate group suggestions while typing</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Enter</kbd></div><div class="htu-kb-desc">Expand selected group (adds all its tasks)</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Esc</kbd></div><div class="htu-kb-desc">Dismiss the suggestion dropdown</div></div>
+      </div>
+    </div>
+
+    <!-- ── VOICE ──────────────────────────────────────────────────────────── -->
+    <div class="htu-pane" id="htu-pane-voice">
+      <div class="htu-hero-card voice-hero">
+        <div class="htu-hero-icon">🎙️</div>
+        <div>
+          <div class="htu-hero-title">Hands-Free Task Entry</div>
+          <div class="htu-hero-body">Tasky uses the Web Speech API for real-time voice dictation. Works in Chrome, Edge, and Brave.</div>
+        </div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Desktop</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num htu-kc">hold</span><div><strong>Hold the Space bar</strong> — the voice overlay appears with three pulsing rings.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">speak</span><div>Speak your task clearly. The transcript appears in real-time as you talk.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">release</span><div><strong>Release Space</strong> to confirm and save. Press <kbd>Esc</kbd> before releasing to cancel.</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Mobile</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num htu-kc">tap</span><div>Tap the <strong>🎙️ mic button</strong> in the bottom bar to start listening.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">speak</span><div>Say your task. Tap the mic again or the stop button to confirm.</div></div>
+      </div>
+
+      <div class="htu-callout amber">
+        <strong>🌐 Browser support:</strong> Requires Chrome, Edge, or Brave. Safari and Firefox do not support the Web Speech API. You'll see an error toast if your browser doesn't support it.
+      </div>
+    </div>
+
+    <!-- ── FEATURES ───────────────────────────────────────────────────────── -->
+    <div class="htu-pane" id="htu-pane-features">
+
+      <div class="htu-feature-grid">
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">⊞</div>
+          <div class="htu-feature-name">Task Groups</div>
+          <div class="htu-feature-desc">Save a named set of tasks as a reusable template. Start typing a group name in the input — a suggestion appears. Press Enter to expand all tasks instantly. Find it under <strong>Tasky ▼ → Task Groups</strong>.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">📅</div>
+          <div class="htu-feature-name">Calendar View</div>
+          <div class="htu-feature-desc">See all tasks with due dates in a monthly or weekly calendar. Drag chips to reschedule. Color-coded by status. Click the <strong>📅</strong> button in the To Do header or set a due date on any task.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🗂️</div>
+          <div class="htu-feature-name">Workspaces</div>
+          <div class="htu-feature-desc">Separate projects with independent boards. Switch via the pill bar at the top. <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> cycle through them. Each workspace can have its own collaboration code.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🔄</div>
+          <div class="htu-feature-name">Recurring Tasks</div>
+          <div class="htu-feature-desc">Set tasks to repeat daily, weekly, or monthly. When moved to Done, they automatically reappear in To Do on schedule. Manage via <strong>Settings → Recurring Tasks</strong>.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🔴</div>
+          <div class="htu-feature-name">Priority System</div>
+          <div class="htu-feature-desc">Three levels: <strong class="htu-pri high">High</strong> (red), <strong class="htu-pri med">Medium</strong> (amber), <strong class="htu-pri low">Low</strong> (green). Set with <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> on a selected task, or tap the badge on mobile.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">📊</div>
+          <div class="htu-feature-name">CSV Import / Export</div>
+          <div class="htu-feature-desc">Import tasks from any spreadsheet. Columns: Task, Status, Priority, Due Date. Export your board as CSV anytime. Both under <strong>Settings</strong>.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🔐</div>
+          <div class="htu-feature-name">Local Encryption</div>
+          <div class="htu-feature-desc">Set a passphrase to encrypt all task data stored in your browser with AES-256-GCM. Zero-knowledge — not even the server can read it. Found in <strong>Settings → Local Encryption</strong>.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🖼️</div>
+          <div class="htu-feature-name">Custom Background</div>
+          <div class="htu-feature-desc">Upload any image as a board background. Adjust card opacity with a slider so tasks stay readable. Found in <strong>Settings → Background Image</strong>.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">⚡</div>
+          <div class="htu-feature-name">WIP Limit</div>
+          <div class="htu-feature-desc">Working On column has a hard limit of 3 tasks. This forces you to finish before starting more — a core Kanban principle. You'll get a toast warning if you try to exceed it.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🔔</div>
+          <div class="htu-feature-name">Due Date Notifications</div>
+          <div class="htu-feature-desc">Enable browser notifications for tasks nearing their due date. Enable in <strong>Settings → Due Date Notifications</strong>. Requires Chrome/Edge/Brave and permission grant.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">☁️</div>
+          <div class="htu-feature-name">Cloud Sync</div>
+          <div class="htu-feature-desc">Sign in with Google to sync tasks across all your devices via Firebase Firestore. Works fully offline — changes queue locally and sync when reconnected.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🔢</div>
+          <div class="htu-feature-name">Task Numbers</div>
+          <div class="htu-feature-desc">Every task gets a permanent number (#1, #2…). Deleted numbers get reused. Jump to any task with <kbd>Alt+G</kbd> then type the number, or <kbd>Alt+1–9</kbd> for instant access to the first nine.</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── COLLAB ──────────────────────────────────────────────────────────── -->
+    <div class="htu-pane" id="htu-pane-collab">
+      <div class="htu-hero-card collab-hero">
+        <div class="htu-hero-icon">👥</div>
+        <div>
+          <div class="htu-hero-title">Real-Time Team Collaboration</div>
+          <div class="htu-hero-body">Share a board with teammates using a 6-character code. All changes sync live via Firebase. Requires a Google sign-in.</div>
+        </div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Setting Up</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num">1</span><div><strong>Sign in with Google</strong> via Tasky ▼ → ☁️ Sign in.</div></div>
+        <div class="htu-step"><span class="htu-step-num">2</span><div><strong>Create a Collaboration</strong> via Tasky ▼ → 👥 Create Collaboration. You get a 6-character code.</div></div>
+        <div class="htu-step"><span class="htu-step-num">3</span><div><strong>Share the code</strong> with teammates. They join via Tasky ▼ → 🔗 Join Collaboration.</div></div>
+        <div class="htu-step"><span class="htu-step-num">4</span><div>All members see each other's tasks in real-time on a shared board.</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Assigning Tasks</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num htu-kc">syntax</span><div>In the floating input, use: <code>task text to::handle priority::high date::2025-06-15</code></div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">hint</span><div>After typing <code>to::</code>, the assign hint appears in blue below the input.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">result</span><div>The assigned task shows the assignee handle and a notification badge in the team panel.</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Team Panel</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num htu-kc">icon</span><div>A 👥 team panel appears when in a collaboration, showing all members and their task counts.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">click</span><div>Click a member card to inspect their tasks in a read-only panel.</div></div>
+      </div>
+
+      <div class="htu-callout purple">
+        <strong>📅 Calendar + Collab:</strong> In the Calendar view, tasks assigned to teammates show their avatar initials on chips, color-coded by status.
+      </div>
+    </div>
+
+    <!-- ── TIPS ───────────────────────────────────────────────────────────── -->
+    <div class="htu-pane" id="htu-pane-tips">
+      <div class="htu-tips-list">
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">01</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">Use Task Groups as daily templates</div>
+            <div class="htu-tip-text">Create a group called "Morning Routine" with 5 tasks. Every morning, type "Mor" in the input — the suggestion pops up — press Enter. All 5 tasks are added in one keystroke.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">02</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">WIP limit is a feature, not a bug</div>
+            <div class="htu-tip-text">The 3-task limit on "Working On" is intentional. If you hit it, finish or move something back before starting more. Fewer active tasks = faster completion.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">03</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">Voice input for long tasks</div>
+            <div class="htu-tip-text">Hold Space and dictate a full sentence. Tasky transcribes it as the task text. Release to save instantly — no typing needed. Great for capturing ideas quickly on desktop.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">04</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">One board per project with Workspaces</div>
+            <div class="htu-tip-text">Use separate workspaces for Work, Personal, and Side Projects. Tab through them without lifting your hands from the keyboard. Each workspace is fully independent.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">05</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">Undo with Esc</div>
+            <div class="htu-tip-text">After deleting or moving a task, a toast appears at the top. Press Esc (or click Undo in the toast) within a few seconds to reverse the action completely.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">06</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">Priority filter dots</div>
+            <div class="htu-tip-text">The colored dots next to column titles are filters. Click the red dot in To Do to show only High-priority tasks. Click again to clear. Great for end-of-day focus sessions.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">07</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">Offline-first by design</div>
+            <div class="htu-tip-text">All data lives in localStorage. The app works with zero internet. If you have cloud sync enabled, changes queue locally and push to Firestore when you reconnect — you never lose work.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">08</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">Install as a PWA</div>
+            <div class="htu-tip-text">Tasky is a Progressive Web App. In Chrome/Edge, click the install icon in the address bar to add it to your home screen or desktop. It launches fullscreen with no browser chrome.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /htu-body -->
+
+  <!-- Footer -->
+  <div class="htu-footer">
+    <span class="htu-footer-text">Press <kbd>Esc</kbd> to close</span>
+    <div class="htu-footer-tabs">
+      <button class="htu-foot-nav" onclick="htuTabPrev()">← Prev</button>
+      <button class="htu-foot-nav" onclick="htuTabNext()">Next →</button>
     </div>
   </div>
-</div>
+
+</div><!-- /htu-modal -->
+</div><!-- /htu-overlay -->
+
+<!-- Kept for backward compat with Settings panel "How to Use" button -->
+<div class="shortcuts-overlay" id="shortcuts-overlay" style="display:none!important;"></div>
 
 <!-- ── Encryption: Setup overlay ── -->
 <div class="tg-overlay hidden" id="enc-setup-overlay" onclick="if(event.target===this){this.classList.remove('visible');this.classList.add('hidden');setTimeout(function(){this.classList.remove('hidden')}.bind(this),270);}">
@@ -2574,6 +2908,328 @@ async function disableEncryption() {
     </div>
   </div>
 </div>
+
+
+<style>
+/* ═══════════════════════════════════════════════════════════
+   HOW TO USE MODAL
+   ═══════════════════════════════════════════════════════════ */
+#htu-overlay.visible { display:flex!important; animation:ob-fade-in .28s cubic-bezier(.4,0,.2,1); }
+
+#htu-modal {
+  width:min(860px,98vw);
+  max-height:92vh;
+  background:linear-gradient(150deg,#14112a 0%,#0e0c1c 100%);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:22px;
+  box-shadow:0 32px 80px rgba(0,0,0,0.75),0 0 0 1px rgba(139,92,246,0.12);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+body.light-mode #htu-modal {
+  background:linear-gradient(150deg,#f8f6ff 0%,#ede8ff 100%);
+  border-color:rgba(0,0,0,0.08);
+  box-shadow:0 32px 80px rgba(0,0,0,0.14),0 0 0 1px rgba(139,92,246,0.1);
+}
+
+/* Header */
+.htu-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:20px 24px 16px; flex-shrink:0;
+  border-bottom:1px solid rgba(255,255,255,0.07);
+  gap:12px;
+}
+body.light-mode .htu-header { border-bottom-color:rgba(0,0,0,0.08); }
+.htu-title-row { display:flex; align-items:center; gap:12px; }
+.htu-logo { font-size:24px; }
+.htu-title { font-size:18px; font-weight:800; color:#e2d9ff; letter-spacing:-.01em; }
+body.light-mode .htu-title { color:#1e1b4b; }
+.htu-subtitle { font-size:12px; color:rgba(255,255,255,0.35); margin-top:2px; }
+body.light-mode .htu-subtitle { color:rgba(0,0,0,0.35); }
+.htu-close {
+  width:32px; height:32px; border-radius:9px;
+  background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.5); font-size:15px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .15s,color .15s,border-color .15s; flex-shrink:0;
+}
+body.light-mode .htu-close { background:rgba(0,0,0,0.05); border-color:rgba(0,0,0,0.1); color:rgba(0,0,0,0.4); }
+.htu-close:hover { background:rgba(239,68,68,0.15); color:#f87171; border-color:rgba(239,68,68,0.3); }
+
+/* Tabs */
+.htu-tabs {
+  display:flex; gap:2px; padding:12px 20px 0; flex-shrink:0;
+  overflow-x:auto; scrollbar-width:none;
+  border-bottom:1px solid rgba(255,255,255,0.07);
+}
+body.light-mode .htu-tabs { border-bottom-color:rgba(0,0,0,0.08); }
+.htu-tabs::-webkit-scrollbar { display:none; }
+.htu-tab {
+  padding:8px 16px; border-radius:10px 10px 0 0;
+  font-size:12.5px; font-weight:600; white-space:nowrap;
+  cursor:pointer; border:none; background:transparent;
+  color:rgba(255,255,255,0.38);
+  border-bottom:2px solid transparent; margin-bottom:-1px;
+  transition:color .18s,background .18s;
+}
+body.light-mode .htu-tab { color:rgba(0,0,0,0.35); }
+.htu-tab:hover { color:rgba(255,255,255,0.7); background:rgba(255,255,255,0.04); }
+body.light-mode .htu-tab:hover { color:rgba(0,0,0,0.65); background:rgba(0,0,0,0.04); }
+.htu-tab.active { color:#c4b5fd; border-bottom-color:#8B5CF6; }
+body.light-mode .htu-tab.active { color:#7c3aed; border-bottom-color:#7c3aed; }
+
+/* Body */
+.htu-body { flex:1; overflow:hidden; }
+.htu-pane { display:none; height:100%; overflow-y:auto; padding:22px 24px 28px; scrollbar-width:thin; scrollbar-color:rgba(139,92,246,0.4) transparent; }
+.htu-pane::-webkit-scrollbar { width:5px; }
+.htu-pane::-webkit-scrollbar-thumb { background:rgba(139,92,246,0.4); border-radius:3px; }
+.htu-pane.active { display:block; animation:ob-fade-in .2s ease; }
+
+/* Section titles */
+.htu-section-title {
+  font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+  color:rgba(255,255,255,0.3); margin-bottom:12px;
+  display:flex; align-items:center; gap:8px;
+}
+body.light-mode .htu-section-title { color:rgba(0,0,0,0.3); }
+.htu-badge {
+  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+  background:rgba(139,92,246,0.15); border:1px solid rgba(139,92,246,0.3);
+  border-radius:5px; padding:2px 7px; color:#a78bfa; normal:normal;
+}
+body.light-mode .htu-badge { color:#7c3aed; }
+
+/* Column intro cards */
+.htu-columns-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.htu-col-card {
+  border-radius:14px; padding:16px; border:1px solid transparent;
+  display:flex; flex-direction:column; gap:6px;
+}
+.htu-col-card.todo    { background:rgba(139,92,246,0.1); border-color:rgba(139,92,246,0.2); }
+.htu-col-card.working { background:rgba(245,158,11,0.1); border-color:rgba(245,158,11,0.2); }
+.htu-col-card.done    { background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.2); }
+body.light-mode .htu-col-card.todo    { background:rgba(139,92,246,0.07); }
+body.light-mode .htu-col-card.working { background:rgba(245,158,11,0.07); }
+body.light-mode .htu-col-card.done    { background:rgba(16,185,129,0.07); }
+.htu-col-icon { font-size:22px; }
+.htu-col-name { font-size:14px; font-weight:700; color:#e2d9ff; }
+body.light-mode .htu-col-name { color:#1e1b4b; }
+.htu-col-desc { font-size:12px; color:rgba(255,255,255,0.45); line-height:1.5; }
+body.light-mode .htu-col-desc { color:rgba(0,0,0,0.45); }
+
+/* Step list */
+.htu-step-list { display:flex; flex-direction:column; gap:8px; }
+.htu-step {
+  display:flex; align-items:flex-start; gap:12px;
+  font-size:13.5px; color:rgba(255,255,255,0.7); line-height:1.55;
+}
+body.light-mode .htu-step { color:rgba(0,0,0,0.65); }
+.htu-step-num {
+  flex-shrink:0; width:24px; height:24px; border-radius:50%;
+  background:rgba(139,92,246,0.2); border:1px solid rgba(139,92,246,0.35);
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:800; color:#a78bfa; margin-top:1px;
+}
+body.light-mode .htu-step-num { color:#7c3aed; }
+.htu-step-num.htu-kc {
+  width:auto; padding:0 8px; border-radius:6px; font-family:monospace;
+  font-size:10px; letter-spacing:.04em; text-transform:uppercase;
+}
+.htu-step strong { color:#e2d9ff; }
+body.light-mode .htu-step strong { color:#1e1b4b; }
+.htu-step code {
+  background:rgba(139,92,246,0.15); border:1px solid rgba(139,92,246,0.25);
+  border-radius:5px; padding:1px 6px; font-size:11px; color:#c4b5fd; font-family:monospace;
+}
+body.light-mode .htu-step code { color:#6d28d9; background:rgba(139,92,246,0.08); }
+
+/* Keyboard grid */
+.htu-kb-grid { display:flex; flex-direction:column; gap:6px; }
+.htu-kb-row {
+  display:flex; align-items:center; gap:14px;
+  padding:8px 12px; border-radius:10px;
+  background:rgba(255,255,255,0.025);
+  border:1px solid rgba(255,255,255,0.05);
+  transition:background .12s;
+}
+body.light-mode .htu-kb-row { background:rgba(255,255,255,0.6); border-color:rgba(0,0,0,0.06); }
+.htu-kb-row:hover { background:rgba(139,92,246,0.07); border-color:rgba(139,92,246,0.15); }
+.htu-keys { display:flex; align-items:center; gap:3px; min-width:100px; flex-shrink:0; }
+.htu-keys kbd {
+  display:inline-flex; align-items:center; justify-content:center;
+  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.16);
+  border-radius:6px; padding:3px 8px; font-size:11.5px; font-weight:700;
+  color:#c4b5fd; font-family:inherit; line-height:1.4; white-space:nowrap;
+  box-shadow:0 2px 0 rgba(0,0,0,0.35);
+}
+body.light-mode .htu-keys kbd {
+  background:rgba(0,0,0,0.06); border-color:rgba(0,0,0,0.15); color:#6d28d9;
+  box-shadow:0 2px 0 rgba(0,0,0,0.1);
+}
+.htu-kb-desc { font-size:13px; color:rgba(255,255,255,0.6); }
+body.light-mode .htu-kb-desc { color:rgba(0,0,0,0.6); }
+
+/* Priority labels */
+.htu-pri { font-weight:700; }
+.htu-pri.high { color:#f87171; }
+.htu-pri.med  { color:#fbbf24; }
+.htu-pri.low  { color:#34d399; }
+
+/* Hero cards */
+.htu-hero-card {
+  display:flex; align-items:flex-start; gap:14px;
+  border-radius:14px; padding:18px;
+  border:1px solid transparent;
+}
+.htu-hero-card.voice-hero  { background:rgba(139,92,246,0.1); border-color:rgba(139,92,246,0.22); }
+.htu-hero-card.collab-hero { background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.22); }
+.htu-hero-icon { font-size:32px; flex-shrink:0; }
+.htu-hero-title { font-size:15px; font-weight:800; color:#e2d9ff; margin-bottom:4px; }
+body.light-mode .htu-hero-title { color:#1e1b4b; }
+.htu-hero-body { font-size:13px; color:rgba(255,255,255,0.55); line-height:1.6; }
+body.light-mode .htu-hero-body { color:rgba(0,0,0,0.5); }
+
+/* Callout boxes */
+.htu-callout {
+  border-radius:12px; padding:14px 16px;
+  font-size:13px; line-height:1.6; margin-top:20px;
+  border:1px solid transparent;
+}
+.htu-callout.amber  { background:rgba(245,158,11,0.1); border-color:rgba(245,158,11,0.25); color:#fde68a; }
+.htu-callout.purple { background:rgba(139,92,246,0.1); border-color:rgba(139,92,246,0.25); color:#ddd6fe; }
+body.light-mode .htu-callout.amber  { color:#92400e; }
+body.light-mode .htu-callout.purple { color:#4c1d95; }
+
+/* Feature grid */
+.htu-feature-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px; }
+.htu-feature-card {
+  background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px; padding:16px;
+  transition:background .15s, border-color .15s, transform .15s;
+}
+body.light-mode .htu-feature-card { background:rgba(255,255,255,0.65); border-color:rgba(0,0,0,0.07); }
+.htu-feature-card:hover {
+  background:rgba(139,92,246,0.07); border-color:rgba(139,92,246,0.2);
+  transform:translateY(-1px);
+}
+.htu-feature-icon { font-size:22px; margin-bottom:8px; }
+.htu-feature-name { font-size:14px; font-weight:700; color:#e2d9ff; margin-bottom:5px; }
+body.light-mode .htu-feature-name { color:#1e1b4b; }
+.htu-feature-desc { font-size:12.5px; color:rgba(255,255,255,0.45); line-height:1.6; }
+body.light-mode .htu-feature-desc { color:rgba(0,0,0,0.5); }
+.htu-feature-desc strong { color:#c4b5fd; }
+body.light-mode .htu-feature-desc strong { color:#6d28d9; }
+.htu-feature-desc kbd {
+  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.14);
+  border-radius:4px; padding:1px 5px; font-size:10.5px; color:#c4b5fd; font-family:monospace;
+}
+body.light-mode .htu-feature-desc kbd { background:rgba(0,0,0,0.06); border-color:rgba(0,0,0,0.12); color:#6d28d9; }
+
+/* Tips list */
+.htu-tips-list { display:flex; flex-direction:column; gap:10px; }
+.htu-tip-card {
+  display:flex; align-items:flex-start; gap:16px;
+  background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);
+  border-radius:14px; padding:16px 18px;
+  transition:background .15s, border-color .15s;
+}
+body.light-mode .htu-tip-card { background:rgba(255,255,255,0.65); border-color:rgba(0,0,0,0.07); }
+.htu-tip-card:hover { background:rgba(139,92,246,0.06); border-color:rgba(139,92,246,0.18); }
+.htu-tip-num {
+  font-size:22px; font-weight:900; color:rgba(139,92,246,0.35);
+  flex-shrink:0; line-height:1; font-variant-numeric:tabular-nums;
+  font-family:monospace; letter-spacing:-.02em;
+}
+body.light-mode .htu-tip-num { color:rgba(139,92,246,0.25); }
+.htu-tip-title { font-size:13.5px; font-weight:700; color:#e2d9ff; margin-bottom:4px; }
+body.light-mode .htu-tip-title { color:#1e1b4b; }
+.htu-tip-text { font-size:13px; color:rgba(255,255,255,0.5); line-height:1.6; }
+body.light-mode .htu-tip-text { color:rgba(0,0,0,0.5); }
+
+/* Footer */
+.htu-footer {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 22px 14px; flex-shrink:0;
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+body.light-mode .htu-footer { border-top-color:rgba(0,0,0,0.07); }
+.htu-footer-text { font-size:11.5px; color:rgba(255,255,255,0.22); }
+body.light-mode .htu-footer-text { color:rgba(0,0,0,0.22); }
+.htu-footer-text kbd {
+  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15);
+  border-radius:4px; padding:1px 6px; font-size:10px; color:rgba(255,255,255,0.4); font-family:monospace;
+}
+body.light-mode .htu-footer-text kbd { background:rgba(0,0,0,0.05); border-color:rgba(0,0,0,0.12); color:rgba(0,0,0,0.3); }
+.htu-footer-tabs { display:flex; gap:6px; }
+.htu-foot-nav {
+  background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+  border-radius:8px; padding:5px 14px; font-size:12px; font-weight:600;
+  color:rgba(255,255,255,0.45); cursor:pointer;
+  transition:background .15s, color .15s;
+}
+body.light-mode .htu-foot-nav { background:rgba(0,0,0,0.04); border-color:rgba(0,0,0,0.1); color:rgba(0,0,0,0.4); }
+.htu-foot-nav:hover { background:rgba(139,92,246,0.15); color:#c4b5fd; border-color:rgba(139,92,246,0.3); }
+
+@media (max-width:700px) {
+  #htu-overlay { padding:0; align-items:flex-end; }
+  #htu-modal { border-radius:22px 22px 0 0; max-height:92vh; width:100%; }
+  .htu-columns-row { grid-template-columns:1fr; }
+  .htu-feature-grid { grid-template-columns:1fr; }
+  .htu-header { padding:16px 16px 12px; }
+  .htu-pane { padding:16px 16px 20px; }
+}
+</style>
+
+<script>
+/* ─── How To Use Modal ──────────────────────────────────────────────────── */
+const _HTU_TABS = ['basics','keyboard','voice','features','collab','tips'];
+let _htuTabIdx = 0;
+
+function openHowToUse(startTab) {
+  const overlay = document.getElementById('htu-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+  htuTab(startTab || 'basics');
+  const dd = document.getElementById('dropdown');
+  if (dd && dd.classList.contains('show') && typeof toggleMenu === 'function') toggleMenu();
+  document.addEventListener('keydown', _htuKeydown, true);
+}
+window.openHowToUse = openHowToUse;
+
+function closeHowToUse() {
+  const overlay = document.getElementById('htu-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  setTimeout(() => { overlay.style.display = 'none'; }, 280);
+  document.removeEventListener('keydown', _htuKeydown, true);
+}
+window.closeHowToUse = closeHowToUse;
+
+function htuTab(name) {
+  const idx = _HTU_TABS.indexOf(name);
+  if (idx !== -1) _htuTabIdx = idx;
+  document.querySelectorAll('.htu-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.htu-pane').forEach(p => p.classList.toggle('active', p.id === 'htu-pane-' + name));
+}
+window.htuTab = htuTab;
+
+function htuTabNext() { htuTab(_HTU_TABS[Math.min(_htuTabIdx + 1, _HTU_TABS.length - 1)]); }
+function htuTabPrev() { htuTab(_HTU_TABS[Math.max(_htuTabIdx - 1, 0)]); }
+window.htuTabNext = htuTabNext;
+window.htuTabPrev = htuTabPrev;
+
+function _htuKeydown(e) {
+  const overlay = document.getElementById('htu-overlay');
+  if (!overlay || overlay.style.display === 'none') return;
+  if (e.key === 'Escape') { closeHowToUse(); e.stopPropagation(); e.preventDefault(); }
+  if (e.key === 'ArrowRight' && e.altKey) { htuTabNext(); e.preventDefault(); }
+  if (e.key === 'ArrowLeft'  && e.altKey) { htuTabPrev(); e.preventDefault(); }
+}
+
+// Patch showShortcuts() to open the new modal instead
+function showShortcuts() { openHowToUse('keyboard'); }
+function closeShortcuts() { closeHowToUse(); }
+</script>
 
 </body>
 </html>
