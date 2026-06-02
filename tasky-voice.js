@@ -585,14 +585,23 @@ function _vcInjectCallButtons() {
 
 function _vcCallBtnClick() {
     if (vcActive) {
-        // Reopen / unminimize panel
-        const panel = document.getElementById('vc-panel');
-        const bar   = document.getElementById('vc-mini-bar');
-        if (bar) bar.remove();
-        if (panel) { panel.classList.remove('vc-panel--minimized'); }
-        else       { _vcRenderPanel(); }
+        _vcSurfacePanel();
     } else {
-        vcJoin(true);
+        vcJoin(true).then(() => {
+            if (vcActive) _vcSurfacePanel();
+        }).catch(() => {});
+    }
+}
+
+function _vcSurfacePanel() {
+    const bar = document.getElementById('vc-mini-bar');
+    if (bar) bar.remove();
+    let panel = document.getElementById('vc-panel');
+    if (panel) {
+        panel.classList.remove('vc-panel--minimized');
+        document.body.appendChild(panel); // re-append = guaranteed top of stacking order
+    } else {
+        _vcRenderPanel();
     }
 }
 
