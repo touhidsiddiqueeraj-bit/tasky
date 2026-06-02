@@ -10,10 +10,16 @@ Live at https://touhidsiddiqueeraj-bit.github.io/tasky/
 
 ```
 tasky/
-├── index.html       — Markup (HTML structure)
-├── tasky.css        — All styles, animations, themes, responsive layout
-├── tasky.js         — Core logic: state, rendering, keyboard, voice, drag & drop, Firebase
-├── tasky-collab.js  — Collaboration layer: groups, supervisor, task assignment, comments
+├── index.html            — Markup, inline boot logic, PWA meta, Firebase CDN
+├── manifest.json         — PWA manifest (standalone display, SVG icons)
+├── tasky.css             — All styles, animations, themes, responsive layout
+├── tasky.js              — Core logic: state, rendering, keyboard, drag & drop, Firebase, encryption
+├── tasky-collab.js       — Collaboration layer: groups, supervisor, task assignment, comments
+├── tasky-voice.js        — WebRTC mesh voice calls via Firestore signaling
+├── tasky-voice.css       — Voice call UI styles
+├── tasky-features.js     — Extended features: recurring tasks, CSV import, @mentions, supervisor locks, tab-cycle
+├── tasky-calendar.js     — Full calendar: monthly/weekly views, drag-to-reschedule, keyboard navigation
+├── tasky-calendar.css    — Calendar panel styles
 ├── README.md
 ├── CONTRIBUTING.md
 └── LICENSE
@@ -45,6 +51,14 @@ tasky/
 - **Mobile FAB** — floating Add + mic buttons on small screens
 - **No install** — everything in localStorage, works offline
 - **Local encryption** — all task data encrypted at rest with AES-256-GCM + PBKDF2 passphrase; optional, toggled from Settings
+- **Recurring tasks** — set daily, weekly, or monthly recurrence on any task; auto-duplicates when completed on the due date
+- **Calendar view** — monthly/weekly calendar showing all tasks with due dates; drag chips to reschedule, color-coded by status
+- **CSV import** — import tasks from a CSV file via the Settings panel
+- **@Mentions** — mention team members in task comments with autocomplete (`@username`) and Firestore notification
+- **Supervisor-only controls** — restrict task assignment and deletion to the collaboration supervisor
+- **Tab-cycle workspaces** — press Tab to cycle through open workspaces
+- **Voice calls** — peer-to-peer voice calls between collab members via WebRTC mesh with Firestore signaling
+- **PWA ready** — installable as a Progressive Web App with standalone display, SVG icons, and offline support
 
 ## Settings Panel
 
@@ -133,6 +147,45 @@ Click **Tasky ▼ → Create Collaboration** to become a supervisor:
 
 Data is synced in real time via Firebase Firestore.
 
+## Calendar View
+
+Click the calendar icon (📅) in the **To Do** column header to open the calendar overlay.
+
+- **Monthly / Weekly** — toggle between month and week views via the header buttons
+- **Color-coded** — tasks are colored by status: purple (To Do), amber (Working On), green (Done)
+- **Drag to reschedule** — drag a task chip to a new date; the task's `dueDate` updates instantly
+- **Collaboration sync** — shows assigned team member avatars on task chips
+- **Navigation** — `←`/`→` previous/next day, `↑`/`↓` ±7 days, `M` month view, `W` week view, `T` go to today, `Alt+M` open calendar, `Esc` close
+- **Keyboard focus** — arrow keys move focus across days; focused date is highlighted
+
+All tasks with a `dueDate` appear on their corresponding day. The calendar pulls from both personal and collaboration tasks.
+
+## Recurring Tasks
+
+Set a task to repeat **daily**, **weekly**, or **monthly** from its task menu:
+
+1. Click **↻ Recur** on any task card's menu.
+2. Choose **Daily**, **Weekly**, or **Monthly**.
+3. A badge appears on the card showing the recurrence interval.
+4. When you move the task to **Done** on or after its due date, a duplicate is created automatically with the next due date.
+5. Manage all recurring tasks from **Settings → Recurring Manager** — view, edit, or delete recurrence rules.
+
+Recurring tasks sync to the cloud when signed in.
+
+## Voice Calls
+
+Collaboration members can call each other directly from the board:
+
+- **Start a call** — click the **📞 Call** button in the collaboration panel. All online group members receive a ring notification.
+- **Incoming call** — a modal appears with **Accept** / **Decline** options; auto-declines after 30 seconds.
+- **Mute / Deafen** — toggle microphone off or silence all incoming audio during a call.
+- **Speaking indicators** — active speakers are highlighted via voice activity detection (VAD).
+- **Minimize** — collapse the call to a compact bar at the bottom of the screen.
+- **Supervisor kick** — the supervisor can remove a participant from an active call.
+- **Browser support** — Chrome, Edge, Brave (WebRTC required).
+
+Voice calls use a mesh WebRTC topology with Firestore signaling — no third-party servers.
+
 ## How to Run
 
 1. Serve locally (required for Firebase auth):
@@ -163,13 +216,13 @@ Clearing site data will erase your tasks — export to CSV first if you need a b
 
 ## Browser Support
 
-| Browser | Tasks | Voice | Cloud Sync | Collaboration |
-|---|---|---|---|---|
-| Chrome 90+ | ✅ | ✅ | ✅ | ✅ |
-| Edge 90+ | ✅ | ✅ | ✅ | ✅ |
-| Brave | ✅ | ✅ | ✅ | ✅ |
-| Firefox | ✅ | ❌ | ✅ | ✅ |
-| Safari | ✅ | ⚠️ (partial) | ✅ | ✅ |
+| Browser | Tasks | Voice Input | Voice Calls | Cloud Sync | Collaboration |
+|---|---|---|---|---|---|---|
+| Chrome 90+ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Edge 90+ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Brave | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Firefox | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Safari | ✅ | ⚠️ (partial) | ❌ | ✅ | ✅ |
 
 ## Customisation
 
