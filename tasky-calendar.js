@@ -127,7 +127,7 @@ function _renderMonth() {
   // Keyboard focus
   if (_focusedDs) {
     const el = panel.querySelector(`[data-date="${_focusedDs}"]`);
-    if (el) { el.classList.add('cal-focused'); el.focus(); }
+    if (el) el.classList.add('cal-focused');
   }
 }
 
