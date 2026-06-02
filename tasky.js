@@ -948,6 +948,15 @@
 
             // ── Global keys ───────────────────────────────────────────────────────
             document.addEventListener('keydown', (e) => {
+                // Bail if calendar is open — tasky-calendar.js handles all keys
+                if (document.getElementById('cal-overlay') && document.getElementById('cal-overlay').classList.contains('visible')) return;
+                // Tab+M → open calendar view
+                if (e.key === 'Tab') { window._tabHeld = true; }
+                if ((e.key === 'm' || e.key === 'M') && window._tabHeld) {
+                    e.preventDefault();
+                    if (typeof openCalendarView === 'function') openCalendarView();
+                    return;
+                }
                 // Esc → undo last action (highest priority)
                 if (e.key === 'Escape') {
                     if (_lastUndoCallback) {
@@ -1075,6 +1084,7 @@
                     spaceHeld = false;
                     stopVoice();
                 }
+                if (e.key === 'Tab') { window._tabHeld = false; }
             }, true);
 
             window.addEventListener('blur', () => {
