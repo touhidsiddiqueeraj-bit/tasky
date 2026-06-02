@@ -11,6 +11,13 @@
 let currentGroup      = null;   // { code, name, supervisorUid, supervisorHandle, members[] }
 let currentHandle     = null;   // short username like "jon"
 let isSupervisor      = false;
+
+// Sync collab state to window so tasky-voice.js (and other modules) can read it
+function _syncCollabState() {
+    window.currentGroup   = currentGroup;
+    window.currentHandle  = currentHandle;
+    window.isSupervisor   = isSupervisor;
+}
 let groupListener     = null;   // Firestore onSnapshot unsubscribe
 let tasksListener     = null;   // Firestore onSnapshot for tasks subcollection (supervisor)
 let teamPanelMember   = null;   // handle being inspected in team panel
@@ -22,13 +29,14 @@ async function ensureHandle() {
 
     // Check localStorage first (written on saveHandle)
     const localHandle = localStorage.getItem('tasky_handle');
-    if (localHandle) { currentHandle = localHandle; return currentHandle; }
+    if (localHandle) { currentHandle = localHandle; _syncCollabState(); return currentHandle; }
 
     // Fall back to Firestore SDK
     try {
         const snap = await db.collection('users').doc(currentUser.uid).get();
         if (snap.exists && snap.data().handle) {
             currentHandle = snap.data().handle;
+            _syncCollabState();
             localStorage.setItem('tasky_handle', currentHandle);
             return currentHandle;
         }
@@ -41,6 +49,7 @@ async function saveHandle(handle) {
     if (!currentUser) return;
     await db.collection('users').doc(currentUser.uid).set({ handle, email: currentUser.email }, { merge: true });
     currentHandle = handle;
+    _syncCollabState();
     localStorage.setItem('tasky_handle', handle);
 }
 
@@ -153,7 +162,9 @@ async function leaveGroup() {
     }
     stopGroupListener();
     currentGroup = null;
+    _syncCollabState();
     isSupervisor = false;
+    _syncCollabState();
     teamPanelMember = null;
     renderGroupUI();
     if (typeof window.renderWorkspaceSwitcher === 'function') window.renderWorkspaceSwitcher();
@@ -203,6 +214,7 @@ async function loadActiveGroup() {
                 startGroupListener(serverCode);
             } else {
                 currentGroup = null;
+                _syncCollabState();
                 renderGroupUI();
             }
         }
@@ -219,14 +231,18 @@ function startGroupListener(code) {
     groupListener = db.collection('groups').doc(code).onSnapshot({ includeMetadataChanges: false }, async snap => {
         if (!snap.exists) {
             currentGroup = null;
+            _syncCollabState();
             isSupervisor = false;
+            _syncCollabState();
             stopTasksListener();
             renderGroupUI();
             return;
         }
 
         currentGroup = { ...snap.data(), code };
+        _syncCollabState();
         isSupervisor = currentGroup.supervisorUid === currentUser.uid;
+        _syncCollabState();
         renderGroupUI();
 
         if (isSupervisor) {
@@ -2175,8 +2191,11 @@ async function _handleAuthChange() {
         stopTasksListener();
         saveGroupCodeLocally(null);
         currentGroup    = null;
+        _syncCollabState();
         isSupervisor    = false;
+        _syncCollabState();
         currentHandle   = null;
+        _syncCollabState();
         localStorage.removeItem('tasky_handle');
         teamPanelMember = null;
         teamTasksCache  = {};
@@ -2226,7 +2245,9 @@ window.__onWorkspaceSwitch = function(newId, oldId) {
     } else {
         saveGroupCodeLocally(null);
         currentGroup = null;
+        _syncCollabState();
         isSupervisor = false;
+        _syncCollabState();
         teamPanelMember = null;
         renderGroupUI();
     }
