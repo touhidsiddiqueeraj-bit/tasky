@@ -48,10 +48,10 @@ let vcRingUnsubscribe = null;
 function _vcUser()       { return window.currentUser || null; }
 function _vcMe()         { const u = _vcUser(); return u ? u.uid : null; }
 function _vcIsAnon()     { const u = _vcUser(); return !u || u.isAnonymous; }
-function _vcHnd()        { return typeof currentHandle !== 'undefined' ? currentHandle : null; }
-function _vcGroup()      { return typeof currentGroup  !== 'undefined' ? currentGroup  : null; }
-function _vcIsSup()      { return typeof isSupervisor  !== 'undefined' ? isSupervisor  : false; }
-function _vcDb()         { return window.db || null; }
+function _vcHnd()        { return window.currentHandle || (typeof currentHandle !== 'undefined' ? currentHandle : null); }
+function _vcGroup()      { return window.currentGroup  || (typeof currentGroup  !== 'undefined' ? currentGroup  : null); }
+function _vcIsSup()      { return window.isSupervisor  != null ? window.isSupervisor : (typeof isSupervisor !== 'undefined' ? isSupervisor : false); }
+function _vcDb()         { return window.db || (typeof db !== 'undefined' ? db : null); }
 function _vcEsc(s)       { return typeof escHtml === 'function' ? escHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function _vcGroupRef() {
@@ -149,7 +149,7 @@ function _vcStartRingListener() {
             const data = snap.data();
             if (!data || !data.active) { _vcDismissIncoming(); return; }
             if (data.callerUid === _vcMe()) return; // we are the caller
-            if (vcActive) return;                   // already in call
+            if (vcActive) { _vcDismissIncoming(); return; } // already in call, dismiss modal if open
             vcIncomingCallerId = data.callerUid;
             vcIncomingCallerH  = data.callerHandle;
             _vcShowIncomingModal(data.callerHandle);
@@ -361,12 +361,21 @@ function _vcStartListeners() {
         const me = _vcMe();
         snap.docChanges().forEach(change => {
             const uid = change.doc.id, data = change.doc.data();
-            if (change.type === 'removed') { if (uid !== me) _vcRemovePeer(uid); return; }
+            if (change.type === 'removed') {
+                if (uid !== me) _vcRemovePeer(uid);
+                return;
+            }
             if (uid === me) {
-                vcParticipants[me] = { ...vcParticipants[me], ...data };
+                // Keep local participant entry in sync with Firestore (muted/speaking state)
+                vcParticipants[me] = {
+                    handle:   data.handle  || _vcHnd() || 'you',
+                    muted:    data.muted   != null ? data.muted   : vcMuted,
+                    speaking: data.speaking != null ? data.speaking : false
+                };
             } else {
                 const wasHere = !!vcParticipants[uid];
-                vcParticipants[uid] = { handle: data.handle || uid, muted: !!data.muted, speaking: !!data.speaking };
+                vcParticipants[uid] = { handle: data.handle || uid.slice(0,6), muted: !!data.muted, speaking: !!data.speaking };
+                // Offer WebRTC connection to new peer (lower uid initiates to avoid glare)
                 if (!wasHere && vcActive && me < uid) setTimeout(() => _vcOffer(uid), 500);
             }
         });
@@ -415,8 +424,19 @@ async function vcJoin(isInitiator = true) {
 
     // Write own presence to Firestore
     vcPresenceRef = _vcMyPresenceRef();
+    if (!vcPresenceRef) {
+        // Group ref not available yet — clean up and bail
+        vcActive = false;
+        if (vcLocalStream) { vcLocalStream.getTracks().forEach(t => t.stop()); vcLocalStream = null; }
+        _vcToast('⚠️ Not in a collaboration group'); return;
+    }
+
+    // Add self to local participants immediately so panel renders correctly
+    const myHandle = _vcHnd() || user.email?.split('@')[0] || 'user';
+    vcParticipants[_vcMe()] = { handle: myHandle, muted: false, speaking: false };
+
     await vcPresenceRef.set({
-        handle:   _vcHnd() || user.email?.split('@')[0] || 'user',
+        handle:   myHandle,
         uid:      _vcMe(),
         muted:    false,
         speaking: false,
@@ -435,10 +455,8 @@ async function vcJoin(isInitiator = true) {
             _vcHideOutgoingRing();
             if (Object.keys(vcParticipants).length <= 1) _vcToast('📵 No one answered');
         }, VC_RING_TIMEOUT_MS);
-    } else {
-        // Answerer clears the ring doc so no one else sees it
-        await _vcDeleteRing();
     }
+    // Note: answerer does NOT delete the ring doc — other members should still be able to join
 
     vcDurationInterval = setInterval(_vcUpdateDuration, 1000);
     _vcRenderPanel();
@@ -675,14 +693,22 @@ function _vcRenderParticipants() {
     if (!container) return;
     const me      = _vcMe();
     const entries = Object.entries(vcParticipants);
-    if (entries.length === 0) {
-        container.innerHTML = '<div class="vc-empty">Waiting for others…</div>';
-        return;
+
+    // Cancel "Calling…" status and ring timeout once a second person joins
+    if (entries.length > 1) {
+        _vcHideOutgoingRing();
+        if (vcRingTimeout) { clearTimeout(vcRingTimeout); vcRingTimeout = null; }
     }
-    // Cancel "Calling…" status once a second person joins
-    if (entries.length > 1) _vcHideOutgoingRing();
 
     container.innerHTML = '';
+
+    if (entries.length === 0) {
+        container.innerHTML = '<div class="vc-empty">Connecting…</div>';
+        const mini = document.getElementById('vc-mini-count');
+        if (mini) mini.textContent = '1 in call';
+        return;
+    }
+
     entries.forEach(([uid, p]) => {
         const isMe  = uid === me;
         const isSup = _vcGroup()?.supervisorUid === uid;
@@ -698,7 +724,7 @@ function _vcRenderParticipants() {
                 <span class="vc-p-status">
                     ${p.muted                    ? '<span class="vc-status-chip muted">🔇</span>'      : ''}
                     ${p.speaking && !p.muted     ? '<span class="vc-status-chip speaking">🎙️</span>'  : ''}
-                    ${!connected                 ? '<span class="vc-status-chip connecting">⏳</span>' : ''}
+                    ${!connected && !isMe        ? '<span class="vc-status-chip connecting">⏳</span>' : ''}
                 </span>
             </div>
             <div class="vc-p-actions">
@@ -708,6 +734,15 @@ function _vcRenderParticipants() {
             b.addEventListener('click', e => { e.stopPropagation(); vcKickFromCall(b.dataset.uid); }));
         container.appendChild(card);
     });
+
+    // Show "waiting" hint when only self is present
+    if (entries.length === 1 && entries[0][0] === me) {
+        const hint = document.createElement('div');
+        hint.className = 'vc-empty';
+        hint.textContent = 'Waiting for others to join…';
+        container.appendChild(hint);
+    }
+
     const mini = document.getElementById('vc-mini-count');
     if (mini) mini.textContent = `${entries.length} in call`;
 }
