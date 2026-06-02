@@ -1,44 +1,49 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //  TASKY — VOICE CALL LAYER  (load after tasky-collab.js)
 //  WebRTC mesh voice calls for collab groups via Firebase Firestore signaling
-//  Supports: group call, mute, deafen, speaker indicators, supervisor kick
+//  Features: ring notifications, incoming call modal, mute, deafen,
+//            speaking indicators (VAD), supervisor kick, minimize to bar
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ─── Constants ───────────────────────────────────────────────────────────
-const VC_COLLECTION   = 'voice_sessions';  // Firestore root: voice_sessions/{groupCode}
-const VC_ICE_SERVERS  = [
+const VC_COLLECTION      = 'voice_sessions';
+const VC_ICE_SERVERS     = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' }
 ];
-const VC_OFFER_TIMEOUT_MS  = 15000;
-const VC_RECONNECT_DELAY   = 3000;
-const VC_SPEAKING_THRESHOLD = -50;   // dB — anything above this is "speaking"
-const VC_SPEAKING_INTERVAL  = 200;   // ms between VAD polls
+const VC_SPEAKING_THRESHOLD = -50;   // dB
+const VC_SPEAKING_INTERVAL  = 200;   // ms
+const VC_RING_TIMEOUT_MS    = 30000; // auto-decline after 30 s
+const VC_RECONNECT_DELAY    = 3000;
 
 // ─── State ────────────────────────────────────────────────────────────────
-let vcActive          = false;       // Are we in a call?
-let vcLocalStream     = null;        // MediaStream (mic)
-let vcPeers           = {};          // { uid: { pc, audioEl, offerPending } }
+let vcActive          = false;
+let vcLocalStream     = null;
+let vcPeers           = {};          // { uid: { pc, audioEl } }
 let vcParticipants    = {};          // { uid: { handle, muted, speaking } }
 let vcMuted           = false;
 let vcDeafened        = false;
-let vcSessionRef      = null;        // Firestore doc ref for our session
-let vcPresenceRef     = null;        // our presence entry
-let vcSessionListener = null;        // onSnapshot unsub
+let vcPresenceRef     = null;
 let vcPresenceUnsub   = null;
 let vcAudioCtx        = null;
-let vcAnalysers       = {};          // { uid: AnalyserNode }  (uid='local' for self)
+let vcAnalysers       = {};
 let vcVadInterval     = null;
 let vcCallStartTime   = null;
-let vcDurationInterval = null;
+let vcDurationInterval= null;
 let _vcPanelOpen      = false;
-let _vcOfferQueue     = [];          // deferred offers to process after getUserMedia
+
+// Ringing state
+let vcRingTimeout     = null;   // auto-decline timer
+let vcIncomingCallerId= null;   // uid of whoever is calling us
+let vcIncomingCallerH = null;   // their handle
+let vcOutgoingRingInt = null;   // interval to pulse outgoing ring UI
+let vcRingUnsubscribe = null;   // Firestore ring doc listener
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
-function _vcMe()   { return currentUser  ? currentUser.uid    : null; }
-function _vcHnd()  { return currentHandle || 'me'; }
-function _vcDb()   { return window.db || (typeof firebase !== 'undefined' ? firebase.firestore() : null); }
+function _vcMe()  { return window.currentUser ? window.currentUser.uid : null; }
+function _vcHnd() { return window.currentHandle || 'me'; }
+function _vcDb()  { return window.db || null; }
 function _vcLog(...a) { console.log('[VC]', ...a); }
 
 function _vcToast(msg) {
@@ -50,13 +55,189 @@ function _vcToast(msg) {
 }
 
 function _vcGroupRef() {
-    const d = _vcDb(); if (!d || !currentGroup) return null;
-    return d.collection(VC_COLLECTION).doc(currentGroup.code);
+    const d = _vcDb();
+    if (!d || !window.currentGroup) return null;
+    return d.collection(VC_COLLECTION).doc(window.currentGroup.code);
 }
-
 function _vcMyPresenceRef() {
     const g = _vcGroupRef(); if (!g) return null;
     return g.collection('participants').doc(_vcMe());
+}
+
+// ─── Ringtone (Web Audio API, no external file needed) ────────────────────
+function _vcPlayRing(type) {
+    // type: 'incoming' | 'outgoing' | 'stop'
+    _vcStopRing();
+    if (type === 'stop') return;
+
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        let stopped = false;
+        const stopFn = () => { stopped = true; ctx.close().catch(() => {}); };
+        window._vcRingCtx = ctx;
+        window._vcRingStop = stopFn;
+
+        if (type === 'incoming') {
+            // Ascending double-beep ring pattern
+            let count = 0;
+            const beep = () => {
+                if (stopped) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.frequency.value = count % 2 === 0 ? 880 : 1046;
+                gain.gain.setValueAtTime(0, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+                gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.18);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.2);
+                count++;
+                if (!stopped) setTimeout(beep, count % 2 === 0 ? 500 : 200);
+            };
+            beep();
+        } else {
+            // Outgoing: low pulse every 1.5 s
+            const pulse = () => {
+                if (stopped) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.frequency.value = 440;
+                osc.type = 'sine';
+                gain.gain.setValueAtTime(0, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
+                gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.4);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.45);
+                if (!stopped) setTimeout(pulse, 1500);
+            };
+            pulse();
+        }
+    } catch(e) { _vcLog('Ring audio error', e); }
+}
+
+function _vcStopRing() {
+    if (window._vcRingStop) { window._vcRingStop(); window._vcRingStop = null; }
+    if (window._vcRingCtx)  { window._vcRingCtx = null; }
+}
+
+// ─── Ring Notification (Firestore) ────────────────────────────────────────
+// Schema: voice_sessions/{groupCode}/ring  — a single document:
+// { callerUid, callerHandle, startedAt, active: true }
+// Members watch this doc; when active=true and not callerUid, show incoming UI.
+
+async function _vcStartCall() {
+    // Write ring doc → all members get notified
+    const gRef = _vcGroupRef(); if (!gRef) return;
+    await gRef.collection('ring').doc('current').set({
+        callerUid:    _vcMe(),
+        callerHandle: _vcHnd(),
+        startedAt:    firebase.firestore.FieldValue.serverTimestamp(),
+        active:       true,
+        groupCode:    window.currentGroup.code
+    });
+    _vcLog('Ring broadcast sent');
+}
+
+async function _vcCancelRing() {
+    const gRef = _vcGroupRef(); if (!gRef) return;
+    await gRef.collection('ring').doc('current').delete().catch(() => {});
+}
+
+function _vcStartRingListener() {
+    const gRef = _vcGroupRef(); if (!gRef) return;
+    const me = _vcMe();
+
+    if (vcRingUnsubscribe) { vcRingUnsubscribe(); vcRingUnsubscribe = null; }
+
+    vcRingUnsubscribe = gRef.collection('ring').doc('current')
+        .onSnapshot(snap => {
+            if (!snap.exists) {
+                // Ring cancelled — dismiss incoming UI if showing
+                _vcDismissIncoming();
+                return;
+            }
+            const data = snap.data();
+            if (!data.active) { _vcDismissIncoming(); return; }
+            if (data.callerUid === me) return; // we are the caller
+            if (vcActive) {
+                // Already in call — auto-join silently (already connected via presence)
+                return;
+            }
+            // Show incoming call UI
+            vcIncomingCallerId = data.callerUid;
+            vcIncomingCallerH  = data.callerHandle;
+            _vcShowIncomingModal(data.callerHandle);
+        });
+}
+
+function _vcStopRingListener() {
+    if (vcRingUnsubscribe) { vcRingUnsubscribe(); vcRingUnsubscribe = null; }
+}
+
+// ─── Incoming Call Modal ──────────────────────────────────────────────────
+function _vcShowIncomingModal(callerHandle) {
+    if (document.getElementById('vc-incoming-modal')) return;
+    _vcPlayRing('incoming');
+
+    const modal = document.createElement('div');
+    modal.id = 'vc-incoming-modal';
+    modal.className = 'vc-incoming-modal';
+    modal.innerHTML = `
+        <div class="vc-incoming-inner">
+            <div class="vc-incoming-ring-anim">
+                <div class="vc-ring-circle vc-ring-c1"></div>
+                <div class="vc-ring-circle vc-ring-c2"></div>
+                <div class="vc-ring-circle vc-ring-c3"></div>
+                <div class="vc-incoming-avatar">${(callerHandle||'?')[0].toUpperCase()}</div>
+            </div>
+            <div class="vc-incoming-label">Incoming call</div>
+            <div class="vc-incoming-caller">@${callerHandle || 'Someone'}</div>
+            <div class="vc-incoming-group">${window.currentGroup ? window.currentGroup.name : ''}</div>
+            <div class="vc-incoming-btns">
+                <button class="vc-incoming-btn vc-incoming-btn--decline" id="vc-decline-btn">
+                    📵 Decline
+                </button>
+                <button class="vc-incoming-btn vc-incoming-btn--accept" id="vc-accept-btn">
+                    🎙️ Answer
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.querySelector('#vc-accept-btn').addEventListener('click',  vcAnswerCall);
+    modal.querySelector('#vc-decline-btn').addEventListener('click', vcDeclineCall);
+
+    // Auto-decline after timeout
+    vcRingTimeout = setTimeout(() => {
+        vcDeclineCall();
+        _vcToast('📵 Missed call from @' + callerHandle);
+    }, VC_RING_TIMEOUT_MS);
+
+    // Animate in
+    requestAnimationFrame(() => modal.classList.add('vc-incoming-modal--visible'));
+}
+
+function _vcDismissIncoming() {
+    _vcStopRing();
+    if (vcRingTimeout) { clearTimeout(vcRingTimeout); vcRingTimeout = null; }
+    const modal = document.getElementById('vc-incoming-modal');
+    if (modal) {
+        modal.classList.remove('vc-incoming-modal--visible');
+        setTimeout(() => modal.remove(), 300);
+    }
+    vcIncomingCallerId = null;
+    vcIncomingCallerH  = null;
+}
+
+// ─── Answer / Decline ─────────────────────────────────────────────────────
+async function vcAnswerCall() {
+    _vcDismissIncoming();
+    await vcJoin();
+}
+
+function vcDeclineCall() {
+    _vcDismissIncoming();
 }
 
 // ─── Audio / VAD ──────────────────────────────────────────────────────────
@@ -68,20 +249,18 @@ function _vcTrackVAD(uid, stream) {
     _vcInitAudioCtx();
     try {
         const src = vcAudioCtx.createMediaStreamSource(stream);
-        const analyser = vcAudioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        src.connect(analyser);
-        vcAnalysers[uid] = analyser;
+        const an  = vcAudioCtx.createAnalyser();
+        an.fftSize = 256;
+        src.connect(an);
+        vcAnalysers[uid] = an;
     } catch(e) { _vcLog('VAD init error', e); }
 }
 
-function _vcRemoveVAD(uid) {
-    delete vcAnalysers[uid];
-}
+function _vcRemoveVAD(uid) { delete vcAnalysers[uid]; }
 
-function _vcGetLevel(analyser) {
-    const buf = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(buf);
+function _vcGetLevel(an) {
+    const buf = new Float32Array(an.fftSize);
+    an.getFloatTimeDomainData(buf);
     let sum = 0;
     for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
     const rms = Math.sqrt(sum / buf.length);
@@ -92,15 +271,13 @@ function _vcStartVAD() {
     if (vcVadInterval) return;
     vcVadInterval = setInterval(() => {
         let changed = false;
-        for (const [uid, analyser] of Object.entries(vcAnalysers)) {
-            const dB = _vcGetLevel(analyser);
-            const speaking = dB > VC_SPEAKING_THRESHOLD;
+        for (const [uid, an] of Object.entries(vcAnalysers)) {
+            const speaking = _vcGetLevel(an) > VC_SPEAKING_THRESHOLD;
             const realUid = uid === 'local' ? _vcMe() : uid;
             if (!vcParticipants[realUid]) continue;
             if (vcParticipants[realUid].speaking !== speaking) {
                 vcParticipants[realUid].speaking = speaking;
                 changed = true;
-                // Broadcast our own speaking state
                 if (uid === 'local' && vcPresenceRef && !vcMuted) {
                     vcPresenceRef.update({ speaking }).catch(() => {});
                 }
@@ -115,18 +292,12 @@ function _vcStopVAD() {
     vcAnalysers = {};
 }
 
-// ─── WebRTC Peer Connection ────────────────────────────────────────────────
+// ─── WebRTC ───────────────────────────────────────────────────────────────
 function _vcCreatePC(peerUid) {
     const pc = new RTCPeerConnection({ iceServers: VC_ICE_SERVERS });
+    if (vcLocalStream) vcLocalStream.getTracks().forEach(t => pc.addTrack(t, vcLocalStream));
 
-    // Add local tracks
-    if (vcLocalStream) {
-        vcLocalStream.getTracks().forEach(t => pc.addTrack(t, vcLocalStream));
-    }
-
-    // Receive remote audio
     pc.ontrack = (e) => {
-        _vcLog('Track from', peerUid);
         let el = document.getElementById('vc-audio-' + peerUid);
         if (!el) {
             el = document.createElement('audio');
@@ -137,30 +308,26 @@ function _vcCreatePC(peerUid) {
         }
         el.srcObject = e.streams[0];
         if (vcDeafened) el.muted = true;
-        // VAD on remote stream
         _vcTrackVAD(peerUid, e.streams[0]);
         vcPeers[peerUid] = vcPeers[peerUid] || {};
         vcPeers[peerUid].audioEl = el;
     };
 
-    // ICE candidate → Firestore
     pc.onicecandidate = (e) => {
         if (!e.candidate) return;
-        const gRef = _vcGroupRef(); if (!gRef) return;
-        gRef.collection('signals')
-            .add({
-                from: _vcMe(),
-                to:   peerUid,
-                type: 'candidate',
-                candidate: e.candidate.toJSON(),
-                ts: firebase.firestore.FieldValue.serverTimestamp()
-            }).catch(() => {});
+        const g = _vcGroupRef(); if (!g) return;
+        g.collection('signals').add({
+            from: _vcMe(), to: peerUid, type: 'candidate',
+            candidate: e.candidate.toJSON(),
+            ts: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(() => {});
     };
 
     pc.onconnectionstatechange = () => {
-        _vcLog('PC state with', peerUid, ':', pc.connectionState);
         if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-            _vcHandlePeerDisconnect(peerUid);
+            setTimeout(() => {
+                if (vcActive && vcParticipants[peerUid] && _vcMe() < peerUid) _vcOffer(peerUid);
+            }, VC_RECONNECT_DELAY);
         }
         _vcRenderParticipants();
     };
@@ -171,139 +338,52 @@ function _vcCreatePC(peerUid) {
 }
 
 async function _vcOffer(peerUid) {
-    _vcLog('Offering to', peerUid);
     const pc = _vcCreatePC(peerUid);
     try {
         const offer = await pc.createOffer({ offerToReceiveAudio: true });
         await pc.setLocalDescription(offer);
-        const gRef = _vcGroupRef(); if (!gRef) return;
-        await gRef.collection('signals').add({
-            from: _vcMe(),
-            to:   peerUid,
-            type: 'offer',
-            sdp:  pc.localDescription.sdp,
-            ts:   firebase.firestore.FieldValue.serverTimestamp()
+        const g = _vcGroupRef(); if (!g) return;
+        await g.collection('signals').add({
+            from: _vcMe(), to: peerUid, type: 'offer',
+            sdp: pc.localDescription.sdp,
+            ts: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch(e) { _vcLog('Offer error', e); }
 }
 
 async function _vcAnswer(peerUid, sdp) {
-    _vcLog('Answering', peerUid);
     let pc = vcPeers[peerUid]?.pc;
-    if (!pc || pc.signalingState === 'closed') {
-        pc = _vcCreatePC(peerUid);
-    }
+    if (!pc || pc.signalingState === 'closed') pc = _vcCreatePC(peerUid);
     try {
-        if (pc.signalingState !== 'stable') {
-            await pc.setRemoteDescription({ type: 'offer', sdp });
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            const gRef = _vcGroupRef(); if (!gRef) return;
-            await gRef.collection('signals').add({
-                from: _vcMe(),
-                to:   peerUid,
-                type: 'answer',
-                sdp:  pc.localDescription.sdp,
-                ts:   firebase.firestore.FieldValue.serverTimestamp()
-            });
-        }
+        if (pc.signalingState !== 'stable') return; // ignore duplicate offers
+        await pc.setRemoteDescription({ type: 'offer', sdp });
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        const g = _vcGroupRef(); if (!g) return;
+        await g.collection('signals').add({
+            from: _vcMe(), to: peerUid, type: 'answer',
+            sdp: pc.localDescription.sdp,
+            ts: firebase.firestore.FieldValue.serverTimestamp()
+        });
     } catch(e) { _vcLog('Answer error', e); }
 }
 
 async function _vcHandleAnswer(peerUid, sdp) {
     const pc = vcPeers[peerUid]?.pc;
-    if (!pc || pc.signalingState === 'closed') return;
-    try {
-        if (pc.signalingState === 'have-local-offer') {
-            await pc.setRemoteDescription({ type: 'answer', sdp });
-        }
-    } catch(e) { _vcLog('Handle answer error', e); }
+    if (!pc || pc.signalingState !== 'have-local-offer') return;
+    try { await pc.setRemoteDescription({ type: 'answer', sdp }); } catch(e) {}
 }
 
 async function _vcHandleCandidate(peerUid, candidate) {
     const pc = vcPeers[peerUid]?.pc;
     if (!pc || pc.signalingState === 'closed') return;
-    try {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch(e) { /* ignore stale candidates */ }
-}
-
-function _vcHandlePeerDisconnect(peerUid) {
-    // Attempt reconnect after delay if we're still in call
-    setTimeout(() => {
-        if (!vcActive || !vcParticipants[peerUid]) return;
-        // Offer side reconnects (lower UID lexicographically offers)
-        if (_vcMe() < peerUid) _vcOffer(peerUid);
-    }, VC_RECONNECT_DELAY);
-}
-
-// ─── Firestore Signaling Listener ─────────────────────────────────────────
-function _vcStartSignalingListener() {
-    const gRef = _vcGroupRef(); if (!gRef) return;
-    const me = _vcMe();
-
-    // Watch signals addressed to me
-    const sigRef = gRef.collection('signals').where('to', '==', me);
-    const sigUnsub = sigRef.onSnapshot(snap => {
-        snap.docChanges().forEach(async change => {
-            if (change.type !== 'added') return;
-            const sig = change.doc.data();
-            const from = sig.from;
-            // Delete after processing (keep Firestore clean)
-            change.doc.ref.delete().catch(() => {});
-
-            if (sig.type === 'offer') {
-                // Only answer if we're in the call
-                if (vcActive) await _vcAnswer(from, sig.sdp);
-            } else if (sig.type === 'answer') {
-                await _vcHandleAnswer(from, sig.sdp);
-            } else if (sig.type === 'candidate') {
-                await _vcHandleCandidate(from, sig.candidate);
-            }
-        });
-    });
-
-    // Watch participant presence
-    const presRef = gRef.collection('participants');
-    const presUnsub = presRef.onSnapshot(snap => {
-        const me = _vcMe();
-        snap.docChanges().forEach(change => {
-            const uid = change.doc.id;
-            const data = change.doc.data();
-
-            if (change.type === 'removed') {
-                if (uid !== me) _vcRemovePeer(uid);
-                return;
-            }
-
-            if (uid === me) {
-                // Our own presence updated
-                vcParticipants[me] = { ...vcParticipants[me], ...data };
-            } else {
-                const wasHere = !!vcParticipants[uid];
-                vcParticipants[uid] = { handle: data.handle || uid, muted: !!data.muted, speaking: !!data.speaking };
-
-                if (!wasHere && vcActive) {
-                    // New peer joined — if our UID is lower, we offer
-                    _vcLog('New peer joined:', uid);
-                    if (me < uid) {
-                        setTimeout(() => _vcOffer(uid), 500);
-                    }
-                }
-            }
-        });
-        _vcRenderParticipants();
-        _vcUpdateCallBtn();
-    });
-
-    vcPresenceUnsub = () => { sigUnsub(); presUnsub(); };
+    try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
 }
 
 function _vcRemovePeer(uid) {
-    _vcLog('Removing peer', uid);
     const peer = vcPeers[uid];
     if (peer) {
-        if (peer.pc) { try { peer.pc.close(); } catch(_) {} }
+        if (peer.pc)      { try { peer.pc.close(); } catch(_) {} }
         if (peer.audioEl) { peer.audioEl.srcObject = null; peer.audioEl.remove(); }
     }
     delete vcPeers[uid];
@@ -311,90 +391,149 @@ function _vcRemovePeer(uid) {
     _vcRemoveVAD(uid);
 }
 
-// ─── Join / Leave Call ─────────────────────────────────────────────────────
+// ─── Signaling + Presence Listener ────────────────────────────────────────
+function _vcStartListeners() {
+    const gRef = _vcGroupRef(); if (!gRef) return;
+    const me = _vcMe();
+
+    const sigUnsub = gRef.collection('signals').where('to', '==', me)
+        .onSnapshot(snap => {
+            snap.docChanges().forEach(async change => {
+                if (change.type !== 'added') return;
+                const sig = change.doc.data();
+                change.doc.ref.delete().catch(() => {});
+                if (sig.type === 'offer')     { if (vcActive) await _vcAnswer(sig.from, sig.sdp); }
+                else if (sig.type === 'answer')    { await _vcHandleAnswer(sig.from, sig.sdp); }
+                else if (sig.type === 'candidate') { await _vcHandleCandidate(sig.from, sig.candidate); }
+                else if (sig.type === 'kick')      { vcLeave(); _vcToast('🚫 Removed from call by supervisor'); }
+            });
+        });
+
+    const presUnsub = gRef.collection('participants')
+        .onSnapshot(snap => {
+            snap.docChanges().forEach(change => {
+                const uid  = change.doc.id;
+                const data = change.doc.data();
+                if (change.type === 'removed') {
+                    if (uid !== me) { _vcRemovePeer(uid); }
+                    return;
+                }
+                if (uid === me) {
+                    vcParticipants[me] = { ...vcParticipants[me], ...data };
+                } else {
+                    const wasHere = !!vcParticipants[uid];
+                    vcParticipants[uid] = { handle: data.handle || uid, muted: !!data.muted, speaking: !!data.speaking };
+                    if (!wasHere && vcActive && me < uid) {
+                        setTimeout(() => _vcOffer(uid), 500);
+                    }
+                }
+            });
+            _vcRenderParticipants();
+            _vcUpdateCallBtn();
+        });
+
+    vcPresenceUnsub = () => { sigUnsub(); presUnsub(); };
+}
+
+// ─── Join Call ────────────────────────────────────────────────────────────
 async function vcJoin() {
     if (vcActive) return;
-    if (!currentGroup || !currentUser || currentUser.isAnonymous) {
+    if (!window.currentGroup || !window.currentUser || window.currentUser.isAnonymous) {
         _vcToast('⚠️ Sign in to join calls'); return;
     }
 
+    // Request mic
     try {
         vcLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     } catch(e) {
-        _vcToast('🎙️ Microphone access denied');
-        _vcLog('getUserMedia error', e);
-        return;
+        _vcToast('🎙️ Microphone access denied'); _vcLog('getUserMedia', e); return;
     }
 
-    vcActive      = true;
-    vcMuted       = false;
-    vcDeafened    = false;
-    vcCallStartTime = Date.now();
-    vcPeers       = {};
+    vcActive       = true;
+    vcMuted        = false;
+    vcDeafened     = false;
+    vcCallStartTime= Date.now();
+    vcPeers        = {};
     vcParticipants = {};
 
-    // VAD on local stream
     _vcTrackVAD('local', vcLocalStream);
     _vcStartVAD();
 
-    // Write presence
+    // Write own presence
     vcPresenceRef = _vcMyPresenceRef();
     await vcPresenceRef.set({
-        handle:  _vcHnd(),
-        uid:     _vcMe(),
-        muted:   false,
-        speaking: false,
+        handle: _vcHnd(), uid: _vcMe(),
+        muted: false, speaking: false,
         joinedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    // Start listeners
-    _vcStartSignalingListener();
+    _vcStartListeners();
 
-    // Start duration timer
+    // If we are the initiator, broadcast ring + start outgoing UI
+    const gRef = _vcGroupRef();
+    const ringSnap = gRef ? await gRef.collection('ring').doc('current').get().catch(() => null) : null;
+    const ringData = ringSnap && ringSnap.exists ? ringSnap.data() : null;
+    const weAreInitiator = !ringData || !ringData.active;
+
+    if (weAreInitiator) {
+        await _vcStartCall();
+        _vcShowOutgoingRing();
+        // Cancel ring after 30 s if nobody joined
+        vcRingTimeout = setTimeout(async () => {
+            await _vcCancelRing();
+            _vcHideOutgoingRing();
+            if (Object.keys(vcParticipants).length <= 1) {
+                _vcToast('📵 No one answered');
+            }
+        }, VC_RING_TIMEOUT_MS);
+    } else {
+        // We are answering — clear the ring doc
+        await _vcCancelRing();
+    }
+
     vcDurationInterval = setInterval(_vcUpdateDuration, 1000);
-
     _vcRenderPanel();
-    _vcToast('🎙️ Joined voice call');
     _vcUpdateCallBtn();
-    _vcLog('Joined call in group', currentGroup.code);
+    _vcToast('🎙️ Joined voice call');
 }
 
+// ─── Leave Call ───────────────────────────────────────────────────────────
 async function vcLeave() {
     if (!vcActive) return;
     vcActive = false;
 
     _vcStopVAD();
+    _vcStopRing();
+    _vcHideOutgoingRing();
+    if (vcRingTimeout) { clearTimeout(vcRingTimeout); vcRingTimeout = null; }
     if (vcDurationInterval) { clearInterval(vcDurationInterval); vcDurationInterval = null; }
     if (vcPresenceUnsub) { vcPresenceUnsub(); vcPresenceUnsub = null; }
 
-    // Remove presence
     if (vcPresenceRef) { await vcPresenceRef.delete().catch(() => {}); vcPresenceRef = null; }
 
-    // Close all peer connections + audio elements
-    for (const uid of Object.keys(vcPeers)) _vcRemovePeer(uid);
-    vcPeers = {}; vcParticipants = {};
-
-    // Stop local stream
-    if (vcLocalStream) {
-        vcLocalStream.getTracks().forEach(t => t.stop());
-        vcLocalStream = null;
-    }
-
-    if (vcAudioCtx) { vcAudioCtx.close().catch(() => {}); vcAudioCtx = null; }
-
-    // Clean up stale signals (best-effort)
+    // Clean up stale signals
     try {
         const gRef = _vcGroupRef();
         if (gRef) {
             const stale = await gRef.collection('signals').where('from', '==', _vcMe()).get();
             stale.forEach(d => d.ref.delete());
+            // Also cancel ring if we were the caller
+            const ringSnap = await gRef.collection('ring').doc('current').get();
+            if (ringSnap.exists && ringSnap.data().callerUid === _vcMe()) {
+                await gRef.collection('ring').doc('current').delete();
+            }
         }
     } catch(_) {}
+
+    for (const uid of Object.keys(vcPeers)) _vcRemovePeer(uid);
+    vcPeers = {}; vcParticipants = {};
+
+    if (vcLocalStream) { vcLocalStream.getTracks().forEach(t => t.stop()); vcLocalStream = null; }
+    if (vcAudioCtx)    { vcAudioCtx.close().catch(() => {}); vcAudioCtx = null; }
 
     _vcClosePanel();
     _vcToast('📵 Left voice call');
     _vcUpdateCallBtn();
-    _vcLog('Left call');
 }
 
 // ─── Mute / Deafen ────────────────────────────────────────────────────────
@@ -411,9 +550,7 @@ function vcToggleMute() {
 function vcToggleDeafen() {
     if (!vcActive) return;
     vcDeafened = !vcDeafened;
-    // Mute all remote audio elements
     document.querySelectorAll('[id^="vc-audio-"]').forEach(el => { el.muted = vcDeafened; });
-    // Also mute mic when deafened (standard UX)
     if (vcDeafened && !vcMuted) vcToggleMute();
     _vcUpdateControls();
     _vcToast(vcDeafened ? '🔕 Deafened' : '🔊 Undeafened');
@@ -421,62 +558,116 @@ function vcToggleDeafen() {
 
 // ─── Supervisor Kick ──────────────────────────────────────────────────────
 async function vcKickFromCall(uid) {
-    if (!isSupervisor || !currentGroup) return;
+    if (!window.isSupervisor || !window.currentGroup) return;
     const gRef = _vcGroupRef(); if (!gRef) return;
-    // Write a kick signal
     await gRef.collection('signals').add({
-        from: _vcMe(),
-        to:   uid,
-        type: 'kick',
-        ts:   firebase.firestore.FieldValue.serverTimestamp()
+        from: _vcMe(), to: uid, type: 'kick',
+        ts: firebase.firestore.FieldValue.serverTimestamp()
     });
-    _vcToast('🦶 Kicked from call');
 }
 
-// Receive kick
-function _vcHandleKick() {
-    vcLeave();
-    _vcToast('🚫 You were removed from the call by the supervisor');
+// ─── Outgoing Ring UI ─────────────────────────────────────────────────────
+function _vcShowOutgoingRing() {
+    _vcPlayRing('outgoing');
+    const btn = document.getElementById('vc-call-btn') || document.getElementById('vc-call-btn-member');
+    if (btn) btn.classList.add('vc-call-btn--ringing');
+    // Update panel if open
+    const panelStatus = document.getElementById('vc-call-status');
+    if (panelStatus) panelStatus.textContent = 'Calling…';
 }
 
-// Patch signaling listener to handle kick signals
-const _origStartSig = _vcStartSignalingListener;
+function _vcHideOutgoingRing() {
+    _vcStopRing();
+    const btn = document.getElementById('vc-call-btn') || document.getElementById('vc-call-btn-member');
+    if (btn) btn.classList.remove('vc-call-btn--ringing');
+    const panelStatus = document.getElementById('vc-call-status');
+    if (panelStatus) panelStatus.textContent = '';
+}
 
 // ─── Duration ─────────────────────────────────────────────────────────────
 function _vcUpdateDuration() {
     const el = document.getElementById('vc-duration');
     if (!el || !vcCallStartTime) return;
     const s = Math.floor((Date.now() - vcCallStartTime) / 1000);
-    const m = Math.floor(s / 60), sec = s % 60;
-    el.textContent = `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    el.textContent = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 }
 
-// ─── UI — Call Button ─────────────────────────────────────────────────────
-function _vcUpdateCallBtn() {
-    // Find existing button or inject
-    let btn = document.getElementById('vc-call-btn');
-    if (!btn) return;
+// ─── Inject Call Button ───────────────────────────────────────────────────
+// Placed alongside the 💬 Board button — in the Team column for supervisors
+// and in the member controls bar for members.
+
+function _vcInjectCallButtons() {
+    _vcInjectSupervisorBtn();
+    _vcInjectMemberBtn();
+}
+
+function _vcInjectSupervisorBtn() {
+    if (document.getElementById('vc-call-btn')) return;
+    // In supervisor Team column header, next to the Board button
+    const boardBtn = document.getElementById('tc-board-btn');
+    if (!boardBtn) return;
+    const btn = document.createElement('button');
+    btn.id = 'vc-call-btn';
+    btn.className = 'vc-call-btn tc-board-btn';
+    btn.title = 'Start a group voice call';
+    btn.innerHTML = `🎙️ Call`;
+    btn.addEventListener('click', _vcHandleCallBtnClick);
+    boardBtn.insertAdjacentElement('afterend', btn);
+    _vcUpdateCallBtn();
+}
+
+function _vcInjectMemberBtn() {
+    if (document.getElementById('vc-call-btn-member')) return;
+    // In the fixed member controls bar, next to Board button
+    const mc = document.getElementById('mb-member-controls');
+    if (!mc) return;
+    const btn = document.createElement('button');
+    btn.id = 'vc-call-btn-member';
+    btn.className = 'vc-call-btn mb-member-board-btn';
+    btn.title = 'Join group voice call';
+    btn.innerHTML = `🎙️ Call`;
+    btn.addEventListener('click', _vcHandleCallBtnClick);
+    mc.appendChild(btn);
+    _vcUpdateCallBtn();
+}
+
+function _vcHandleCallBtnClick() {
     if (vcActive) {
-        btn.className = 'vc-call-btn vc-call-btn--active';
-        btn.innerHTML = `<span class="vc-btn-pulse"></span>🔴 In Call`;
+        // Reopen panel
+        const panel = document.getElementById('vc-panel');
+        if (panel) {
+            panel.classList.remove('vc-panel--minimized');
+            const bar = document.getElementById('vc-mini-bar');
+            if (bar) bar.remove();
+            _vcPanelOpen = true;
+        } else {
+            _vcRenderPanel();
+        }
     } else {
-        btn.className = 'vc-call-btn';
-        btn.innerHTML = `🎙️ Voice Call`;
+        vcJoin();
     }
 }
 
-// ─── UI — Panel ──────────────────────────────────────────────────────────
-function vcOpenPanel() {
-    if (document.getElementById('vc-panel')) { _vcPanelOpen = true; return; }
-    _vcPanelOpen = true;
-    _vcRenderPanel();
+// ─── Call Button State ────────────────────────────────────────────────────
+function _vcUpdateCallBtn() {
+    ['vc-call-btn', 'vc-call-btn-member'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        if (vcActive) {
+            btn.innerHTML = `<span class="vc-btn-pulse"></span> In Call`;
+            btn.classList.add('vc-call-btn--active');
+            btn.classList.remove('vc-call-btn--ringing');
+        } else {
+            btn.innerHTML = `🎙️ Call`;
+            btn.classList.remove('vc-call-btn--active', 'vc-call-btn--ringing');
+        }
+    });
 }
 
+// ─── Panel ────────────────────────────────────────────────────────────────
 function _vcClosePanel() {
-    const panel = document.getElementById('vc-panel');
-    if (panel) panel.remove();
-    const overlay = document.getElementById('vc-overlay');
-    if (overlay) overlay.remove();
+    document.getElementById('vc-panel')?.remove();
+    document.getElementById('vc-mini-bar')?.remove();
     _vcPanelOpen = false;
 }
 
@@ -489,99 +680,98 @@ function _vcRenderPanel() {
         document.body.appendChild(panel);
     }
 
-    const partCount = Object.keys(vcParticipants).length;
-
     panel.innerHTML = `
         <div class="vc-panel-header">
             <div class="vc-panel-title">
                 <span class="vc-live-dot"></span>
                 <span>Voice Call</span>
-                ${currentGroup ? `<span class="vc-group-name">${escHtml ? escHtml(currentGroup.name) : currentGroup.name}</span>` : ''}
+                ${window.currentGroup ? `<span class="vc-group-name">${(typeof escHtml === 'function' ? escHtml(window.currentGroup.name) : window.currentGroup.name)}</span>` : ''}
             </div>
             <div class="vc-header-right">
+                <span class="vc-call-status" id="vc-call-status"></span>
                 <span class="vc-duration" id="vc-duration">00:00</span>
-                <button class="vc-close-btn" id="vc-panel-close" title="Hide panel">✕</button>
+                <button class="vc-close-btn" id="vc-panel-close" title="Minimise">─</button>
             </div>
         </div>
         <div class="vc-participants" id="vc-participants">
-            ${partCount === 0 ? '<div class="vc-empty">Waiting for others to join…</div>' : ''}
+            <div class="vc-empty">Waiting for others…</div>
         </div>
-        <div class="vc-controls" id="vc-controls">
-            <button class="vc-ctrl-btn ${vcMuted ? 'vc-ctrl-btn--active' : ''}" id="vc-mute-btn" title="${vcMuted ? 'Unmute' : 'Mute'}">
-                ${vcMuted ? '🔇' : '🎙️'}
-                <span>${vcMuted ? 'Unmute' : 'Mute'}</span>
+        <div class="vc-controls">
+            <button class="vc-ctrl-btn ${vcMuted ? 'vc-ctrl-btn--active' : ''}" id="vc-mute-btn">
+                ${vcMuted ? '🔇' : '🎙️'}<span>${vcMuted ? 'Unmute' : 'Mute'}</span>
             </button>
-            <button class="vc-ctrl-btn ${vcDeafened ? 'vc-ctrl-btn--active' : ''}" id="vc-deafen-btn" title="${vcDeafened ? 'Undeafen' : 'Deafen'}">
-                ${vcDeafened ? '🔕' : '🔊'}
-                <span>${vcDeafened ? 'Undeafen' : 'Deafen'}</span>
+            <button class="vc-ctrl-btn ${vcDeafened ? 'vc-ctrl-btn--active' : ''}" id="vc-deafen-btn">
+                ${vcDeafened ? '🔕' : '🔊'}<span>${vcDeafened ? 'Undeafen' : 'Deafen'}</span>
             </button>
-            <button class="vc-ctrl-btn vc-ctrl-btn--leave" id="vc-leave-btn" title="Leave call">
-                📵 <span>Leave</span>
+            <button class="vc-ctrl-btn vc-ctrl-btn--leave" id="vc-leave-btn">
+                📵<span>Leave</span>
             </button>
         </div>
     `;
 
     panel.querySelector('#vc-panel-close').addEventListener('click', () => {
-        _vcPanelOpen = false;
         panel.classList.add('vc-panel--minimized');
-        // Show mini indicator
+        _vcPanelOpen = false;
         _vcShowMiniBar();
     });
-    panel.querySelector('#vc-mute-btn').addEventListener('click', vcToggleMute);
+    panel.querySelector('#vc-mute-btn').addEventListener('click',   vcToggleMute);
     panel.querySelector('#vc-deafen-btn').addEventListener('click', vcToggleDeafen);
-    panel.querySelector('#vc-leave-btn').addEventListener('click', vcLeave);
+    panel.querySelector('#vc-leave-btn').addEventListener('click',  vcLeave);
 
     _vcRenderParticipants();
     _vcUpdateDuration();
+    _vcPanelOpen = true;
 }
 
 function _vcShowMiniBar() {
-    let bar = document.getElementById('vc-mini-bar');
-    if (bar) return;
-    bar = document.createElement('div');
+    if (document.getElementById('vc-mini-bar')) return;
+    const bar = document.createElement('div');
     bar.id = 'vc-mini-bar';
     bar.className = 'vc-mini-bar';
     bar.innerHTML = `
         <span class="vc-live-dot"></span>
         <span id="vc-mini-count">${Object.keys(vcParticipants).length} in call</span>
-        <button class="vc-mini-expand" id="vc-mini-expand" title="Open call">▲</button>
-        <button class="vc-mini-mute" id="vc-mini-mute" title="${vcMuted ? 'Unmute' : 'Mute'}">${vcMuted ? '🔇' : '🎙️'}</button>
+        <button id="vc-mini-expand" title="Open">▲</button>
+        <button id="vc-mini-mute"   title="${vcMuted ? 'Unmute' : 'Mute'}">${vcMuted ? '🔇' : '🎙️'}</button>
         <button class="vc-mini-leave" id="vc-mini-leave" title="Leave">📵</button>
     `;
     document.body.appendChild(bar);
     bar.querySelector('#vc-mini-expand').addEventListener('click', () => {
         bar.remove();
         const p = document.getElementById('vc-panel');
-        if (p) p.classList.remove('vc-panel--minimized');
-        _vcPanelOpen = true;
+        if (p) { p.classList.remove('vc-panel--minimized'); _vcPanelOpen = true; }
+        else _vcRenderPanel();
     });
     bar.querySelector('#vc-mini-mute').addEventListener('click', () => {
         vcToggleMute();
-        bar.querySelector('#vc-mini-mute').textContent = vcMuted ? '🔇' : '🎙️';
-        bar.querySelector('#vc-mini-mute').title = vcMuted ? 'Unmute' : 'Mute';
+        const btn = bar.querySelector('#vc-mini-mute');
+        btn.textContent = vcMuted ? '🔇' : '🎙️';
+        btn.title = vcMuted ? 'Unmute' : 'Mute';
     });
-    bar.querySelector('#vc-mini-leave').addEventListener('click', () => {
-        bar.remove(); vcLeave();
-    });
+    bar.querySelector('#vc-mini-leave').addEventListener('click', () => { bar.remove(); vcLeave(); });
 }
 
 function _vcRenderParticipants() {
     const container = document.getElementById('vc-participants');
     if (!container) return;
-
     const me = _vcMe();
     const entries = Object.entries(vcParticipants);
     if (entries.length === 0) {
-        container.innerHTML = '<div class="vc-empty">Waiting for others to join…</div>';
+        container.innerHTML = '<div class="vc-empty">Waiting for others…</div>';
+        const status = document.getElementById('vc-call-status');
+        if (status && !status.textContent) status.textContent = 'Calling…';
         return;
     }
+    // Clear "Calling…" once someone joins
+    const status = document.getElementById('vc-call-status');
+    if (status && entries.length > 1) { status.textContent = ''; _vcHideOutgoingRing(); }
 
     container.innerHTML = '';
     entries.forEach(([uid, p]) => {
-        const isMe = uid === me;
-        const isSup = currentGroup && uid === currentGroup.supervisorUid;
-        const pcState = vcPeers[uid]?.pc?.connectionState || (isMe ? 'connected' : 'connecting');
-        const isConnected = isMe || pcState === 'connected';
+        const isMe  = uid === me;
+        const isSup = window.currentGroup && uid === window.currentGroup.supervisorUid;
+        const pcState = vcPeers[uid]?.pc?.connectionState || (isMe ? 'connected' : 'new');
+        const connected = isMe || pcState === 'connected';
 
         const card = document.createElement('div');
         card.className = `vc-p-card ${p.speaking && !p.muted ? 'vc-p-card--speaking' : ''}`;
@@ -592,101 +782,49 @@ function _vcRenderParticipants() {
             <div class="vc-p-info">
                 <span class="vc-p-name">@${p.handle || uid.slice(0,6)}${isMe ? ' (you)' : ''}${isSup ? ' 👑' : ''}</span>
                 <span class="vc-p-status">
-                    ${p.muted ? '<span class="vc-status-chip muted">🔇 Muted</span>' : ''}
-                    ${p.speaking && !p.muted ? '<span class="vc-status-chip speaking">🎙️ Speaking</span>' : ''}
-                    ${!isConnected ? '<span class="vc-status-chip connecting">⏳ Connecting</span>' : ''}
+                    ${p.muted ? '<span class="vc-status-chip muted">🔇</span>' : ''}
+                    ${p.speaking && !p.muted ? '<span class="vc-status-chip speaking">🎙️</span>' : ''}
+                    ${!connected ? '<span class="vc-status-chip connecting">⏳</span>' : ''}
                 </span>
             </div>
             <div class="vc-p-actions">
-                ${isSupervisor && !isMe ? `<button class="vc-kick-btn" data-uid="${uid}" title="Remove from call">✕</button>` : ''}
+                ${window.isSupervisor && !isMe ? `<button class="vc-kick-btn" data-uid="${uid}" title="Remove from call">✕</button>` : ''}
             </div>
         `;
-        card.querySelectorAll('.vc-kick-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                vcKickFromCall(btn.dataset.uid);
-            });
+        card.querySelectorAll('.vc-kick-btn').forEach(b => {
+            b.addEventListener('click', e => { e.stopPropagation(); vcKickFromCall(b.dataset.uid); });
         });
         container.appendChild(card);
     });
 
-    // Update mini bar count if visible
-    const miniCount = document.getElementById('vc-mini-count');
-    if (miniCount) miniCount.textContent = `${entries.length} in call`;
+    const mini = document.getElementById('vc-mini-count');
+    if (mini) mini.textContent = `${entries.length} in call`;
 }
 
 function _vcUpdateControls() {
-    const muteBtn = document.getElementById('vc-mute-btn');
-    const deafBtn = document.getElementById('vc-deafen-btn');
-    if (muteBtn) {
-        muteBtn.className = `vc-ctrl-btn ${vcMuted ? 'vc-ctrl-btn--active' : ''}`;
-        muteBtn.innerHTML = `${vcMuted ? '🔇' : '🎙️'} <span>${vcMuted ? 'Unmute' : 'Mute'}</span>`;
-    }
-    if (deafBtn) {
-        deafBtn.className = `vc-ctrl-btn ${vcDeafened ? 'vc-ctrl-btn--active' : ''}`;
-        deafBtn.innerHTML = `${vcDeafened ? '🔕' : '🔊'} <span>${vcDeafened ? 'Undeafen' : 'Deafen'}</span>`;
-    }
-    const miniMute = document.getElementById('vc-mini-mute');
-    if (miniMute) { miniMute.textContent = vcMuted ? '🔇' : '🎙️'; }
+    const mb = document.getElementById('vc-mute-btn');
+    const db = document.getElementById('vc-deafen-btn');
+    if (mb) { mb.className = `vc-ctrl-btn ${vcMuted ? 'vc-ctrl-btn--active' : ''}`; mb.innerHTML = `${vcMuted ? '🔇' : '🎙️'}<span>${vcMuted ? 'Unmute' : 'Mute'}</span>`; }
+    if (db) { db.className = `vc-ctrl-btn ${vcDeafened ? 'vc-ctrl-btn--active' : ''}`; db.innerHTML = `${vcDeafened ? '🔕' : '🔊'}<span>${vcDeafened ? 'Undeafen' : 'Deafen'}</span>`; }
+    const mm = document.getElementById('vc-mini-mute');
+    if (mm) { mm.textContent = vcMuted ? '🔇' : '🎙️'; }
 }
 
-// ─── Inject Call Button into Team Column / Member Controls ───────────────
-function _vcInjectCallButton() {
-    // For supervisors: inject into the Team column header action area
-    const tcMeta = document.querySelector('.tc-meta-row');
-    if (tcMeta && !document.getElementById('vc-call-btn')) {
-        const btn = document.createElement('button');
-        btn.id = 'vc-call-btn';
-        btn.className = 'vc-call-btn';
-        btn.innerHTML = '🎙️ Voice Call';
-        btn.title = 'Start or join a group voice call';
-        btn.addEventListener('click', () => {
-            if (vcActive) {
-                const panel = document.getElementById('vc-panel');
-                if (panel) {
-                    panel.classList.remove('vc-panel--minimized');
-                    _vcPanelOpen = true;
-                    const bar = document.getElementById('vc-mini-bar');
-                    if (bar) bar.remove();
-                } else {
-                    _vcRenderPanel();
-                }
-            } else {
-                vcJoin();
-            }
-        });
-        tcMeta.appendChild(btn);
-        _vcUpdateCallBtn();
-    }
+// ─── Hook into renderGroupUI ──────────────────────────────────────────────
+const _vcOrigRenderGroupUI = renderGroupUI;
+renderGroupUI = function() {
+    _vcOrigRenderGroupUI.apply(this, arguments);
+    setTimeout(_vcInjectCallButtons, 60);
 
-    // For members: inject into the member controls bar
-    const mc = document.getElementById('mb-member-controls');
-    if (mc && !document.getElementById('vc-call-btn-member')) {
-        const btn = document.createElement('button');
-        btn.id = 'vc-call-btn-member';
-        btn.className = 'vc-call-btn vc-call-btn--member';
-        btn.innerHTML = '🎙️ Call';
-        btn.title = 'Join group voice call';
-        btn.addEventListener('click', () => {
-            if (vcActive) {
-                const panel = document.getElementById('vc-panel');
-                if (panel) {
-                    panel.classList.remove('vc-panel--minimized');
-                    _vcPanelOpen = true;
-                    const bar = document.getElementById('vc-mini-bar');
-                    if (bar) bar.remove();
-                } else {
-                    _vcRenderPanel();
-                }
-            } else {
-                vcJoin();
-            }
-        });
-        mc.appendChild(btn);
+    if (window.currentGroup && window.currentUser && !window.currentUser.isAnonymous) {
+        _vcStartRingListener();
+    } else {
+        _vcStopRingListener();
+        if (vcActive) vcLeave();
     }
-}
+};
 
-// ─── Cleanup on group leave ───────────────────────────────────────────────
+// ─── Hook group leave ─────────────────────────────────────────────────────
 const _vcOrigLeaveGroup = typeof leaveGroup === 'function' ? leaveGroup : null;
 if (_vcOrigLeaveGroup) {
     window.leaveGroup = async function() {
@@ -695,83 +833,44 @@ if (_vcOrigLeaveGroup) {
     };
 }
 
-// ─── Hook into renderGroupUI to inject the call button ───────────────────
-const _vcOrigRenderGroupUI = renderGroupUI;
-renderGroupUI = function() {
-    _vcOrigRenderGroupUI.apply(this, arguments);
-    // Defer to let DOM settle
-    setTimeout(_vcInjectCallButton, 50);
-    // If we left a group while in call, clean up
-    if (!currentGroup && vcActive) vcLeave();
-};
+// ─── Firestore Rules (reference comment) ──────────────────────────────────
+/*
+  match /voice_sessions/{groupCode} {
+    allow read: if request.auth != null && exists(/databases/$(database)/documents/groups/$(groupCode));
+    allow write: if false;
 
-// ─── Handle kick signals in signaling listener ────────────────────────────
-// We patch onSnapshot to also handle kick type
-const _vcRealStartSignaling = _vcStartSignalingListener;
-
-function _vcStartSignalingListener() {
-    const gRef = _vcGroupRef(); if (!gRef) return;
-    const me = _vcMe();
-
-    const sigRef = gRef.collection('signals').where('to', '==', me);
-    const sigUnsub = sigRef.onSnapshot(snap => {
-        snap.docChanges().forEach(async change => {
-            if (change.type !== 'added') return;
-            const sig = change.doc.data();
-            const from = sig.from;
-            change.doc.ref.delete().catch(() => {});
-
-            if (sig.type === 'offer') {
-                if (vcActive) await _vcAnswer(from, sig.sdp);
-            } else if (sig.type === 'answer') {
-                await _vcHandleAnswer(from, sig.sdp);
-            } else if (sig.type === 'candidate') {
-                await _vcHandleCandidate(from, sig.candidate);
-            } else if (sig.type === 'kick') {
-                _vcHandleKick();
-            }
-        });
-    });
-
-    const presRef = gRef.collection('participants');
-    const presUnsub = presRef.onSnapshot(snap => {
-        const me = _vcMe();
-        snap.docChanges().forEach(change => {
-            const uid = change.doc.id;
-            const data = change.doc.data();
-
-            if (change.type === 'removed') {
-                if (uid !== me) _vcRemovePeer(uid);
-                return;
-            }
-
-            if (uid === me) {
-                vcParticipants[me] = { ...vcParticipants[me], ...data };
-            } else {
-                const wasHere = !!vcParticipants[uid];
-                vcParticipants[uid] = {
-                    handle: data.handle || uid,
-                    muted: !!data.muted,
-                    speaking: !!data.speaking
-                };
-                if (!wasHere && vcActive) {
-                    _vcLog('New peer joined:', uid);
-                    if (me < uid) setTimeout(() => _vcOffer(uid), 500);
-                }
-            }
-        });
-        _vcRenderParticipants();
-        _vcUpdateCallBtn();
-    });
-
-    vcPresenceUnsub = () => { sigUnsub(); presUnsub(); };
-}
-
+    match /ring/{doc} {
+      allow read: if request.auth != null && exists(/databases/$(database)/documents/groups/$(groupCode));
+      allow create, update: if request.auth != null
+        && exists(/databases/$(database)/documents/groups/$(groupCode))
+        && request.resource.data.callerUid == request.auth.uid;
+      allow delete: if request.auth != null && (
+        resource.data.callerUid == request.auth.uid
+        || get(/databases/$(database)/documents/groups/$(groupCode)).data.supervisorUid == request.auth.uid
+      );
+    }
+    match /participants/{uid} {
+      allow read: if request.auth != null && exists(/databases/$(database)/documents/groups/$(groupCode));
+      allow create, update: if request.auth.uid == uid && request.resource.data.uid == request.auth.uid;
+      allow delete: if request.auth.uid == uid
+        || get(/databases/$(database)/documents/groups/$(groupCode)).data.supervisorUid == request.auth.uid;
+    }
+    match /signals/{signalId} {
+      allow read: if request.auth != null && exists(/databases/$(database)/documents/groups/$(groupCode));
+      allow create: if request.auth != null
+        && exists(/databases/$(database)/documents/groups/$(groupCode))
+        && request.resource.data.from == request.auth.uid;
+      allow delete: if resource.data.from == request.auth.uid || resource.data.to == request.auth.uid;
+      allow update: if false;
+    }
+  }
+*/
 
 // ─── Exports ──────────────────────────────────────────────────────────────
 window.vcJoin          = vcJoin;
 window.vcLeave         = vcLeave;
+window.vcAnswerCall    = vcAnswerCall;
+window.vcDeclineCall   = vcDeclineCall;
 window.vcToggleMute    = vcToggleMute;
 window.vcToggleDeafen  = vcToggleDeafen;
 window.vcKickFromCall  = vcKickFromCall;
-window.vcOpenPanel     = vcOpenPanel;
