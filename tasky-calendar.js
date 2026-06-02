@@ -331,93 +331,25 @@ function _calGoToday() {
 
 /* ─── Keyboard navigation ─────────────────────────────────────────────────── */
 function _calKeydown(e) {
-  const overlay = document.getElementById('cal-overlay');
-  if (!overlay || !overlay.classList.contains('visible')) return;
-
-  const tag = document.activeElement ? document.activeElement.tagName : '';
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-
-  switch (e.key) {
-    case 'Escape':
-      e.preventDefault(); e.stopImmediatePropagation();
-      closeCalendarView();
-      return;
-    case 'ArrowLeft':
-      e.preventDefault(); e.stopImmediatePropagation();
-      if (_focusedDs) {
-        _focusedDs = _addDays(_focusedDs, -1);
-        const fd = new Date(_focusedDs + 'T00:00:00');
-        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
-          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
-        } else if (_calView === 'week') {
-          _calWeekOf = _mondayOf(_focusedDs);
-        }
-      } else {
-        _calPrevPeriod();
-      }
-      _calRefresh();
-      return;
-    case 'ArrowRight':
-      e.preventDefault(); e.stopImmediatePropagation();
-      if (_focusedDs) {
-        _focusedDs = _addDays(_focusedDs, 1);
-        const fd = new Date(_focusedDs + 'T00:00:00');
-        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
-          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
-        } else if (_calView === 'week') {
-          _calWeekOf = _mondayOf(_focusedDs);
-        }
-      } else {
-        _calNextPeriod();
-      }
-      _calRefresh();
-      return;
-    case 'ArrowUp':
-      e.preventDefault(); e.stopImmediatePropagation();
-      if (_focusedDs) {
-        _focusedDs = _addDays(_focusedDs, -7);
-        const fd = new Date(_focusedDs + 'T00:00:00');
-        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
-          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
-        } else if (_calView === 'week') {
-          _calWeekOf = _mondayOf(_focusedDs);
-        }
-      } else {
-        _calPrevPeriod();
-      }
-      _calRefresh();
-      return;
-    case 'ArrowDown':
-      e.preventDefault(); e.stopImmediatePropagation();
-      if (_focusedDs) {
-        _focusedDs = _addDays(_focusedDs, 7);
-        const fd = new Date(_focusedDs + 'T00:00:00');
-        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
-          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
-        } else if (_calView === 'week') {
-          _calWeekOf = _mondayOf(_focusedDs);
-        }
-      } else {
-        _calNextPeriod();
-      }
-      _calRefresh();
-      return;
-    case 't':
-    case 'T':
-      e.preventDefault(); e.stopImmediatePropagation();
-      _calGoToday();
-      return;
-    case 'm':
-    case 'M':
-      e.preventDefault(); e.stopImmediatePropagation();
-      _setView('month');
-      return;
-    case 'w':
-    case 'W':
-      e.preventDefault(); e.stopImmediatePropagation();
-      _setView('week');
-      return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeCalendarView();
+    return;
   }
+  const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+  if (delta !== undefined) {
+    e.preventDefault();
+    _focusedDs = _addDays(_focusedDs, delta);
+    const fd = new Date(_focusedDs + 'T00:00:00');
+    _calYear   = fd.getFullYear();
+    _calMonth  = fd.getMonth();
+    _calWeekOf = _mondayOf(_focusedDs);
+    _calRefresh();
+    return;
+  }
+  if (e.key === 'T' || e.key === 't') { e.preventDefault(); _calGoToday();     return; }
+  if (e.key === 'M' || e.key === 'm') { e.preventDefault(); _setView('month'); return; }
+  if (e.key === 'W' || e.key === 'w') { e.preventDefault(); _setView('week');  return; }
 }
 
 function _setView(v) {
@@ -477,27 +409,22 @@ function openCalendarView() {
       <div id="cal-main" class="cal-main"></div>
 
       <div class="cal-footer-hint">
-        <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> navigate days &nbsp;·&nbsp;
-        <kbd>M</kbd> month view &nbsp;·&nbsp;
-        <kbd>W</kbd> week view &nbsp;·&nbsp;
+        <kbd>←</kbd><kbd>→</kbd> prev/next day &nbsp;·&nbsp;
+        <kbd>↑</kbd><kbd>↓</kbd> ±7 days &nbsp;·&nbsp;
+        <kbd>M</kbd> month &nbsp;·&nbsp;
+        <kbd>W</kbd> week &nbsp;·&nbsp;
         <kbd>T</kbd> today &nbsp;·&nbsp;
+        <kbd>Tab+M</kbd> open &nbsp;·&nbsp;
         <kbd>Esc</kbd> close
       </div>
     </div>`;
     document.body.appendChild(overlay);
-    document.addEventListener('keydown', _calKeydown, true);
+    document.addEventListener('keydown', _calKeydown);
   }
 
   overlay.classList.add('visible');
   _calRefresh();
-  // Move DOM focus into the panel so board shortcuts don't intercept keys
-  requestAnimationFrame(() => {
-    const panel = document.getElementById('cal-panel');
-    if (panel) {
-      if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
-      panel.focus({ preventScroll: true });
-    }
-  });
+  // (no DOM focus juggling needed — tasky.js bails when cal-overlay is visible)
 }
 
 function closeCalendarView() {
