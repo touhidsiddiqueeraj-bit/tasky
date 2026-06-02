@@ -331,22 +331,23 @@ function _calGoToday() {
 
 /* ─── Keyboard navigation ─────────────────────────────────────────────────── */
 function _calKeydown(e) {
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    closeCalendarView();
-    return;
-  }
+  // Kill event completely — nothing outside the calendar should see these keys
+  e.stopImmediatePropagation();
+
+  if (e.key === 'Escape') { e.preventDefault(); closeCalendarView(); return; }
+
   const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
   if (delta !== undefined) {
     e.preventDefault();
     _focusedDs = _addDays(_focusedDs, delta);
-    const fd = new Date(_focusedDs + 'T00:00:00');
+    const fd  = new Date(_focusedDs + 'T00:00:00');
     _calYear   = fd.getFullYear();
     _calMonth  = fd.getMonth();
     _calWeekOf = _mondayOf(_focusedDs);
     _calRefresh();
     return;
   }
+
   if (e.key === 'T' || e.key === 't') { e.preventDefault(); _calGoToday();     return; }
   if (e.key === 'M' || e.key === 'm') { e.preventDefault(); _setView('month'); return; }
   if (e.key === 'W' || e.key === 'w') { e.preventDefault(); _setView('week');  return; }
@@ -376,7 +377,11 @@ function openCalendarView() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'cal-overlay';
+    overlay.setAttribute('tabindex', '-1');
     overlay.addEventListener('click', e => { if (e.target === overlay) closeCalendarView(); });
+    // Attach keydown directly to overlay element — fires before any document listeners,
+    // stopImmediatePropagation kills it completely so tasky.js never sees it.
+    overlay.addEventListener('keydown', _calKeydown);
     overlay.innerHTML = `
     <div id="cal-panel">
       <div class="cal-header">
@@ -419,12 +424,13 @@ function openCalendarView() {
       </div>
     </div>`;
     document.body.appendChild(overlay);
-    document.addEventListener('keydown', _calKeydown);
+    // (keydown handled directly on overlay element above)
   }
 
   overlay.classList.add('visible');
   _calRefresh();
-  // (no DOM focus juggling needed — tasky.js bails when cal-overlay is visible)
+  // Focus the overlay so it receives keydown events directly
+  requestAnimationFrame(() => overlay.focus({ preventScroll: true }));
 }
 
 function closeCalendarView() {
