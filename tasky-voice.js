@@ -721,31 +721,41 @@ function _vcUpdateControls() {
     if (mm) { mm.textContent = vcMuted ? '🔇' : '🎙️'; }
 }
 
-// ─── Hook into renderGroupUI ──────────────────────────────────────────────
-const _vcOrigRenderGroupUI = renderGroupUI;
-renderGroupUI = function() {
-    _vcOrigRenderGroupUI.apply(this, arguments);
-    // Inject call buttons after DOM settles
-    setTimeout(_vcInjectCallButtons, 80);
-    // Start/stop ring listener based on group membership
-    const u = _vcUser(), g = _vcGroup();
-    if (g && u && !u.isAnonymous) {
-        _vcStartRingListener();
-    } else {
-        _vcStopRingListener();
-        if (vcActive) vcLeave();
-    }
-};
+// ─── Install hooks after all scripts have parsed ─────────────────────────
+// Wrapped in load event so tasky-collab.js chain is fully built first.
+window.addEventListener('load', function _vcInstallHooks() {
 
-// ─── Hook leaveGroup ─────────────────────────────────────────────────────
-const _vcOrigLeaveGroup = typeof leaveGroup === 'function' ? leaveGroup : null;
-if (_vcOrigLeaveGroup) {
-    window.leaveGroup = async function() {
-        if (vcActive) await vcLeave();
-        _vcStopRingListener();
-        return _vcOrigLeaveGroup.apply(this, arguments);
-    };
-}
+    // Patch renderGroupUI
+    if (typeof renderGroupUI === 'function') {
+        const _vcOrig = renderGroupUI;
+        renderGroupUI = function() {
+            _vcOrig.apply(this, arguments);
+            setTimeout(_vcInjectCallButtons, 80);
+            const u = _vcUser(), g = _vcGroup();
+            if (g && u && !u.isAnonymous) {
+                _vcStartRingListener();
+            } else {
+                _vcStopRingListener();
+                if (vcActive) vcLeave();
+            }
+        };
+    }
+
+    // Patch leaveGroup
+    if (typeof leaveGroup === 'function') {
+        const _vcOrigLeave = leaveGroup;
+        window.leaveGroup = async function() {
+            if (vcActive) await vcLeave();
+            _vcStopRingListener();
+            return _vcOrigLeave.apply(this, arguments);
+        };
+    }
+
+    // Trigger initial injection in case group is already active on load
+    setTimeout(_vcInjectCallButtons, 200);
+    const u = _vcUser(), g = _vcGroup();
+    if (g && u && !u.isAnonymous) _vcStartRingListener();
+});
 
 // ─── Exports ──────────────────────────────────────────────────────────────
 window.vcJoin         = vcJoin;
