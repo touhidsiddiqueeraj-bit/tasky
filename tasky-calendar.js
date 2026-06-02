@@ -127,7 +127,7 @@ function _renderMonth() {
   // Keyboard focus
   if (_focusedDs) {
     const el = panel.querySelector(`[data-date="${_focusedDs}"]`);
-    if (el) el.classList.add('cal-focused');
+    if (el) { el.classList.add('cal-focused'); el.focus(); }
   }
 }
 
@@ -331,26 +331,95 @@ function _calGoToday() {
 
 /* ─── Keyboard navigation ─────────────────────────────────────────────────── */
 function _calKeydown(e) {
-  // Kill event completely — nothing outside the calendar should see these keys
+  const overlay = document.getElementById('cal-overlay');
+  if (!overlay || !overlay.classList.contains('visible')) return;
+
+  const tag = document.activeElement ? document.activeElement.tagName : '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  // Claim the event immediately for all keys we handle so no other listener
+  // (tasky.js captures arrow keys / letter keys) interferes.
+  const handled = ['Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown',
+                   't','T','m','M','w','W'];
+  if (!handled.includes(e.key)) return;
+
+  e.preventDefault();
+  e.stopPropagation();
   e.stopImmediatePropagation();
 
-  if (e.key === 'Escape') { e.preventDefault(); closeCalendarView(); return; }
+  switch (e.key) {
+    case 'Escape':
+      closeCalendarView();
+      return;
 
-  const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
-  if (delta !== undefined) {
-    e.preventDefault();
-    _focusedDs = _addDays(_focusedDs, delta);
-    const fd  = new Date(_focusedDs + 'T00:00:00');
-    _calYear   = fd.getFullYear();
-    _calMonth  = fd.getMonth();
-    _calWeekOf = _mondayOf(_focusedDs);
-    _calRefresh();
-    return;
+    case 'ArrowLeft': {
+      if (_focusedDs) {
+        _focusedDs = _addDays(_focusedDs, -1);
+        const fd = new Date(_focusedDs + 'T00:00:00');
+        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
+          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
+        } else if (_calView === 'week') {
+          _calWeekOf = _mondayOf(_focusedDs);
+        }
+      } else {
+        _calPrevPeriod();
+      }
+      _calRefresh();
+      return;
+    }
+
+    case 'ArrowRight': {
+      if (_focusedDs) {
+        _focusedDs = _addDays(_focusedDs, 1);
+        const fd = new Date(_focusedDs + 'T00:00:00');
+        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
+          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
+        } else if (_calView === 'week') {
+          _calWeekOf = _mondayOf(_focusedDs);
+        }
+      } else {
+        _calNextPeriod();
+      }
+      _calRefresh();
+      return;
+    }
+
+    case 'ArrowUp': {
+      if (_focusedDs) {
+        _focusedDs = _addDays(_focusedDs, -7);
+        const fd = new Date(_focusedDs + 'T00:00:00');
+        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
+          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
+        } else if (_calView === 'week') {
+          _calWeekOf = _mondayOf(_focusedDs);
+        }
+      } else {
+        _calPrevPeriod();
+      }
+      _calRefresh();
+      return;
+    }
+
+    case 'ArrowDown': {
+      if (_focusedDs) {
+        _focusedDs = _addDays(_focusedDs, 7);
+        const fd = new Date(_focusedDs + 'T00:00:00');
+        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
+          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
+        } else if (_calView === 'week') {
+          _calWeekOf = _mondayOf(_focusedDs);
+        }
+      } else {
+        _calNextPeriod();
+      }
+      _calRefresh();
+      return;
+    }
+
+    case 't': case 'T': _calGoToday();    return;
+    case 'm': case 'M': _setView('month'); return;
+    case 'w': case 'W': _setView('week');  return;
   }
-
-  if (e.key === 'T' || e.key === 't') { e.preventDefault(); _calGoToday();     return; }
-  if (e.key === 'M' || e.key === 'm') { e.preventDefault(); _setView('month'); return; }
-  if (e.key === 'W' || e.key === 'w') { e.preventDefault(); _setView('week');  return; }
 }
 
 function _setView(v) {
@@ -377,11 +446,7 @@ function openCalendarView() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'cal-overlay';
-    overlay.setAttribute('tabindex', '-1');
     overlay.addEventListener('click', e => { if (e.target === overlay) closeCalendarView(); });
-    // Attach keydown directly to overlay element — fires before any document listeners,
-    // stopImmediatePropagation kills it completely so tasky.js never sees it.
-    overlay.addEventListener('keydown', _calKeydown);
     overlay.innerHTML = `
     <div id="cal-panel">
       <div class="cal-header">
@@ -414,23 +479,19 @@ function openCalendarView() {
       <div id="cal-main" class="cal-main"></div>
 
       <div class="cal-footer-hint">
-        <kbd>←</kbd><kbd>→</kbd> prev/next day &nbsp;·&nbsp;
-        <kbd>↑</kbd><kbd>↓</kbd> ±7 days &nbsp;·&nbsp;
-        <kbd>M</kbd> month &nbsp;·&nbsp;
-        <kbd>W</kbd> week &nbsp;·&nbsp;
+        <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> navigate days &nbsp;·&nbsp;
+        <kbd>M</kbd> month view &nbsp;·&nbsp;
+        <kbd>W</kbd> week view &nbsp;·&nbsp;
         <kbd>T</kbd> today &nbsp;·&nbsp;
-        <kbd>Alt+M</kbd> open &nbsp;·&nbsp;
         <kbd>Esc</kbd> close
       </div>
     </div>`;
     document.body.appendChild(overlay);
-    // (keydown handled directly on overlay element above)
+    document.addEventListener('keydown', _calKeydown, true);
   }
 
   overlay.classList.add('visible');
   _calRefresh();
-  // Focus the overlay so it receives keydown events directly
-  requestAnimationFrame(() => overlay.focus({ preventScroll: true }));
 }
 
 function closeCalendarView() {
