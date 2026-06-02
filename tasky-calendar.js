@@ -419,7 +419,7 @@ function openCalendarView() {
         <kbd>M</kbd> month &nbsp;·&nbsp;
         <kbd>W</kbd> week &nbsp;·&nbsp;
         <kbd>T</kbd> today &nbsp;·&nbsp;
-        <kbd>Tab+M</kbd> open &nbsp;·&nbsp;
+        <kbd>Alt+M</kbd> open &nbsp;·&nbsp;
         <kbd>Esc</kbd> close
       </div>
     </div>`;
