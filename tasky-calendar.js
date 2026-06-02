@@ -339,40 +339,13 @@ function _calKeydown(e) {
 
   switch (e.key) {
     case 'Escape':
-      closeCalendarView();
       e.preventDefault(); e.stopPropagation();
+      closeCalendarView();
       return;
     case 'ArrowLeft':
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation();
       if (_focusedDs) {
         _focusedDs = _addDays(_focusedDs, -1);
-        // If month-view and moved to prev month, navigate
-        const fd = new Date(_focusedDs + 'T00:00:00');
-        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
-          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
-        }
-      } else {
-        _calPrevPeriod(); return;
-      }
-      _calRefresh();
-      return;
-    case 'ArrowRight':
-      e.preventDefault();
-      if (_focusedDs) {
-        _focusedDs = _addDays(_focusedDs, 1);
-        const fd = new Date(_focusedDs + 'T00:00:00');
-        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
-          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
-        }
-      } else {
-        _calNextPeriod(); return;
-      }
-      _calRefresh();
-      return;
-    case 'ArrowUp':
-      e.preventDefault();
-      if (_focusedDs) {
-        _focusedDs = _addDays(_focusedDs, _calView === 'month' ? -7 : -7);
         const fd = new Date(_focusedDs + 'T00:00:00');
         if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
           _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
@@ -380,12 +353,42 @@ function _calKeydown(e) {
           _calWeekOf = _mondayOf(_focusedDs);
         }
       } else {
-        _calPrevPeriod(); return;
+        _calPrevPeriod();
+      }
+      _calRefresh();
+      return;
+    case 'ArrowRight':
+      e.preventDefault(); e.stopPropagation();
+      if (_focusedDs) {
+        _focusedDs = _addDays(_focusedDs, 1);
+        const fd = new Date(_focusedDs + 'T00:00:00');
+        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
+          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
+        } else if (_calView === 'week') {
+          _calWeekOf = _mondayOf(_focusedDs);
+        }
+      } else {
+        _calNextPeriod();
+      }
+      _calRefresh();
+      return;
+    case 'ArrowUp':
+      e.preventDefault(); e.stopPropagation();
+      if (_focusedDs) {
+        _focusedDs = _addDays(_focusedDs, -7);
+        const fd = new Date(_focusedDs + 'T00:00:00');
+        if (_calView === 'month' && (fd.getMonth() !== _calMonth || fd.getFullYear() !== _calYear)) {
+          _calYear = fd.getFullYear(); _calMonth = fd.getMonth();
+        } else if (_calView === 'week') {
+          _calWeekOf = _mondayOf(_focusedDs);
+        }
+      } else {
+        _calPrevPeriod();
       }
       _calRefresh();
       return;
     case 'ArrowDown':
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation();
       if (_focusedDs) {
         _focusedDs = _addDays(_focusedDs, 7);
         const fd = new Date(_focusedDs + 'T00:00:00');
@@ -395,20 +398,23 @@ function _calKeydown(e) {
           _calWeekOf = _mondayOf(_focusedDs);
         }
       } else {
-        _calNextPeriod(); return;
+        _calNextPeriod();
       }
       _calRefresh();
       return;
     case 't':
     case 'T':
+      e.preventDefault(); e.stopPropagation();
       _calGoToday();
       return;
     case 'm':
     case 'M':
+      e.preventDefault(); e.stopPropagation();
       _setView('month');
       return;
     case 'w':
     case 'W':
+      e.preventDefault(); e.stopPropagation();
       _setView('week');
       return;
   }
@@ -484,6 +490,14 @@ function openCalendarView() {
 
   overlay.classList.add('visible');
   _calRefresh();
+  // Move DOM focus into the panel so board shortcuts don't intercept keys
+  requestAnimationFrame(() => {
+    const panel = document.getElementById('cal-panel');
+    if (panel) {
+      if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
+      panel.focus({ preventScroll: true });
+    }
+  });
 }
 
 function closeCalendarView() {
