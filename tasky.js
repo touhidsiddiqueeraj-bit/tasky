@@ -950,9 +950,8 @@
             document.addEventListener('keydown', (e) => {
                 // Bail if calendar is open — tasky-calendar.js handles all keys
                 if (document.getElementById('cal-overlay') && document.getElementById('cal-overlay').classList.contains('visible')) return;
-                // Tab+M → open calendar view
-                if (e.key === 'Tab') { window._tabHeld = true; }
-                if ((e.key === 'm' || e.key === 'M') && window._tabHeld) {
+                // Alt+M → open calendar view
+                if ((e.key === 'm' || e.key === 'M') && e.altKey) {
                     e.preventDefault();
                     if (typeof openCalendarView === 'function') openCalendarView();
                     return;
@@ -1084,7 +1083,7 @@
                     spaceHeld = false;
                     stopVoice();
                 }
-                if (e.key === 'Tab') { window._tabHeld = false; }
+
             }, true);
 
             window.addEventListener('blur', () => {
