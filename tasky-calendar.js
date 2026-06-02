@@ -339,11 +339,11 @@ function _calKeydown(e) {
 
   switch (e.key) {
     case 'Escape':
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopImmediatePropagation();
       closeCalendarView();
       return;
     case 'ArrowLeft':
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopImmediatePropagation();
       if (_focusedDs) {
         _focusedDs = _addDays(_focusedDs, -1);
         const fd = new Date(_focusedDs + 'T00:00:00');
@@ -358,7 +358,7 @@ function _calKeydown(e) {
       _calRefresh();
       return;
     case 'ArrowRight':
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopImmediatePropagation();
       if (_focusedDs) {
         _focusedDs = _addDays(_focusedDs, 1);
         const fd = new Date(_focusedDs + 'T00:00:00');
@@ -373,7 +373,7 @@ function _calKeydown(e) {
       _calRefresh();
       return;
     case 'ArrowUp':
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopImmediatePropagation();
       if (_focusedDs) {
         _focusedDs = _addDays(_focusedDs, -7);
         const fd = new Date(_focusedDs + 'T00:00:00');
@@ -388,7 +388,7 @@ function _calKeydown(e) {
       _calRefresh();
       return;
     case 'ArrowDown':
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopImmediatePropagation();
       if (_focusedDs) {
         _focusedDs = _addDays(_focusedDs, 7);
         const fd = new Date(_focusedDs + 'T00:00:00');
@@ -404,17 +404,17 @@ function _calKeydown(e) {
       return;
     case 't':
     case 'T':
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopImmediatePropagation();
       _calGoToday();
       return;
     case 'm':
     case 'M':
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopImmediatePropagation();
       _setView('month');
       return;
     case 'w':
     case 'W':
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault(); e.stopImmediatePropagation();
       _setView('week');
       return;
   }
