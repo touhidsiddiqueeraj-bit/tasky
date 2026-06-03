@@ -321,20 +321,41 @@ async function _vvSetSenderBitrate(sender) {
     } catch(e) {}
 }
 
+// Remote stream registry: uid → MediaStream
+// Avoids creating orphaned hidden <video> elements that Chromium won't decode.
+const _vvRemoteStreams = new Map();
+
 function _vvAttachRemoteVideo(peerUid, stream) {
-    let el = document.getElementById('vv-video-' + peerUid);
-    if (!el) {
-        el = document.createElement('video');
-        el.id = 'vv-video-' + peerUid;
-        el.autoplay = true; el.playsInline = true; el.muted = false;
-        el.style.display = 'none';
-        document.body.appendChild(el);
-    }
-    el.srcObject = stream;
+    // Store the stream; the video element is only created when a tile is
+    // actually in the DOM (_vvGetOrCreateVideoEl / _vvMakeTile), ensuring
+    // the browser has a visible rendering context before decoding begins.
+    _vvRemoteStreams.set(peerUid, stream);
+
     _vvPartic()[peerUid] = _vvPartic()[peerUid] || {};
     _vvPartic()[peerUid].hasVideo = true;
+
+    // If a tile already exists (grid is open), wire the stream into it now.
+    const existingEl = document.getElementById('vv-video-' + peerUid);
+    if (existingEl && existingEl.isConnected) {
+        _vvApplyStreamToEl(existingEl, stream);
+    }
+
     _vvRefreshGridTile(peerUid);
     _vvUpdateActiveSpeaker();
+}
+
+// Apply a stream to an already-in-DOM video element and force play().
+function _vvApplyStreamToEl(el, stream) {
+    if (el.srcObject !== stream) {
+        el.srcObject = stream;
+    }
+    el.style.display = 'block';
+    // play() must be called after the element is connected and visible;
+    // autoplay alone is not enough when srcObject is assigned while hidden.
+    el.play().catch(err => {
+        // Autoplay policy block — benign, the browser will play on user gesture
+        if (err.name !== 'NotAllowedError') console.warn('[VV] play()', err);
+    });
 }
 
 // ─── Intercept RTCPeerConnection creation to patch ontrack ────────────────
@@ -862,11 +883,24 @@ function _vvMakeTile(uid, isLocal, p, isFeatured) {
 
     const hasVideo = isLocal
         ? (vvCameraOn || vvScreenOn)
-        : !!document.getElementById('vv-video-' + uid)?.srcObject;
+        : _vvRemoteStreams.has(uid);
 
     const videoEl = _vvGetOrCreateVideoEl(uid, isLocal);
 
     tile.appendChild(videoEl);
+
+    // For remote participants: apply the stream and call play() AFTER the tile
+    // is appended to the live DOM by _vvRenderVideoGrid (happens synchronously
+    // after _vvMakeTile returns). A microtask is enough — Chromium will not
+    // decode a stream on a display:none / disconnected video element.
+    if (!isLocal) {
+        const stream = _vvRemoteStreams.get(uid);
+        if (stream) {
+            Promise.resolve().then(() => {
+                if (videoEl.isConnected) _vvApplyStreamToEl(videoEl, stream);
+            });
+        }
+    }
 
     // Avatar overlay (shown when no video)
     const ov = document.createElement('div');
@@ -925,6 +959,15 @@ function _vvGetOrCreateVideoEl(uid, isLocal) {
         const src = vvCameraOn ? vvCameraStream : (vvScreenOn ? vvScreenStream : null);
         if (src && el.srcObject !== src) el.srcObject = src;
         el.style.display = (vvCameraOn || vvScreenOn) ? 'block' : 'none';
+    } else {
+        // For remote tiles: stream is applied after the element is appended
+        // to the live DOM in _vvMakeTile, via the _vvApplyStreamToEl call below.
+        // Hide until stream arrives so the tile shows the avatar overlay instead.
+        const stream = _vvRemoteStreams.get(uid);
+        if (!stream) {
+            el.style.display = 'none';
+        }
+        // stream application happens in _vvMakeTile after appendChild
     }
     return el;
 }
@@ -935,7 +978,11 @@ function _vvRefreshLocalTile() {
     const vid  = document.getElementById('vv-local-video');
     const hasVideo = vvCameraOn || vvScreenOn;
     if (vid) {
-        vid.srcObject = hasVideo ? (vvCameraOn ? vvCameraStream : vvScreenStream) : null;
+        const newSrc = hasVideo ? (vvCameraOn ? vvCameraStream : vvScreenStream) : null;
+        if (vid.srcObject !== newSrc) {
+            vid.srcObject = newSrc;
+            if (newSrc) vid.play().catch(err => { if (err.name !== 'NotAllowedError') console.warn('[VV] local play()', err); });
+        }
         vid.style.display = hasVideo ? 'block' : 'none';
     }
     if (ov) ov.className = `vv-tile-overlay ${hasVideo ? 'vv-tile-overlay--hidden' : ''}`;
@@ -1011,7 +1058,8 @@ function _vvCleanup() {
 
     vvCameraOn = false; vvScreenOn = false;
 
-    // Remove all vv video elements
+    // Remove all vv video elements and clear the stream registry
+    _vvRemoteStreams.clear();
     document.querySelectorAll('[id^="vv-video-"]').forEach(el => { el.srcObject = null; el.remove(); });
     const lv = document.getElementById('vv-local-video');
     if (lv) { lv.srcObject = null; lv.remove(); }
