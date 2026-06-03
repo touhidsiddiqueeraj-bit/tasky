@@ -181,6 +181,7 @@
         // ─── Expose Task Groups API ────────────────────────────────────────────────
         window.addTask = addTask;
         window.hideFloatingInput = hideFloatingInput;
+        Object.defineProperty(window, 'tasks', { get: () => tasks, configurable: true });
 
         // Returns the lowest positive integer not already used as a task number.
         // This lets deleted numbers be reused instead of incrementing forever.
