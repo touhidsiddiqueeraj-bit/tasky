@@ -167,10 +167,16 @@ function _vvLivePCs() {
             if (pc.signalingState !== 'closed') pcs.push(pc);
         });
     }
-    // Also include any from _vvPeersRef not yet in _vvAllPCs
+    // Also catch any from _vvPeersRef not yet in _vvAllPCs
     Object.values(_vvPeers()).forEach(peer => {
         if (peer.pc && peer.pc.signalingState !== 'closed' && !pcs.includes(peer.pc)) pcs.push(peer.pc);
     });
+    // And from _vvPCMap
+    if (window._vvPCMap) {
+        window._vvPCMap.forEach((uid, pc) => {
+            if (pc.signalingState !== 'closed' && !pcs.includes(pc)) pcs.push(pc);
+        });
+    }
     return pcs;
 }
 
@@ -219,21 +225,13 @@ async function _vvRenegotiate(pc) {
 
 // Look up which remote uid is associated with a given RTCPeerConnection
 function _vvUidForPC(pc) {
-    // Check our shim's pcToUid map (stored on window for cross-function access)
-    if (window._vvPCtoUID) {
-        const uid = window._vvPCtoUID.get(pc);
+    const pcMap = window._vvPCMap;
+    if (pcMap) {
+        const uid = pcMap.get(pc);
         if (uid) return uid;
-    }
-    // Fallback: match by audio element srcObject stream id
-    const audioEls = [...document.querySelectorAll('[id^="vc-audio-"]')];
-    for (const el of audioEls) {
-        if (!el.srcObject) continue;
-        const uid = el.id.replace('vc-audio-', '');
-        // Find PC in our set that has a receiver whose stream matches
-        const receivers = pc.getReceivers();
-        for (const r of receivers) {
-            if (r.track && el.srcObject.getTracks().includes(r.track)) return uid;
-        }
+        // Try to resolve now
+        _vvSyncAllUIDs(pcMap);
+        return pcMap.get(pc) || null;
     }
     return null;
 }
@@ -286,107 +284,133 @@ function _vvAttachRemoteVideo(peerUid, stream) {
 // updates — concretely: whenever a new vc-p-card appears in the panel we
 // search all live RTCPeerConnections we have intercepted to match it.
 function _vvWatchPeers() {
-    const patchedPCs = new WeakSet();      // PCs we have already patched
-    const pcToUid    = new WeakMap();      // RTCPeerConnection → peerUid
+    // pcMap: plain Map (iterable) — RTCPeerConnection → peerUid string
+    // We use a plain Map (not WeakMap) so we can call .values() / .entries()
+    const pcMap = new Map();   // Map<RTCPeerConnection, uid>
+    window._vvPCMap = pcMap;   // expose for _vvUidForPC() and _vvLivePCs()
     if (!window._vvPeersRef) window._vvPeersRef = {};
-    window._vvPCtoUID = pcToUid;           // expose for _vvUidForPC()
 
-    // Shim RTCPeerConnection so we see every new instance
+    // Shim RTCPeerConnection — must run before tasky-voice.js creates any PC.
+    // All scripts are `defer` and run in order, so tasky-video.js runs after
+    // tasky-voice.js is parsed but before any call is made — the shim is in
+    // place before _vcCreatePC() is ever called.
     const OrigPC = window.RTCPeerConnection;
     window.RTCPeerConnection = function(...args) {
         const pc = new OrigPC(...args);
 
-        // Wrap ontrack setter so we intercept video tracks.
-        // tasky-voice.js assigns pc.ontrack = fn inside _vcCreatePC right
-        // after construction, so this setter fires synchronously before any
-        // ICE or signaling happens — uid lookup runs again on each track event.
-        let _ontrack = null;
+        // Intercept the ontrack setter that tasky-voice assigns inside _vcCreatePC.
+        // We wrap it so remote video tracks are routed to _vvAttachRemoteVideo.
+        let _ontrackFn = null;
         Object.defineProperty(pc, 'ontrack', {
-            get: () => _ontrack,
-            set: (fn) => {
-                _ontrack = (e) => {
-                    if (fn) fn.call(pc, e);
+            configurable: true,
+            get: () => _ontrackFn,
+            set(fn) {
+                _ontrackFn = function(e) {
+                    if (fn) fn.call(pc, e);                    // run original handler first
                     if (!e.track || e.track.kind !== 'video') return;
-                    // Try uid from map; if not yet mapped, sync now then retry
-                    let uid = pcToUid.get(pc);
-                    if (!uid) {
-                        _vvSyncPeerUIDs(pcToUid);
-                        uid = pcToUid.get(pc);
-                    }
-                    if (uid && e.streams && e.streams[0]) {
+                    const uid = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
+                    if (uid && e.streams?.[0]) {
                         _vvAttachRemoteVideo(uid, e.streams[0]);
                     } else {
-                        // Uid not mapped yet — queue a retry
-                        setTimeout(() => {
-                            const u = pcToUid.get(pc);
-                            if (u && e.streams && e.streams[0]) _vvAttachRemoteVideo(u, e.streams[0]);
-                        }, 500);
+                        // UID not yet known — retry after ICE settles
+                        let retries = 0;
+                        const retry = () => {
+                            const u = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
+                            if (u && e.streams?.[0]) { _vvAttachRemoteVideo(u, e.streams[0]); return; }
+                            if (++retries < 10) setTimeout(retry, 400);
+                        };
+                        setTimeout(retry, 400);
                     }
                 };
-            },
-            configurable: true
+            }
         });
 
-        // Watch for iceconnectionstatechange to associate uid
-        pc.addEventListener('iceconnectionstatechange', () => {
-            // Match this PC to a uid by looking at the vc-participants panel
-            // and comparing to our own PC map
-            _vvMatchPCtoUID(pc, pcToUid);
-        });
-
-        // Track this PC
+        // Track every PC in the set so _vvLivePCs() can find them
         if (!window._vvAllPCs) window._vvAllPCs = new Set();
         window._vvAllPCs.add(pc);
 
-        // If we already have a video track, add it once the PC negotiates
+        // Try to resolve uid as soon as ICE starts connecting
+        pc.addEventListener('iceconnectionstatechange', () => {
+            if (!pcMap.has(pc)) _vvResolveUID(pc, pcMap);
+        });
+
         return pc;
     };
-    // Copy static methods / prototype
     window.RTCPeerConnection.prototype = OrigPC.prototype;
     Object.setPrototypeOf(window.RTCPeerConnection, OrigPC);
 
-    // Poll vc-participants panel to keep pcToUid map fresh
-    setInterval(() => _vvSyncPeerUIDs(pcToUid), 900);
+    // Periodic sync: match PCs to uids via audio element presence
+    setInterval(() => _vvSyncAllUIDs(pcMap), 900);
 }
 
-function _vvMatchPCtoUID(pc, pcToUid) {
-    if (pcToUid.has(pc)) return;
-    _vvSyncPeerUIDs(pcToUid);
+// _vvResolveUID: try to map one PC to a uid right now; returns uid or null
+function _vvResolveUID(pc, pcMap) {
+    _vvSyncAllUIDs(pcMap || window._vvPCMap);
+    return (pcMap || window._vvPCMap)?.get(pc) || null;
 }
 
-function _vvSyncPeerUIDs(pcToUid) {
-    // Read known uids from the Firestore presence data exposed via
-    // vc-participant card data-uid attributes (set by _vcRenderParticipants)
-    const cards = document.querySelectorAll('.vc-p-card [data-uid], .vc-kick-btn[data-uid]');
-    const knownUids = new Set();
-    cards.forEach(el => { if (el.dataset.uid) knownUids.add(el.dataset.uid); });
+// _vvSyncAllUIDs: match every unresolved PC to a peer uid.
+// Strategy: tasky-voice creates one <audio id="vc-audio-{uid}"> per peer
+// and stores the remote stream on it.  We cross-reference receiver tracks
+// to find which audio el's stream contains tracks from this PC.
+function _vvSyncAllUIDs(pcMap) {
+    if (!pcMap || !window._vvAllPCs) return;
 
-    // Also read audio elements: tasky-voice creates <audio id="vc-audio-{uid}">
+    // Collect all known remote uids from audio elements
+    const audioMap = new Map(); // uid → HTMLAudioElement
     document.querySelectorAll('[id^="vc-audio-"]').forEach(el => {
-        const uid = el.id.replace('vc-audio-', '');
-        if (uid) knownUids.add(uid);
+        const uid = el.id.slice('vc-audio-'.length);
+        if (uid) audioMap.set(uid, el);
     });
 
-    if (!window._vvAllPCs) return;
-    const pcs = [...window._vvAllPCs].filter(pc => pc.signalingState !== 'closed');
-    const unmapped = pcs.filter(pc => !pcToUid.has(pc));
+    // Also pick up uids from kick buttons (rendered by tasky-voice for supervisor)
+    document.querySelectorAll('.vc-kick-btn[data-uid]').forEach(el => {
+        if (!audioMap.has(el.dataset.uid)) audioMap.set(el.dataset.uid, null);
+    });
 
-    // Assign unmapped PCs to uids not yet mapped (rough 1-to-1 pairing)
-    const mappedUids = new Set([...pcToUid.values()]);
-    const freeUids   = [...knownUids].filter(u => !mappedUids.has(u));
+    // For each PC not yet in pcMap, try matching via receiver track → audio stream
+    const livePCs = [...window._vvAllPCs].filter(pc => pc.signalingState !== 'closed');
 
-    unmapped.forEach((pc, i) => {
-        if (freeUids[i]) {
-            pcToUid.set(pc, freeUids[i]);
-            if (!window._vvPeersRef) window._vvPeersRef = {};
-            window._vvPeersRef[freeUids[i]] = window._vvPeersRef[freeUids[i]] || {};
-            window._vvPeersRef[freeUids[i]].pc = pc;
+    livePCs.forEach(pc => {
+        if (pcMap.has(pc)) return;   // already resolved
+
+        // Get all track ids this PC is receiving
+        const receiverTrackIds = new Set(pc.getReceivers().map(r => r.track?.id).filter(Boolean));
+
+        // Find audio element whose srcObject contains one of those tracks
+        for (const [uid, el] of audioMap) {
+            if (!el?.srcObject) continue;
+            const streamTrackIds = new Set(el.srcObject.getTracks().map(t => t.id));
+            const overlap = [...receiverTrackIds].some(id => streamTrackIds.has(id));
+            if (overlap) {
+                pcMap.set(pc, uid);
+                if (!window._vvPeersRef) window._vvPeersRef = {};
+                window._vvPeersRef[uid] = window._vvPeersRef[uid] || {};
+                window._vvPeersRef[uid].pc = pc;
+                break;
+            }
+        }
+
+        // Fallback: if only one uid is unresolved and only one PC is unresolved, pair them
+        if (!pcMap.has(pc)) {
+            const mappedUids = new Set(pcMap.values());
+            const freeUids   = [...audioMap.keys()].filter(u => !mappedUids.has(u));
+            const freePCs    = livePCs.filter(p => !pcMap.has(p));
+            if (freeUids.length === 1 && freePCs.length === 1) {
+                pcMap.set(pc, freeUids[0]);
+                if (!window._vvPeersRef) window._vvPeersRef = {};
+                window._vvPeersRef[freeUids[0]] = window._vvPeersRef[freeUids[0]] || {};
+                window._vvPeersRef[freeUids[0]].pc = pc;
+            }
         }
     });
 
-    // Clean up closed PCs
+    // Remove closed PCs from the tracking set
     window._vvAllPCs.forEach(pc => {
-        if (pc.signalingState === 'closed') window._vvAllPCs.delete(pc);
+        if (pc.signalingState === 'closed') {
+            window._vvAllPCs.delete(pc);
+            pcMap.delete(pc);
+        }
     });
 }
 
