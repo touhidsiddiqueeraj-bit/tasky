@@ -294,12 +294,12 @@ function _vcCreatePC(peerUid) {
 async function _vcOffer(peerUid) {
     const pc = _vcCreatePC(peerUid);
     try {
-        const offer = await pc.createOffer({ offerToReceiveAudio: true });
+        const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
         await pc.setLocalDescription(offer);
         const gRef = _vcGroupRef(); if (!gRef) return;
         await gRef.collection('signals').add({
             from: _vcMe(), to: peerUid, type: 'offer',
-            sdp: pc.localDescription.sdp,
+            sdp: offer.sdp,
             ts: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch(e) { console.warn('[VC] offer error', e); }
@@ -307,6 +307,19 @@ async function _vcOffer(peerUid) {
 async function _vcAnswer(peerUid, sdp) {
     let pc = vcPeers[peerUid]?.pc;
     if (!pc || pc.signalingState === 'closed') pc = _vcCreatePC(peerUid);
+
+    // Handle glare: if we also sent an offer (have-local-offer), roll back
+    // our local description so we can accept the incoming offer.
+    // This is required for renegotiation (e.g. when a peer adds a video track).
+    if (pc.signalingState === 'have-local-offer') {
+        try {
+            await pc.setLocalDescription({ type: 'rollback' });
+        } catch(e) {
+            console.warn('[VC] answer rollback failed, dropping offer', e);
+            return;
+        }
+    }
+
     if (pc.signalingState !== 'stable') return;
     try {
         await pc.setRemoteDescription({ type: 'offer', sdp });
@@ -315,7 +328,7 @@ async function _vcAnswer(peerUid, sdp) {
         const gRef = _vcGroupRef(); if (!gRef) return;
         await gRef.collection('signals').add({
             from: _vcMe(), to: peerUid, type: 'answer',
-            sdp: pc.localDescription.sdp,
+            sdp: answer.sdp,
             ts: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch(e) { console.warn('[VC] answer error', e); }
@@ -809,3 +822,9 @@ window.vcDeclineCall  = vcDeclineCall;
 window.vcToggleMute   = vcToggleMute;
 window.vcToggleDeafen = vcToggleDeafen;
 window.vcKickFromCall = vcKickFromCall;
+
+// Expose live references so tasky-video.js can read them without closures.
+// These are read-only getters — tasky-video must never reassign them.
+Object.defineProperty(window, '_vcParticipantsRef', { get: () => vcParticipants, configurable: true });
+Object.defineProperty(window, '_vcPeersRef',        { get: () => vcPeers,        configurable: true });
+Object.defineProperty(window, '_vcLocalStreamRef',  { get: () => vcLocalStream,  configurable: true });
