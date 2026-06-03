@@ -1072,6 +1072,7 @@ body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
 <script defer src="tasky-features.js"></script>
 <script defer src="tasky-calendar.js"></script>
 <script defer src="tasky-voice.js"></script>
+<script defer src="tasky-deps-search.js"></script>
 
 <script>
 /* ============================================================
@@ -2590,10 +2591,17 @@ async function disableEncryption() {
         <div class="htu-kb-row"><div class="htu-keys"><kbd>Shift</kbd>+<kbd>Tab</kbd></div><div class="htu-kb-desc">Switch to previous workspace</div></div>
       </div>
 
-      <div class="htu-section-title" style="margin-top:20px;">Quick Jump</div>
+      <div class="htu-section-title" style="margin-top:20px;">Quick Jump &amp; Search</div>
       <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Alt</kbd>+<kbd>R</kbd></div><div class="htu-kb-desc">🔍 Global search — find any task by text or number</div></div>
         <div class="htu-kb-row"><div class="htu-keys"><kbd>Alt</kbd>+<kbd>G</kbd></div><div class="htu-kb-desc">Open task selector — type a task number to jump to it</div></div>
         <div class="htu-kb-row"><div class="htu-keys"><kbd>Alt</kbd>+<kbd>1–9</kbd></div><div class="htu-kb-desc">Jump directly to task #1–#9</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Task Dependencies</div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys">🔗 btn</div><div class="htu-kb-desc">Open dependency manager — set &quot;Blocked by&quot; tasks</div></div>
+        <div class="htu-kb-row"><div class="htu-keys">🔒 badge</div><div class="htu-kb-desc">Red badge/border — task blocked, cannot move to Working On</div></div>
       </div>
 
       <div class="htu-section-title" style="margin-top:20px;">Calendar View</div>
