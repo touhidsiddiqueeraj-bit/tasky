@@ -346,16 +346,21 @@ function _vvAttachRemoteVideo(peerUid, stream) {
 
 // Apply a stream to an already-in-DOM video element and force play().
 function _vvApplyStreamToEl(el, stream) {
-    if (el.srcObject !== stream) {
+    const streamChanged = el.srcObject !== stream;
+    if (streamChanged) {
         el.srcObject = stream;
     }
     el.style.display = 'block';
-    // play() must be called after the element is connected and visible;
-    // autoplay alone is not enough when srcObject is assigned while hidden.
-    el.play().catch(err => {
-        // Autoplay policy block — benign, the browser will play on user gesture
-        if (err.name !== 'NotAllowedError') console.warn('[VV] play()', err);
-    });
+    // play() must be called after the element is connected and visible.
+    // Skip if already playing the same stream to avoid AbortError from
+    // interrupting a pending play() promise.
+    if (streamChanged || el.paused) {
+        el.play().catch(err => {
+            if (err.name !== 'NotAllowedError' && err.name !== 'AbortError') {
+                console.warn('[VV] play()', err);
+            }
+        });
+    }
 }
 
 // ─── Intercept RTCPeerConnection creation to patch ontrack ────────────────
@@ -839,31 +844,53 @@ function _vvRenderVideoGrid() {
     const entries = Object.entries(partic);
     const count   = entries.length + 1; // +1 for local self tile
 
-    // Determine grid class
+    // Grid class
     const gridClass = count <= 1 ? 'vv-tiles--1'
                     : count <= 2 ? 'vv-tiles--2'
                     : count <= 4 ? 'vv-tiles--4'
                     : 'vv-tiles--9';
 
-    // Speaker view: determine featured uid
     const featured = vvSpeakerUid || vvActiveSpeaker || me;
 
     tiles.className = `vv-tiles ${gridClass} ${vvLayout === 'speaker' ? 'vv-tiles--speaker' : ''}`;
-    tiles.innerHTML = '';
 
-    // Build tile list: in speaker view, featured goes first and gets .vv-tile--featured
+    // Build ordered list of desired tiles
     const allTiles = [{ uid: me, isLocal: true, p: { handle: window.currentHandle || 'You', muted: false } }];
     entries.forEach(([uid, p]) => { if (uid !== me) allTiles.push({ uid, isLocal: false, p }); });
-
     if (vvLayout === 'speaker') {
-        // Sort: featured first
         allTiles.sort((a, b) => (a.uid === featured ? -1 : b.uid === featured ? 1 : 0));
     }
 
-    allTiles.forEach(({ uid, isLocal, p }) => {
+    // ── Reconcile: reuse existing tile nodes, only create/remove what changed ──
+    // This is critical: never wipe tiles.innerHTML while video elements are
+    // playing — Chromium aborts play() and goes black when srcObject is removed
+    // from a connected element.
+
+    const desiredUids = new Set(allTiles.map(t => t.uid));
+
+    // Remove tiles whose uid is no longer in the participant list
+    [...tiles.children].forEach(child => {
+        if (!desiredUids.has(child.dataset.uid)) child.remove();
+    });
+
+    // Insert / update tiles in the correct order
+    allTiles.forEach(({ uid, isLocal, p }, idx) => {
         const isFeatured = vvLayout === 'speaker' && uid === featured;
-        const tile = _vvMakeTile(uid, isLocal, p, isFeatured);
-        tiles.appendChild(tile);
+        let tileEl = document.getElementById('vv-tile-' + uid);
+
+        if (tileEl) {
+            // Tile already exists — update mutable parts without touching video
+            _vvUpdateTile(tileEl, uid, isLocal, p, isFeatured);
+        } else {
+            // New participant — build the full tile
+            tileEl = _vvMakeTile(uid, isLocal, p, isFeatured);
+        }
+
+        // Ensure correct DOM order by moving if needed
+        const currentAtIdx = tiles.children[idx];
+        if (currentAtIdx !== tileEl) {
+            tiles.insertBefore(tileEl, currentAtIdx || null);
+        }
     });
 
     // Label
@@ -873,6 +900,51 @@ function _vvRenderVideoGrid() {
     // Rec badge
     const badge = document.getElementById('vv-rec-badge');
     if (badge) badge.style.display = vvRecording ? 'flex' : 'none';
+}
+
+// Update the mutable parts of an existing tile without touching its video element.
+function _vvUpdateTile(tileEl, uid, isLocal, p, isFeatured) {
+    const isSpeaking = p.speaking && !p.muted;
+    tileEl.className = `vv-tile ${isFeatured ? 'vv-tile--featured' : ''} ${isSpeaking ? 'vv-tile--speaking' : ''}`;
+
+    const hasVideo = isLocal ? (vvCameraOn || vvScreenOn) : _vvRemoteStreams.has(uid);
+    const handle   = p.handle || (isLocal ? (window.currentHandle || 'You') : uid.slice(0, 6));
+
+    const ov = document.getElementById('vv-ov-' + uid);
+    if (ov) ov.className = `vv-tile-overlay ${hasVideo ? 'vv-tile-overlay--hidden' : ''}`;
+
+    const bar = tileEl.querySelector('.vv-tile-bar');
+    if (bar) {
+        bar.innerHTML = `<span class="vv-tile-handle">@${_vvEsc(handle)}${isLocal ? ' (you)' : ''}</span>
+            <div class="vv-tile-icons">
+                ${p.muted ? '<span title="Muted">🔇</span>' : ''}
+                ${isLocal && (vvCameraOn || vvScreenOn) ? (vvScreenOn ? '<span title="Sharing screen">🖥️</span>' : '<span title="Camera on">📷</span>') : ''}
+                ${!isLocal && hasVideo ? '<span title="Camera on">📷</span>' : ''}
+            </div>`;
+    }
+
+    const pinBtn = tileEl.querySelector('.vv-pin-btn');
+    if (pinBtn) pinBtn.textContent = vvSpeakerUid === uid ? '📌' : '📍';
+
+    // For local tile: keep local video srcObject current
+    if (isLocal) {
+        const vid = document.getElementById('vv-local-video');
+        if (vid) {
+            const newSrc = hasVideo ? (vvCameraOn ? vvCameraStream : vvScreenStream) : null;
+            if (vid.srcObject !== newSrc) {
+                vid.srcObject = newSrc;
+                if (newSrc) vid.play().catch(err => { if (err.name !== 'NotAllowedError') console.warn('[VV] local play()', err); });
+            }
+            vid.style.display = hasVideo ? 'block' : 'none';
+        }
+    } else {
+        // For remote: wire stream if it arrived after the tile was first created
+        const vid = document.getElementById('vv-video-' + uid);
+        const stream = _vvRemoteStreams.get(uid);
+        if (vid && stream && vid.srcObject !== stream) {
+            _vvApplyStreamToEl(vid, stream);
+        }
+    }
 }
 
 function _vvMakeTile(uid, isLocal, p, isFeatured) {
@@ -890,14 +962,18 @@ function _vvMakeTile(uid, isLocal, p, isFeatured) {
     tile.appendChild(videoEl);
 
     // For remote participants: apply the stream and call play() AFTER the tile
-    // is appended to the live DOM by _vvRenderVideoGrid (happens synchronously
-    // after _vvMakeTile returns). A microtask is enough — Chromium will not
-    // decode a stream on a display:none / disconnected video element.
+    // is in the live DOM. _vvRenderVideoGrid appends it synchronously right after
+    // _vvMakeTile returns, so a microtask is sufficient.
+    // Guard: only fire if (a) element is still connected, and (b) the stream
+    // hasn't already been applied by _vvUpdateTile on a subsequent render that
+    // ran before this microtask drained.
     if (!isLocal) {
         const stream = _vvRemoteStreams.get(uid);
         if (stream) {
             Promise.resolve().then(() => {
-                if (videoEl.isConnected) _vvApplyStreamToEl(videoEl, stream);
+                if (videoEl.isConnected && videoEl.srcObject !== stream) {
+                    _vvApplyStreamToEl(videoEl, stream);
+                }
             });
         }
     }
