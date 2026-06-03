@@ -282,7 +282,7 @@ async function _vvRenegotiate(pc) {
         const uid = _vvUidForPC(pc);
         console.log('[VV:renegotiate] uid=%s signalingState=%s', uid, pc.signalingState);
         if (!uid) { console.error('[VV:renegotiate] ABORT — no uid for PC'); return; }
-        const db    = window.db; if (!db) { console.error('[VV:renegotiate] ABORT — no db'); return; }
+        const db    = window.db || (typeof db !== 'undefined' ? db : null); if (!db) { console.error('[VV:renegotiate] ABORT — no db'); return; }
         const group = _vvGroup(); if (!group) { console.error('[VV:renegotiate] ABORT — no group'); return; }
         const me    = _vvMe();   if (!me) { console.error('[VV:renegotiate] ABORT — no me'); return; }
         const gRef  = db.collection('voice_sessions').doc(group.code);
