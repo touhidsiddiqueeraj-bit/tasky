@@ -254,9 +254,17 @@ async function _vvAddVideoTrackToPeers(track) {
             pc.signalingState, senders.length, !!liveVideoSender, !!blankedVideoSender);
 
         if (videoSender) {
-            console.log('[VV:addTrack] replaceTrack path');
+            console.log('[VV:addTrack] replaceTrack path, blanked=%s', !!blankedVideoSender);
             await videoSender.replaceTrack(track).catch(e => console.warn('[VV] replaceTrack', e));
             _vvSetSenderBitrate(videoSender);
+            // If the sender was blanked (track was null), replaceTrack alone is not
+            // enough: the remote receiver's track stays muted and ontrack never
+            // re-fires. We must renegotiate so the remote SDP reflects an active
+            // sender and the receiver's track gets unmuted.
+            if (blankedVideoSender) {
+                console.log('[VV:addTrack] blanked sender — forcing renegotiation');
+                await _vvRenegotiate(pc);
+            }
         } else {
             console.log('[VV:addTrack] addTrack + renegotiate path');
             try { pc.addTrack(track, stream); } catch(e) { console.error('[VV:addTrack] addTrack threw', e); return; }
@@ -459,6 +467,11 @@ function _vvWatchPeers() {
         // Try to resolve uid as soon as ICE starts connecting
         pc.addEventListener('iceconnectionstatechange', () => {
             if (!pcMap.has(pc)) _vvResolveUID(pc, pcMap);
+        });
+
+        // Also sync on signaling state changes — catches post-renegotiation stable state
+        pc.addEventListener('signalingstatechange', () => {
+            if (pc.signalingState === 'stable') _vvSyncAllUIDs(pcMap);
         });
 
         return pc;
