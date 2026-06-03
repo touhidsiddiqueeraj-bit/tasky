@@ -42,15 +42,26 @@ const VV_QUALITY = {
     sd: { width: 640,  height: 360,  frameRate: 15, bitrate: 400000  }
 };
 
-// ─── Accessors (mirrors pattern in tasky-voice.js) ────────────────────────
+// ─── Accessors ───────────────────────────────────────────────────────────
 function _vvUser()      { return window.currentUser || null; }
 function _vvMe()        { const u = _vvUser(); return u ? u.uid : null; }
 function _vvGroup()     { return window.currentGroup || null; }
-function _vvIsActive()  { return !!window.vcActive; }
-function _vvPeers()     { return window.vcPeers || {}; }
-function _vvPartic()    { return window.vcParticipants || {}; }
 function _vvEsc(s)      { return typeof escHtml === 'function' ? escHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function _vvLocalStream(){ return window.vcLocalStream || null; }
+
+// vcActive, vcPeers, vcParticipants, vcLocalStream are plain `let` in
+// tasky-voice.js — never exported to window.  Bridge via:
+//   window._vvCallActive    set by our vcJoin / vcLeave wrappers
+//   window._vvPeersRef      object reference injected by wrapper
+//   window._vvParticRef     object reference injected by wrapper
+//   window._vvLocalStreamRef track reference injected by wrapper
+// Fallback: presence of #vc-panel in DOM = call is live.
+function _vvIsActive() {
+    if (window._vvCallActive != null) return !!window._vvCallActive;
+    return !!document.getElementById('vc-panel');
+}
+function _vvPeers()       { return window._vvPeersRef       || {}; }
+function _vvPartic()      { return window._vvParticRef      || {}; }
+function _vvLocalStream() { return window._vvLocalStreamRef || null; }
 
 function _vvToast(msg) {
     if (typeof _vcToast === 'function') { _vcToast(msg); return; }
@@ -147,28 +158,39 @@ async function vvToggleScreen() {
 }
 
 // ─── Attach / replace video track in all existing peer connections ─────────
+// Uses window._vvAllPCs (set by the RTCPeerConnection shim) as primary source
+// so we reach every PC even if _vvPeersRef mapping is not yet complete.
+function _vvLivePCs() {
+    const pcs = [];
+    if (window._vvAllPCs) {
+        window._vvAllPCs.forEach(pc => {
+            if (pc.signalingState !== 'closed') pcs.push(pc);
+        });
+    }
+    // Also include any from _vvPeersRef not yet in _vvAllPCs
+    Object.values(_vvPeers()).forEach(peer => {
+        if (peer.pc && peer.pc.signalingState !== 'closed' && !pcs.includes(peer.pc)) pcs.push(peer.pc);
+    });
+    return pcs;
+}
+
 function _vvAddVideoTrackToPeers(track) {
-    const peers = _vvPeers();
     const stream = vvCameraOn ? vvCameraStream : vvScreenStream;
-    Object.values(peers).forEach(peer => {
-        if (!peer.pc || peer.pc.signalingState === 'closed') return;
-        const senders = peer.pc.getSenders();
+    _vvLivePCs().forEach(pc => {
+        const senders = pc.getSenders();
         const videoSender = senders.find(s => s.track && s.track.kind === 'video');
         if (videoSender) {
             videoSender.replaceTrack(track).catch(e => console.warn('[VV] replaceTrack', e));
             _vvSetSenderBitrate(videoSender);
         } else {
-            try { peer.pc.addTrack(track, stream); } catch(e) {}
+            try { pc.addTrack(track, stream); } catch(e) {}
         }
     });
 }
 
 function _vvRemoveCameraTrack() {
-    const peers = _vvPeers();
-    Object.values(peers).forEach(peer => {
-        if (!peer.pc || peer.pc.signalingState === 'closed') return;
-        const senders = peer.pc.getSenders();
-        const vs = senders.find(s => s.track && s.track.kind === 'video');
+    _vvLivePCs().forEach(pc => {
+        const vs = pc.getSenders().find(s => s.track && s.track.kind === 'video');
         if (vs) { vs.replaceTrack(null).catch(() => {}); }
     });
 }
@@ -181,18 +203,6 @@ async function _vvSetSenderBitrate(sender) {
         params.encodings[0].maxBitrate = VV_QUALITY[vvQuality].bitrate;
         await sender.setParameters(params);
     } catch(e) {}
-}
-
-// ─── Patch _vcCreatePC to also handle video tracks ────────────────────────
-// We monkey-patch by wrapping the global vcPeers assignment after each peer is created
-function _vvPatchPeerOnTrack(pc, peerUid) {
-    const origOntrack = pc.ontrack;
-    pc.ontrack = (e) => {
-        if (origOntrack) origOntrack.call(pc, e);
-        const track = e.track;
-        if (!track || track.kind !== 'video') return;
-        _vvAttachRemoteVideo(peerUid, e.streams[0]);
-    };
 }
 
 function _vvAttachRemoteVideo(peerUid, stream) {
@@ -211,35 +221,113 @@ function _vvAttachRemoteVideo(peerUid, stream) {
     _vvUpdateActiveSpeaker();
 }
 
-// ─── Intercept vcPeers additions so we can patch ontrack ──────────────────
-// Called every time tasky-voice creates a new PC (after _vcCreatePC returns)
+// ─── Intercept RTCPeerConnection creation to patch ontrack ────────────────
+// tasky-voice.js creates PCs via `new RTCPeerConnection(...)` — we shim the
+// constructor so every new PC is immediately patched to also handle video
+// tracks, without needing access to vcPeers (which is not on window).
+//
+// We also maintain window._vvPeersRef ourselves as a {uid: {pc}} map by
+// observing the Firestore presence collection via the vc-participants DOM
+// updates — concretely: whenever a new vc-p-card appears in the panel we
+// search all live RTCPeerConnections we have intercepted to match it.
 function _vvWatchPeers() {
-    // Poll for new peer connections and patch them
-    const seen = new Set(Object.keys(_vvPeers()));
-    setInterval(() => {
-        const peers = _vvPeers();
-        Object.entries(peers).forEach(([uid, peer]) => {
-            if (!seen.has(uid) && peer.pc) {
-                seen.add(uid);
-                _vvPatchPeerOnTrack(peer.pc, uid);
-                // If we already have camera/screen, send that track to the new peer
-                const vidTrack = (vvCameraOn && vvCameraStream?.getVideoTracks()[0])
-                              || (vvScreenOn && vvScreenStream?.getVideoTracks()[0]);
-                if (vidTrack) {
-                    const stream = vvCameraOn ? vvCameraStream : vvScreenStream;
-                    try { peer.pc.addTrack(vidTrack, stream); } catch(e) {}
-                }
-            }
+    const patchedPCs = new WeakSet();      // PCs we have already patched
+    const pcToUid    = new WeakMap();      // RTCPeerConnection → peerUid
+    if (!window._vvPeersRef) window._vvPeersRef = {};
+
+    // Shim RTCPeerConnection so we see every new instance
+    const OrigPC = window.RTCPeerConnection;
+    window.RTCPeerConnection = function(...args) {
+        const pc = new OrigPC(...args);
+
+        // Wrap ontrack setter so we intercept video tracks
+        let _ontrack = null;
+        Object.defineProperty(pc, 'ontrack', {
+            get: () => _ontrack,
+            set: (fn) => {
+                _ontrack = (e) => {
+                    if (fn) fn.call(pc, e);
+                    // Video track from remote peer
+                    if (e.track && e.track.kind === 'video') {
+                        const uid = pcToUid.get(pc);
+                        if (uid) _vvAttachRemoteVideo(uid, e.streams[0]);
+                    }
+                };
+                pc._origOntrackFn = fn; // keep ref for debugging
+            },
+            configurable: true
         });
-        // Remove stale video elements for disconnected peers
-        seen.forEach(uid => {
-            if (!peers[uid]) {
-                seen.delete(uid);
-                document.getElementById('vv-video-' + uid)?.remove();
-                _vvRefreshGridTile(uid, true);
-            }
+
+        // Watch for iceconnectionstatechange to associate uid
+        pc.addEventListener('iceconnectionstatechange', () => {
+            // Match this PC to a uid by looking at the vc-participants panel
+            // and comparing to our own PC map
+            _vvMatchPCtoUID(pc, pcToUid);
         });
-    }, 800);
+
+        // Track this PC
+        if (!window._vvAllPCs) window._vvAllPCs = new Set();
+        window._vvAllPCs.add(pc);
+
+        // If we already have a video track, add it once the PC negotiates
+        pc.addEventListener('negotiationneeded', () => {
+            const vidTrack = (vvCameraOn && vvCameraStream?.getVideoTracks()[0])
+                          || (vvScreenOn  && vvScreenStream?.getVideoTracks()[0]);
+            if (!vidTrack) return;
+            const stream = vvCameraOn ? vvCameraStream : vvScreenStream;
+            const hasSender = pc.getSenders().some(s => s.track?.kind === 'video');
+            if (!hasSender) { try { pc.addTrack(vidTrack, stream); } catch(e) {} }
+        });
+
+        return pc;
+    };
+    // Copy static methods / prototype
+    window.RTCPeerConnection.prototype = OrigPC.prototype;
+    Object.setPrototypeOf(window.RTCPeerConnection, OrigPC);
+
+    // Poll vc-participants panel to keep pcToUid map fresh
+    setInterval(() => _vvSyncPeerUIDs(pcToUid), 900);
+}
+
+function _vvMatchPCtoUID(pc, pcToUid) {
+    if (pcToUid.has(pc)) return;
+    _vvSyncPeerUIDs(pcToUid);
+}
+
+function _vvSyncPeerUIDs(pcToUid) {
+    // Read known uids from the Firestore presence data exposed via
+    // vc-participant card data-uid attributes (set by _vcRenderParticipants)
+    const cards = document.querySelectorAll('.vc-p-card [data-uid], .vc-kick-btn[data-uid]');
+    const knownUids = new Set();
+    cards.forEach(el => { if (el.dataset.uid) knownUids.add(el.dataset.uid); });
+
+    // Also read audio elements: tasky-voice creates <audio id="vc-audio-{uid}">
+    document.querySelectorAll('[id^="vc-audio-"]').forEach(el => {
+        const uid = el.id.replace('vc-audio-', '');
+        if (uid) knownUids.add(uid);
+    });
+
+    if (!window._vvAllPCs) return;
+    const pcs = [...window._vvAllPCs].filter(pc => pc.signalingState !== 'closed');
+    const unmapped = pcs.filter(pc => !pcToUid.has(pc));
+
+    // Assign unmapped PCs to uids not yet mapped (rough 1-to-1 pairing)
+    const mappedUids = new Set([...pcToUid.values()]);
+    const freeUids   = [...knownUids].filter(u => !mappedUids.has(u));
+
+    unmapped.forEach((pc, i) => {
+        if (freeUids[i]) {
+            pcToUid.set(pc, freeUids[i]);
+            if (!window._vvPeersRef) window._vvPeersRef = {};
+            window._vvPeersRef[freeUids[i]] = window._vvPeersRef[freeUids[i]] || {};
+            window._vvPeersRef[freeUids[i]].pc = pc;
+        }
+    });
+
+    // Clean up closed PCs
+    window._vvAllPCs.forEach(pc => {
+        if (pc.signalingState === 'closed') window._vvAllPCs.delete(pc);
+    });
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -781,14 +869,55 @@ function _vvCleanup() {
     _vvUpdateVideoControls();
 }
 
-// ─── Patch vcLeave to call cleanup ────────────────────────────────────────
+// ─── Patch vcJoin + vcLeave to bridge closed-over state vars ─────────────
+// tasky-voice.js uses plain `let` vars (vcActive, vcPeers, vcParticipants,
+// vcLocalStream) that are never exported to window.  We wrap the exported
+// vcJoin / vcLeave functions to copy those refs into window._vv* bridges
+// immediately after they are set inside tasky-voice.js's own closures.
+//
+// The trick: the exported functions capture the same vars by reference, so
+// we can't read them directly — but we CAN observe side-effects:
+//   • vcJoin sets vcActive = true  → we set window._vvCallActive = true
+//   • vcLeave sets vcActive = false → cleanup then window._vvCallActive = false
+//
+// For vcPeers / vcParticipants / vcLocalStream we poll in _vvWatchPeers
+// and set window._vv*Ref by looking at RTCPeerConnection instances that
+// tasky-voice creates (visible as audio element srcObjects + the PC objects
+// we intercept via the peer-watcher).  A simpler heuristic: after vcJoin
+// resolves, the vc-panel #vc-participants has child elements — we don't
+// need the raw object refs for our correctness check, only for _vvPeers()
+// used in track-sender logic.  That function falls back gracefully to {}.
 function _vvPatchVcLeave() {
     const origLeave = window.vcLeave;
     if (!origLeave) { setTimeout(_vvPatchVcLeave, 300); return; }
+
+    // Wrap vcLeave
     window.vcLeave = async function() {
+        window._vvCallActive = false;
         _vvCleanup();
         return origLeave.apply(this, arguments);
     };
+
+    // Also wrap vcJoin to set the active flag
+    const origJoin = window.vcJoin;
+    if (origJoin) {
+        window.vcJoin = async function() {
+            const result = await origJoin.apply(this, arguments);
+            // After join, poll briefly until the panel appears = call confirmed live
+            let tries = 0;
+            const check = () => {
+                if (document.getElementById('vc-panel')) {
+                    window._vvCallActive = true;
+                    // Inject the panel video button now that panel exists
+                    _vvInjectPanelButton();
+                } else if (++tries < 20) {
+                    setTimeout(check, 150);
+                }
+            };
+            check();
+            return result;
+        };
+    }
 }
 
 // ── Also patch VAD speaking detection to update active speaker ─────────────
