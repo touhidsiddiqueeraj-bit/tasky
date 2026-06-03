@@ -243,7 +243,16 @@ async function _vvAddVideoTrackToPeers(track) {
     const stream = vvCameraOn ? vvCameraStream : vvScreenStream;
     const promises = _vvLivePCs().map(async pc => {
         const senders = pc.getSenders();
-        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+        // Prefer a sender that already has a live video track.
+        // Also accept a null-track sender on a PC whose SDP already has a
+        // video m-line (happens after replaceTrack(null) to "blank" video —
+        // the sender stays but track becomes null; replaceTrack is correct).
+        const liveVideoSender   = senders.find(s => s.track?.kind === 'video');
+        const blankedVideoSender = !liveVideoSender
+            ? senders.find(s => s.track === null && /^m=video/m.test(pc.localDescription?.sdp || ''))
+            : null;
+        const videoSender = liveVideoSender || blankedVideoSender;
+
         if (videoSender) {
             // replaceTrack: in-place swap, no renegotiation needed
             await videoSender.replaceTrack(track).catch(e => console.warn('[VV] replaceTrack', e));
@@ -394,23 +403,47 @@ function _vvWatchPeers() {
         pc.addEventListener('track', function(e) {
             if (!e.track || e.track.kind !== 'video') return;
 
-            // Resolve the remote stream: e.streams[0] is preferred, but some
-            // browsers (Firefox, Chrome during renegotiation) deliver an empty
-            // streams array. Fall back to wrapping the track in a new MediaStream.
-            const stream = (e.streams && e.streams[0]) || new MediaStream([e.track]);
+            // Build a stable stream reference.
+            // During renegotiation Chromium fires ontrack before the streams
+            // array is populated (e.streams[0] may be undefined or an empty
+            // stream with no tracks yet).  We always wrap the track ourselves
+            // so we have a guaranteed non-empty MediaStream.
+            const stream = new MediaStream([e.track]);
 
-            const attachNow = (uid) => _vvAttachRemoteVideo(uid, stream);
+            // Also add the track to e.streams[0] if it arrives later — some
+            // browsers (Firefox) deliver it in e.streams rather than via
+            // the track object directly.  We don't rely on it, but keep the
+            // audio-element srcObject in sync for _vvSyncAllUIDs matching.
+
+            const doAttach = (uid) => {
+                // Re-read the stream each time in case onunmute fires late:
+                // the MediaStream we built always has the track already in it.
+                _vvAttachRemoteVideo(uid, stream);
+            };
+
+            const attachWhenReady = (uid) => {
+                if (!uid) return;
+                if (e.track.readyState === 'live' && !e.track.muted) {
+                    // Track is already flowing (e.g. replaceTrack path)
+                    doAttach(uid);
+                } else {
+                    // First unmute = first video frame is incoming.
+                    // Always attach now too so the tile/stream registry is
+                    // populated even before the frame arrives (overlay hides
+                    // immediately, video renders on first decoded frame).
+                    doAttach(uid);
+                    e.track.addEventListener('unmute', () => doAttach(uid), { once: true });
+                }
+            };
 
             const uid = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
             if (uid) {
-                attachNow(uid);
+                attachWhenReady(uid);
             } else {
-                // UID not yet resolved — retry as pcMap fills from the audio track
-                // ontrack (which fires just before or alongside this video event).
                 let retries = 0;
                 const retry = () => {
                     const u = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
-                    if (u) { attachNow(u); return; }
+                    if (u) { attachWhenReady(u); return; }
                     if (++retries < 20) setTimeout(retry, 250);
                     else console.warn('[VV] ontrack: could not resolve uid for PC after retries');
                 };
