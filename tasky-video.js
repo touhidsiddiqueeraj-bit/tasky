@@ -59,9 +59,68 @@ function _vvIsActive() {
     if (window._vvCallActive != null) return !!window._vvCallActive;
     return !!document.getElementById('vc-panel');
 }
-function _vvPeers()       { return window._vvPeersRef       || {}; }
-function _vvPartic()      { return window._vvParticRef      || {}; }
-function _vvLocalStream() { return window._vvLocalStreamRef || null; }
+function _vvPeers() {
+    // Prefer the live getter from tasky-voice if available
+    if (window._vcPeersRef && Object.keys(window._vcPeersRef).length > 0) return window._vcPeersRef;
+    return window._vvPeersRef || {};
+}
+function _vvPartic() {
+    // Prefer the live getter exported by tasky-voice.js (_vcParticipantsRef) —
+    // this is the actual vcParticipants object, always current on all peers.
+    if (window._vcParticipantsRef && Object.keys(window._vcParticipantsRef).length > 0) {
+        return window._vcParticipantsRef;
+    }
+
+    // Fallback: build from DOM evidence when the live ref isn't available
+    const base = Object.assign({}, window._vvParticRef || {});
+    const me   = _vvMe();
+
+    // Collect all remote uids from audio elements tasky-voice creates
+    document.querySelectorAll('[id^="vc-audio-"]').forEach(el => {
+        const uid = el.id.slice('vc-audio-'.length);
+        if (uid && uid !== me && !base[uid]) {
+            base[uid] = { handle: uid.slice(0, 8), muted: false, speaking: false };
+        }
+    });
+
+    // Improve handles: read vc-p-name from supervisor kick buttons (all roles)
+    // and from vc-p-card entries that have a data-uid attribute
+    document.querySelectorAll('.vc-kick-btn[data-uid]').forEach(btn => {
+        const uid = btn.dataset.uid;
+        if (!uid || uid === me) return;
+        const card   = btn.closest('.vc-p-card');
+        const nameEl = card?.querySelector('.vc-p-name');
+        if (nameEl) {
+            const handle = nameEl.textContent
+                .replace(/^@/, '').replace(/\s*\(you\).*$/, '').replace(/\s*👑\s*$/, '').trim();
+            if (base[uid]) base[uid].handle = handle || base[uid].handle;
+            else base[uid] = { handle, muted: false, speaking: false };
+        }
+    });
+
+    // For non-supervisors: match vc-p-cards to audio elements by order
+    // Each card that isn't "you" corresponds to a remote audio element in order
+    const unresolved = Object.keys(base).filter(uid => base[uid].handle === uid.slice(0, 8));
+    if (unresolved.length > 0) {
+        const remoteCards = [...document.querySelectorAll('#vc-participants .vc-p-card')]
+            .filter(c => !c.querySelector('.vc-p-name')?.textContent.includes('(you)'));
+        unresolved.forEach((uid, i) => {
+            const nameEl = remoteCards[i]?.querySelector('.vc-p-name');
+            if (nameEl) {
+                const handle = nameEl.textContent
+                    .replace(/^@/, '').replace(/\s*\(you\).*$/, '').replace(/\s*👑\s*$/, '').trim();
+                if (handle) base[uid].handle = handle;
+            }
+        });
+    }
+
+    return base;
+}
+function _vvLocalStream() {
+    // Prefer the live getter exported by tasky-voice.js
+    if (window._vcLocalStreamRef !== undefined) return window._vcLocalStreamRef;
+    return window._vvLocalStreamRef || null;
+}
 
 function _vvToast(msg) {
     if (typeof _vcToast === 'function') { _vcToast(msg); return; }
@@ -174,7 +233,7 @@ function _vvLivePCs() {
     // And from _vvPCMap
     if (window._vvPCMap) {
         window._vvPCMap.forEach((uid, pc) => {
-            if (pc.signalingState !== 'closed' && !pcs.includes(pc)) pcs.push(pc);
+            if (pc && pc.signalingState !== 'closed' && !pcs.includes(pc)) pcs.push(pc);
         });
     }
     return pcs;
@@ -210,14 +269,18 @@ async function _vvRenegotiate(pc) {
         const me    = _vvMe();   if (!me) return;
         const gRef  = db.collection('voice_sessions').doc(group.code);
 
-        const offer = await pc.createOffer();
+        // Must request receive direction for both audio AND video so the remote
+        // peer's SDP includes a video m-line and its ontrack fires correctly.
+        const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
         await pc.setLocalDescription(offer);
 
+        // Use offer.sdp directly — pc.localDescription may lag behind the
+        // setLocalDescription microtask on some browsers.
         await gRef.collection('signals').add({
             from: me,
             to:   uid,
             type: 'offer',
-            sdp:  pc.localDescription.sdp,
+            sdp:  offer.sdp,
             ts:   firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch(e) { console.warn('[VV] renegotiate error', e); }
@@ -298,30 +361,34 @@ function _vvWatchPeers() {
     window.RTCPeerConnection = function(...args) {
         const pc = new OrigPC(...args);
 
-        // Intercept the ontrack setter that tasky-voice assigns inside _vcCreatePC.
-        // We wrap it so remote video tracks are routed to _vvAttachRemoteVideo.
-        let _ontrackFn = null;
-        Object.defineProperty(pc, 'ontrack', {
-            configurable: true,
-            get: () => _ontrackFn,
-            set(fn) {
-                _ontrackFn = function(e) {
-                    if (fn) fn.call(pc, e);                    // run original handler first
-                    if (!e.track || e.track.kind !== 'video') return;
-                    const uid = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
-                    if (uid && e.streams?.[0]) {
-                        _vvAttachRemoteVideo(uid, e.streams[0]);
-                    } else {
-                        // UID not yet known — retry after ICE settles
-                        let retries = 0;
-                        const retry = () => {
-                            const u = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
-                            if (u && e.streams?.[0]) { _vvAttachRemoteVideo(u, e.streams[0]); return; }
-                            if (++retries < 10) setTimeout(retry, 400);
-                        };
-                        setTimeout(retry, 400);
-                    }
+        // Use addEventListener('track') — more reliable than shimming the ontrack
+        // IDL property setter. Browsers dispatch track events via EventTarget
+        // regardless of how ontrack is assigned, and renegotiation-added tracks
+        // always arrive here even when the property shim is bypassed internally.
+        pc.addEventListener('track', function(e) {
+            if (!e.track || e.track.kind !== 'video') return;
+
+            // Resolve the remote stream: e.streams[0] is preferred, but some
+            // browsers (Firefox, Chrome during renegotiation) deliver an empty
+            // streams array. Fall back to wrapping the track in a new MediaStream.
+            const stream = (e.streams && e.streams[0]) || new MediaStream([e.track]);
+
+            const attachNow = (uid) => _vvAttachRemoteVideo(uid, stream);
+
+            const uid = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
+            if (uid) {
+                attachNow(uid);
+            } else {
+                // UID not yet resolved — retry as pcMap fills from the audio track
+                // ontrack (which fires just before or alongside this video event).
+                let retries = 0;
+                const retry = () => {
+                    const u = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
+                    if (u) { attachNow(u); return; }
+                    if (++retries < 20) setTimeout(retry, 250);
+                    else console.warn('[VV] ontrack: could not resolve uid for PC after retries');
                 };
+                setTimeout(retry, 100);
             }
         });
 
