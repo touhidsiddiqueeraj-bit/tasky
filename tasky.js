@@ -178,6 +178,10 @@
         window._unlockEncryption = _unlockEncryption;
         window._encryptStoredData = _encryptStoredData;
 
+        // ─── Expose Task Groups API ────────────────────────────────────────────────
+        window.addTask = addTask;
+        window.hideFloatingInput = hideFloatingInput;
+
         // Returns the lowest positive integer not already used as a task number.
         // This lets deleted numbers be reused instead of incrementing forever.
         function getNextNumber() {
