@@ -241,25 +241,25 @@ function _vvLivePCs() {
 
 async function _vvAddVideoTrackToPeers(track) {
     const stream = vvCameraOn ? vvCameraStream : vvScreenStream;
-    const promises = _vvLivePCs().map(async pc => {
+    const livePCs = _vvLivePCs();
+    console.log('[VV:addTrack] livePCs=%d track.kind=%s track.id=%s', livePCs.length, track.kind, track.id);
+    const promises = livePCs.map(async pc => {
         const senders = pc.getSenders();
-        // Prefer a sender that already has a live video track.
-        // Also accept a null-track sender on a PC whose SDP already has a
-        // video m-line (happens after replaceTrack(null) to "blank" video —
-        // the sender stays but track becomes null; replaceTrack is correct).
         const liveVideoSender   = senders.find(s => s.track?.kind === 'video');
         const blankedVideoSender = !liveVideoSender
             ? senders.find(s => s.track === null && /^m=video/m.test(pc.localDescription?.sdp || ''))
             : null;
         const videoSender = liveVideoSender || blankedVideoSender;
+        console.log('[VV:addTrack] pc sigState=%s senders=%d liveVideoSender=%s blankedSender=%s',
+            pc.signalingState, senders.length, !!liveVideoSender, !!blankedVideoSender);
 
         if (videoSender) {
-            // replaceTrack: in-place swap, no renegotiation needed
+            console.log('[VV:addTrack] replaceTrack path');
             await videoSender.replaceTrack(track).catch(e => console.warn('[VV] replaceTrack', e));
             _vvSetSenderBitrate(videoSender);
         } else {
-            // addTrack: new m-line, MUST renegotiate so remote peer knows to expect video
-            try { pc.addTrack(track, stream); } catch(e) { return; }
+            console.log('[VV:addTrack] addTrack + renegotiate path');
+            try { pc.addTrack(track, stream); } catch(e) { console.error('[VV:addTrack] addTrack threw', e); return; }
             await _vvRenegotiate(pc);
         }
     });
@@ -272,19 +272,17 @@ async function _vvAddVideoTrackToPeers(track) {
 async function _vvRenegotiate(pc) {
     try {
         const uid = _vvUidForPC(pc);
-        if (!uid) { console.warn('[VV] renegotiate: no uid for PC'); return; }
-        const db    = window.db; if (!db) return;
-        const group = _vvGroup(); if (!group) return;
-        const me    = _vvMe();   if (!me) return;
+        console.log('[VV:renegotiate] uid=%s signalingState=%s', uid, pc.signalingState);
+        if (!uid) { console.error('[VV:renegotiate] ABORT — no uid for PC'); return; }
+        const db    = window.db; if (!db) { console.error('[VV:renegotiate] ABORT — no db'); return; }
+        const group = _vvGroup(); if (!group) { console.error('[VV:renegotiate] ABORT — no group'); return; }
+        const me    = _vvMe();   if (!me) { console.error('[VV:renegotiate] ABORT — no me'); return; }
         const gRef  = db.collection('voice_sessions').doc(group.code);
 
-        // Must request receive direction for both audio AND video so the remote
-        // peer's SDP includes a video m-line and its ontrack fires correctly.
         const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+        console.log('[VV:renegotiate] offer created, sdp has video m-line=%s', /m=video/.test(offer.sdp));
         await pc.setLocalDescription(offer);
 
-        // Use offer.sdp directly — pc.localDescription may lag behind the
-        // setLocalDescription microtask on some browsers.
         await gRef.collection('signals').add({
             from: me,
             to:   uid,
@@ -292,7 +290,8 @@ async function _vvRenegotiate(pc) {
             sdp:  offer.sdp,
             ts:   firebase.firestore.FieldValue.serverTimestamp()
         });
-    } catch(e) { console.warn('[VV] renegotiate error', e); }
+        console.log('[VV:renegotiate] offer sent to Firestore for uid=%s', uid);
+    } catch(e) { console.error('[VV:renegotiate] ERROR', e); }
 }
 
 // Look up which remote uid is associated with a given RTCPeerConnection
@@ -335,17 +334,18 @@ async function _vvSetSenderBitrate(sender) {
 const _vvRemoteStreams = new Map();
 
 function _vvAttachRemoteVideo(peerUid, stream) {
-    // Store the stream; the video element is only created when a tile is
-    // actually in the DOM (_vvGetOrCreateVideoEl / _vvMakeTile), ensuring
-    // the browser has a visible rendering context before decoding begins.
+    console.log('[VV:attach] uid=%s streamId=%s tracks=%d', peerUid, stream.id, stream.getTracks().length);
+    stream.getTracks().forEach(t => console.log('[VV:attach]   track kind=%s readyState=%s muted=%s id=%s', t.kind, t.readyState, t.muted, t.id));
+
     _vvRemoteStreams.set(peerUid, stream);
 
     _vvPartic()[peerUid] = _vvPartic()[peerUid] || {};
     _vvPartic()[peerUid].hasVideo = true;
 
-    // If a tile already exists (grid is open), wire the stream into it now.
     const existingEl = document.getElementById('vv-video-' + peerUid);
+    console.log('[VV:attach] existingEl=%s isConnected=%s', !!existingEl, existingEl?.isConnected);
     if (existingEl && existingEl.isConnected) {
+        console.log('[VV:attach] calling _vvApplyStreamToEl directly');
         _vvApplyStreamToEl(existingEl, stream);
     }
 
@@ -356,19 +356,21 @@ function _vvAttachRemoteVideo(peerUid, stream) {
 // Apply a stream to an already-in-DOM video element and force play().
 function _vvApplyStreamToEl(el, stream) {
     const streamChanged = el.srcObject !== stream;
+    console.log('[VV:apply] el.id=%s isConnected=%s streamChanged=%s paused=%s tracks=%d',
+        el.id, el.isConnected, streamChanged, el.paused, stream.getTracks().length);
     if (streamChanged) {
         el.srcObject = stream;
     }
     el.style.display = 'block';
-    // play() must be called after the element is connected and visible.
-    // Skip if already playing the same stream to avoid AbortError from
-    // interrupting a pending play() promise.
     if (streamChanged || el.paused) {
-        el.play().catch(err => {
-            if (err.name !== 'NotAllowedError' && err.name !== 'AbortError') {
-                console.warn('[VV] play()', err);
-            }
+        console.log('[VV:apply] calling play()');
+        el.play().then(() => {
+            console.log('[VV:apply] play() resolved OK for', el.id);
+        }).catch(err => {
+            console.warn('[VV:apply] play() rejected:', err.name, err.message, 'el.id=', el.id);
         });
+    } else {
+        console.log('[VV:apply] skipping play() — same stream, not paused');
     }
 }
 
@@ -395,57 +397,56 @@ function _vvWatchPeers() {
     const OrigPC = window.RTCPeerConnection;
     window.RTCPeerConnection = function(...args) {
         const pc = new OrigPC(...args);
+        console.log('[VV:shim] new RTCPeerConnection created, total tracked=%d', (window._vvAllPCs?.size || 0) + 1);
 
         // Use addEventListener('track') — more reliable than shimming the ontrack
         // IDL property setter. Browsers dispatch track events via EventTarget
         // regardless of how ontrack is assigned, and renegotiation-added tracks
         // always arrive here even when the property shim is bypassed internally.
         pc.addEventListener('track', function(e) {
+            console.log('[VV:track] kind=%s readyState=%s muted=%s streams=%d pcInMap=%s',
+                e.track?.kind, e.track?.readyState, e.track?.muted,
+                e.streams?.length, pcMap.has(pc));
+            if (e.streams?.[0]) {
+                console.log('[VV:track] e.streams[0] id=%s tracks=%d',
+                    e.streams[0].id, e.streams[0].getTracks().length);
+            }
             if (!e.track || e.track.kind !== 'video') return;
 
-            // Build a stable stream reference.
-            // During renegotiation Chromium fires ontrack before the streams
-            // array is populated (e.streams[0] may be undefined or an empty
-            // stream with no tracks yet).  We always wrap the track ourselves
-            // so we have a guaranteed non-empty MediaStream.
             const stream = new MediaStream([e.track]);
-
-            // Also add the track to e.streams[0] if it arrives later — some
-            // browsers (Firefox) deliver it in e.streams rather than via
-            // the track object directly.  We don't rely on it, but keep the
-            // audio-element srcObject in sync for _vvSyncAllUIDs matching.
+            console.log('[VV:track] VIDEO track received, built stream id=%s', stream.id);
 
             const doAttach = (uid) => {
-                // Re-read the stream each time in case onunmute fires late:
-                // the MediaStream we built always has the track already in it.
+                console.log('[VV:doAttach] uid=%s track.readyState=%s track.muted=%s', uid, e.track.readyState, e.track.muted);
                 _vvAttachRemoteVideo(uid, stream);
             };
 
             const attachWhenReady = (uid) => {
                 if (!uid) return;
-                if (e.track.readyState === 'live' && !e.track.muted) {
-                    // Track is already flowing (e.g. replaceTrack path)
-                    doAttach(uid);
-                } else {
-                    // First unmute = first video frame is incoming.
-                    // Always attach now too so the tile/stream registry is
-                    // populated even before the frame arrives (overlay hides
-                    // immediately, video renders on first decoded frame).
-                    doAttach(uid);
-                    e.track.addEventListener('unmute', () => doAttach(uid), { once: true });
+                console.log('[VV:attachWhenReady] uid=%s readyState=%s muted=%s', uid, e.track.readyState, e.track.muted);
+                doAttach(uid);
+                if (e.track.muted) {
+                    console.log('[VV:attachWhenReady] track muted — waiting for unmute event');
+                    e.track.addEventListener('unmute', () => {
+                        console.log('[VV:unmute] fired for uid=%s', uid);
+                        doAttach(uid);
+                    }, { once: true });
                 }
             };
 
             const uid = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
+            console.log('[VV:track] resolved uid=%s', uid);
             if (uid) {
                 attachWhenReady(uid);
             } else {
+                console.warn('[VV:track] uid not resolved yet, starting retry loop');
                 let retries = 0;
                 const retry = () => {
                     const u = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
+                    console.log('[VV:retry] attempt=%d uid=%s', retries, u);
                     if (u) { attachWhenReady(u); return; }
                     if (++retries < 20) setTimeout(retry, 250);
-                    else console.warn('[VV] ontrack: could not resolve uid for PC after retries');
+                    else console.error('[VV] ontrack: FAILED to resolve uid after 20 retries');
                 };
                 setTimeout(retry, 100);
             }
@@ -974,7 +975,9 @@ function _vvUpdateTile(tileEl, uid, isLocal, p, isFeatured) {
         // For remote: wire stream if it arrived after the tile was first created
         const vid = document.getElementById('vv-video-' + uid);
         const stream = _vvRemoteStreams.get(uid);
+        console.log('[VV:updateTile] uid=%s vid=%s stream=%s srcObjectSame=%s', uid, !!vid, !!stream, vid?.srcObject === stream);
         if (vid && stream && vid.srcObject !== stream) {
+            console.log('[VV:updateTile] applying stream to existing element');
             _vvApplyStreamToEl(vid, stream);
         }
     }
@@ -1002,8 +1005,10 @@ function _vvMakeTile(uid, isLocal, p, isFeatured) {
     // ran before this microtask drained.
     if (!isLocal) {
         const stream = _vvRemoteStreams.get(uid);
+        console.log('[VV:makeTile] uid=%s hasStream=%s videoElConnected=%s', uid, !!stream, videoEl.isConnected);
         if (stream) {
             Promise.resolve().then(() => {
+                console.log('[VV:makeTile:microtask] uid=%s isConnected=%s srcObjectSame=%s', uid, videoEl.isConnected, videoEl.srcObject === stream);
                 if (videoEl.isConnected && videoEl.srcObject !== stream) {
                     _vvApplyStreamToEl(videoEl, stream);
                 }
