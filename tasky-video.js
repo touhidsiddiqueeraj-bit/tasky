@@ -101,7 +101,7 @@ async function vvToggleCamera() {
 
     if (vvCameraOn) {
         // Turn off
-        _vvRemoveCameraTrack();
+        await _vvRemoveCameraTrack();
         if (vvCameraStream) { vvCameraStream.getTracks().forEach(t => t.stop()); vvCameraStream = null; }
         vvCameraOn = false;
         _vvToast('📷 Camera off');
@@ -114,7 +114,7 @@ async function vvToggleCamera() {
             _vvToast('📷 Camera access denied'); console.warn('[VV] camera', e); return;
         }
         vvCameraOn = true;
-        _vvAddVideoTrackToPeers(vvCameraStream.getVideoTracks()[0]);
+        await _vvAddVideoTrackToPeers(vvCameraStream.getVideoTracks()[0]);
         _vvToast('📷 Camera on');
     }
     _vvUpdateVideoControls();
@@ -129,7 +129,7 @@ async function vvToggleScreen() {
     if (!_vvIsActive()) { _vvToast('⚠️ Join a call first'); return; }
 
     if (vvScreenOn) {
-        _vvRemoveCameraTrack();
+        await _vvRemoveCameraTrack();
         if (vvScreenStream) { vvScreenStream.getTracks().forEach(t => t.stop()); vvScreenStream = null; }
         vvScreenOn = false;
         _vvToast('🖥️ Screen share stopped');
@@ -149,7 +149,7 @@ async function vvToggleScreen() {
             _vvToast('🖥️ Screen share cancelled'); console.warn('[VV] screen', e); return;
         }
         vvScreenOn = true;
-        _vvAddVideoTrackToPeers(vvScreenStream.getVideoTracks()[0]);
+        await _vvAddVideoTrackToPeers(vvScreenStream.getVideoTracks()[0]);
         _vvToast('🖥️ Sharing screen');
     }
     _vvUpdateVideoControls();
@@ -174,25 +174,80 @@ function _vvLivePCs() {
     return pcs;
 }
 
-function _vvAddVideoTrackToPeers(track) {
+async function _vvAddVideoTrackToPeers(track) {
     const stream = vvCameraOn ? vvCameraStream : vvScreenStream;
-    _vvLivePCs().forEach(pc => {
+    const promises = _vvLivePCs().map(async pc => {
         const senders = pc.getSenders();
         const videoSender = senders.find(s => s.track && s.track.kind === 'video');
         if (videoSender) {
-            videoSender.replaceTrack(track).catch(e => console.warn('[VV] replaceTrack', e));
+            // replaceTrack: in-place swap, no renegotiation needed
+            await videoSender.replaceTrack(track).catch(e => console.warn('[VV] replaceTrack', e));
             _vvSetSenderBitrate(videoSender);
         } else {
-            try { pc.addTrack(track, stream); } catch(e) {}
+            // addTrack: new m-line, MUST renegotiate so remote peer knows to expect video
+            try { pc.addTrack(track, stream); } catch(e) { return; }
+            await _vvRenegotiate(pc);
         }
     });
+    await Promise.all(promises);
 }
 
-function _vvRemoveCameraTrack() {
-    _vvLivePCs().forEach(pc => {
+// _vvRenegotiate: create a new offer on `pc` and send it through the same
+// Firestore signals collection that tasky-voice uses.  The remote peer's
+// existing signal listener (in tasky-voice.js) handles offer/answer already.
+async function _vvRenegotiate(pc) {
+    try {
+        const uid = _vvUidForPC(pc);
+        if (!uid) { console.warn('[VV] renegotiate: no uid for PC'); return; }
+        const db    = window.db; if (!db) return;
+        const group = _vvGroup(); if (!group) return;
+        const me    = _vvMe();   if (!me) return;
+        const gRef  = db.collection('voice_sessions').doc(group.code);
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        await gRef.collection('signals').add({
+            from: me,
+            to:   uid,
+            type: 'offer',
+            sdp:  pc.localDescription.sdp,
+            ts:   firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch(e) { console.warn('[VV] renegotiate error', e); }
+}
+
+// Look up which remote uid is associated with a given RTCPeerConnection
+function _vvUidForPC(pc) {
+    // Check our shim's pcToUid map (stored on window for cross-function access)
+    if (window._vvPCtoUID) {
+        const uid = window._vvPCtoUID.get(pc);
+        if (uid) return uid;
+    }
+    // Fallback: match by audio element srcObject stream id
+    const audioEls = [...document.querySelectorAll('[id^="vc-audio-"]')];
+    for (const el of audioEls) {
+        if (!el.srcObject) continue;
+        const uid = el.id.replace('vc-audio-', '');
+        // Find PC in our set that has a receiver whose stream matches
+        const receivers = pc.getReceivers();
+        for (const r of receivers) {
+            if (r.track && el.srcObject.getTracks().includes(r.track)) return uid;
+        }
+    }
+    return null;
+}
+
+async function _vvRemoveCameraTrack() {
+    const promises = _vvLivePCs().map(async pc => {
         const vs = pc.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (vs) { vs.replaceTrack(null).catch(() => {}); }
+        if (vs) {
+            await vs.replaceTrack(null).catch(() => {});
+            // No renegotiation needed for replaceTrack(null) — track goes silent
+            // but sender stays in SDP so remote doesn't tear down the receiver
+        }
     });
+    await Promise.all(promises);
 }
 
 async function _vvSetSenderBitrate(sender) {
@@ -234,26 +289,40 @@ function _vvWatchPeers() {
     const patchedPCs = new WeakSet();      // PCs we have already patched
     const pcToUid    = new WeakMap();      // RTCPeerConnection → peerUid
     if (!window._vvPeersRef) window._vvPeersRef = {};
+    window._vvPCtoUID = pcToUid;           // expose for _vvUidForPC()
 
     // Shim RTCPeerConnection so we see every new instance
     const OrigPC = window.RTCPeerConnection;
     window.RTCPeerConnection = function(...args) {
         const pc = new OrigPC(...args);
 
-        // Wrap ontrack setter so we intercept video tracks
+        // Wrap ontrack setter so we intercept video tracks.
+        // tasky-voice.js assigns pc.ontrack = fn inside _vcCreatePC right
+        // after construction, so this setter fires synchronously before any
+        // ICE or signaling happens — uid lookup runs again on each track event.
         let _ontrack = null;
         Object.defineProperty(pc, 'ontrack', {
             get: () => _ontrack,
             set: (fn) => {
                 _ontrack = (e) => {
                     if (fn) fn.call(pc, e);
-                    // Video track from remote peer
-                    if (e.track && e.track.kind === 'video') {
-                        const uid = pcToUid.get(pc);
-                        if (uid) _vvAttachRemoteVideo(uid, e.streams[0]);
+                    if (!e.track || e.track.kind !== 'video') return;
+                    // Try uid from map; if not yet mapped, sync now then retry
+                    let uid = pcToUid.get(pc);
+                    if (!uid) {
+                        _vvSyncPeerUIDs(pcToUid);
+                        uid = pcToUid.get(pc);
+                    }
+                    if (uid && e.streams && e.streams[0]) {
+                        _vvAttachRemoteVideo(uid, e.streams[0]);
+                    } else {
+                        // Uid not mapped yet — queue a retry
+                        setTimeout(() => {
+                            const u = pcToUid.get(pc);
+                            if (u && e.streams && e.streams[0]) _vvAttachRemoteVideo(u, e.streams[0]);
+                        }, 500);
                     }
                 };
-                pc._origOntrackFn = fn; // keep ref for debugging
             },
             configurable: true
         });
@@ -270,15 +339,6 @@ function _vvWatchPeers() {
         window._vvAllPCs.add(pc);
 
         // If we already have a video track, add it once the PC negotiates
-        pc.addEventListener('negotiationneeded', () => {
-            const vidTrack = (vvCameraOn && vvCameraStream?.getVideoTracks()[0])
-                          || (vvScreenOn  && vvScreenStream?.getVideoTracks()[0]);
-            if (!vidTrack) return;
-            const stream = vvCameraOn ? vvCameraStream : vvScreenStream;
-            const hasSender = pc.getSenders().some(s => s.track?.kind === 'video');
-            if (!hasSender) { try { pc.addTrack(vidTrack, stream); } catch(e) {} }
-        });
-
         return pc;
     };
     // Copy static methods / prototype
