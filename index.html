@@ -1560,8 +1560,10 @@ function tgExpandGroup(id, mouseEvent) {
   if (!group) return;
 
   const existing = new Set();
-  if (typeof STATE !== 'undefined' && STATE.tasks) {
-    STATE.tasks.forEach(t => existing.add(t.text.toLowerCase()));
+  if (typeof window.tasks === 'object' && window.tasks !== null) {
+    Object.values(window.tasks).forEach(col => {
+      if (Array.isArray(col)) col.forEach(t => existing.add(t.text.toLowerCase()));
+    });
   } else {
     document.querySelectorAll('.task-item').forEach(el => {
       const txt = el.querySelector('.task-text');
