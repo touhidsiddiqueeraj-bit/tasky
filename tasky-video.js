@@ -182,6 +182,11 @@ async function vvToggleCamera() {
 
     if (vvCameraOn) {
         // Turn off
+        // Clear the local video element BEFORE stopping the track so no frozen
+        // last-frame is visible while the avatar overlay animates back in.
+        const localVid = document.getElementById('vv-local-video');
+        if (localVid) { localVid.pause(); localVid.srcObject = null; localVid.style.display = 'none'; }
+
         await _vvRemoveCameraTrack();
         if (vvCameraStream) { vvCameraStream.getTracks().forEach(t => t.stop()); vvCameraStream = null; }
         vvCameraOn = false;
@@ -210,6 +215,11 @@ async function vvToggleScreen() {
     if (!_vvIsActive()) { _vvToast('⚠️ Join a call first'); return; }
 
     if (vvScreenOn) {
+        // Clear the local video element BEFORE stopping tracks so there's no
+        // frozen last-frame while the avatar overlay fades back in.
+        const localVid = document.getElementById('vv-local-video');
+        if (localVid) { localVid.pause(); localVid.srcObject = null; localVid.style.display = 'none'; }
+
         await _vvRemoveCameraTrack();
         if (vvScreenStream) { vvScreenStream.getTracks().forEach(t => t.stop()); vvScreenStream = null; }
         vvScreenOn = false;
@@ -390,18 +400,74 @@ function _vvAttachRemoteVideo(peerUid, stream) {
 
     _vvRemoteStreams.set(peerUid, stream);
 
+    // A stream is only "live video" if its video track is unmuted and live.
+    // A replaceTrack(null) or a just-negotiated-but-not-yet-active track is muted.
+    const videoTrack = stream.getVideoTracks()[0];
+    const isLive = videoTrack && !videoTrack.muted && videoTrack.readyState === 'live';
+
     _vvPartic()[peerUid] = _vvPartic()[peerUid] || {};
-    _vvPartic()[peerUid].hasVideo = true;
+    _vvPartic()[peerUid].hasVideo = isLive;
+
+    // When the track unmutes later (sender's stream becomes active), re-attach
+    if (videoTrack && videoTrack.muted) {
+        videoTrack.addEventListener('unmute', () => {
+            console.log('[VV:attach:unmute] track unmuted for uid=%s', peerUid);
+            _vvPartic()[peerUid] = _vvPartic()[peerUid] || {};
+            _vvPartic()[peerUid].hasVideo = true;
+            const el = document.getElementById('vv-video-' + peerUid);
+            if (el && el.isConnected) _vvApplyStreamToEl(el, stream);
+            _vvRefreshRemoteTileVideo(peerUid, stream, true);
+        }, { once: true });
+    }
+
+    // When the track ends (screen share stopped, replaceTrack(null) settled),
+    // revert the tile back to avatar view.
+    if (videoTrack) {
+        videoTrack.addEventListener('ended', () => {
+            console.log('[VV:attach:ended] track ended for uid=%s', peerUid);
+            _vvRevertRemoteTileToAvatar(peerUid);
+        }, { once: true });
+        videoTrack.addEventListener('mute', () => {
+            console.log('[VV:attach:mute] track muted for uid=%s', peerUid);
+            _vvRevertRemoteTileToAvatar(peerUid);
+        });
+    }
 
     const existingEl = document.getElementById('vv-video-' + peerUid);
-    console.log('[VV:attach] existingEl=%s isConnected=%s', !!existingEl, existingEl?.isConnected);
-    if (existingEl && existingEl.isConnected) {
+    console.log('[VV:attach] existingEl=%s isConnected=%s isLive=%s', !!existingEl, existingEl?.isConnected, isLive);
+    if (existingEl && existingEl.isConnected && isLive) {
         console.log('[VV:attach] calling _vvApplyStreamToEl directly');
         _vvApplyStreamToEl(existingEl, stream);
+    } else if (existingEl && !isLive) {
+        // Track is not yet live — hide video and show avatar
+        existingEl.style.display = 'none';
     }
 
     _vvRefreshGridTile(peerUid);
     _vvUpdateActiveSpeaker();
+}
+
+// Revert a remote tile to avatar view (video ended or muted)
+function _vvRevertRemoteTileToAvatar(uid) {
+    if (_vvPartic()[uid]) _vvPartic()[uid].hasVideo = false;
+    const vid = document.getElementById('vv-video-' + uid);
+    if (vid) {
+        vid.pause();
+        vid.srcObject = null;
+        vid.style.display = 'none';
+    }
+    const ov = document.getElementById('vv-ov-' + uid);
+    if (ov) ov.className = 'vv-tile-overlay'; // remove --hidden
+    _vvRefreshGridTile(uid);
+}
+
+// Refresh overlay/video visibility for a remote tile when video goes live
+function _vvRefreshRemoteTileVideo(uid, stream, isLive) {
+    const vid = document.getElementById('vv-video-' + uid);
+    const ov  = document.getElementById('vv-ov-' + uid);
+    if (ov) ov.className = `vv-tile-overlay ${isLive ? 'vv-tile-overlay--hidden' : ''}`;
+    if (vid && isLive && stream) _vvApplyStreamToEl(vid, stream);
+    else if (vid && !isLive) { vid.style.display = 'none'; }
 }
 
 // Apply a stream to an already-in-DOM video element and force play().
@@ -1053,7 +1119,16 @@ function _vvUpdateTile(tileEl, uid, isLocal, p, isFeatured) {
     const isSpeaking = p.speaking && !p.muted;
     tileEl.className = `vv-tile ${isFeatured ? 'vv-tile--featured' : ''} ${isSpeaking ? 'vv-tile--speaking' : ''}`;
 
-    const hasVideo = isLocal ? (vvCameraOn || vvScreenOn) : _vvRemoteStreams.has(uid);
+    // For remote tiles, "has video" means the stream has a live, unmuted video track
+    let hasVideo;
+    if (isLocal) {
+        hasVideo = vvCameraOn || vvScreenOn;
+    } else {
+        const stream = _vvRemoteStreams.get(uid);
+        const vt = stream?.getVideoTracks()[0];
+        hasVideo = !!(vt && !vt.muted && vt.readyState === 'live');
+    }
+
     const handle   = p.handle || (isLocal ? (window.currentHandle || 'You') : uid.slice(0, 6));
 
     const ov = document.getElementById('vv-ov-' + uid);
@@ -1078,19 +1153,26 @@ function _vvUpdateTile(tileEl, uid, isLocal, p, isFeatured) {
         if (vid) {
             const newSrc = hasVideo ? (vvCameraOn ? vvCameraStream : vvScreenStream) : null;
             if (vid.srcObject !== newSrc) {
+                vid.pause();
                 vid.srcObject = newSrc;
                 if (newSrc) vid.play().catch(err => { if (err.name !== 'NotAllowedError') console.warn('[VV] local play()', err); });
             }
             vid.style.display = hasVideo ? 'block' : 'none';
         }
     } else {
-        // For remote: wire stream if it arrived after the tile was first created
+        // For remote: wire stream if live, or clear if not
         const vid = document.getElementById('vv-video-' + uid);
         const stream = _vvRemoteStreams.get(uid);
-        console.log('[VV:updateTile] uid=%s vid=%s stream=%s srcObjectSame=%s', uid, !!vid, !!stream, vid?.srcObject === stream);
-        if (vid && stream && vid.srcObject !== stream) {
-            console.log('[VV:updateTile] applying stream to existing element');
-            _vvApplyStreamToEl(vid, stream);
+        console.log('[VV:updateTile] uid=%s vid=%s stream=%s hasVideo=%s srcObjectSame=%s', uid, !!vid, !!stream, hasVideo, vid?.srcObject === stream);
+        if (vid) {
+            if (hasVideo && stream && vid.srcObject !== stream) {
+                console.log('[VV:updateTile] applying live stream to existing element');
+                _vvApplyStreamToEl(vid, stream);
+            } else if (!hasVideo) {
+                // No live video — revert to avatar
+                if (vid.srcObject) { vid.pause(); vid.srcObject = null; }
+                vid.style.display = 'none';
+            }
         }
     }
 }
@@ -1207,6 +1289,7 @@ function _vvRefreshLocalTile() {
     if (vid) {
         const newSrc = hasVideo ? (vvCameraOn ? vvCameraStream : vvScreenStream) : null;
         if (vid.srcObject !== newSrc) {
+            vid.pause();
             vid.srcObject = newSrc;
             if (newSrc) vid.play().catch(err => { if (err.name !== 'NotAllowedError') console.warn('[VV] local play()', err); });
         }
