@@ -285,15 +285,6 @@ async function _vvRenegotiate(pc) {
         const db    = (typeof _vcDb === 'function' ? _vcDb() : null) || window.db || null; if (!db) { console.error('[VV:renegotiate] ABORT — no db'); return; }
         const group = _vvGroup(); if (!group) { console.error('[VV:renegotiate] ABORT — no group'); return; }
         const me    = _vvMe();   if (!me) { console.error('[VV:renegotiate] ABORT — no me'); return; }
-
-        // Only the lexicographically-lower uid sends renegotiation offers,
-        // matching the same convention used by _vcOffer in tasky-voice.js.
-        // This prevents glare when both peers toggle video simultaneously.
-        if (me > uid) {
-            console.log('[VV:renegotiate] deferring — remote uid is lower, they will initiate');
-            return;
-        }
-
         const gRef  = db.collection('voice_sessions').doc(group.code);
 
         const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
@@ -371,11 +362,15 @@ function _vvAttachRemoteVideo(peerUid, stream) {
 }
 
 // Apply a stream to an already-in-DOM video element and force play().
+// Apply a stream to an already-in-DOM video element and force play().
 function _vvApplyStreamToEl(el, stream) {
     const streamChanged = el.srcObject !== stream;
     console.log('[VV:apply] el.id=%s isConnected=%s streamChanged=%s paused=%s tracks=%d',
         el.id, el.isConnected, streamChanged, el.paused, stream.getTracks().length);
     if (streamChanged) {
+        // Abort any in-flight play() before changing srcObject.
+        // Assigning srcObject while a play() promise is pending causes AbortError.
+        el.pause();
         el.srcObject = stream;
     }
     el.style.display = 'block';
@@ -497,15 +492,26 @@ function _vvWatchPeers() {
 
                 console.log('[VV:sigstate→stable] receiver video track readyState=%s muted=%s uid=%s', track.readyState, track.muted, uid);
 
-                const stream = new MediaStream([track]);
+                // Reuse existing stream if this track is already registered —
+                // avoids creating a new MediaStream object on every renegotiation
+                // (audio-only renegotiations also trigger stable) which would cause
+                // repeated srcObject reassignments and AbortErrors.
+                const existingStream = _vvRemoteStreams.get(uid);
+                const trackAlreadyRegistered = existingStream?.getTracks().includes(track);
+                if (trackAlreadyRegistered && !track.muted) {
+                    console.log('[VV:sigstate→stable] track already registered and unmuted — skipping');
+                    return;
+                }
+
+                const stream = existingStream && existingStream.getTracks().includes(track)
+                    ? existingStream
+                    : new MediaStream([track]);
 
                 const doAttach = () => {
                     console.log('[VV:sigstate→stable] attaching uid=%s muted=%s', uid, track.muted);
                     _vvAttachRemoteVideo(uid, stream);
                 };
 
-                // Attach immediately so the tile/registry is updated.
-                // If still muted (no frames yet), also listen for unmute.
                 doAttach();
                 if (track.muted) {
                     track.addEventListener('unmute', () => {
