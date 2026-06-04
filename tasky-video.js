@@ -256,11 +256,11 @@ async function _vvAddVideoTrackToPeers(track) {
         if (videoSender) {
             console.log('[VV:addTrack] replaceTrack path, blanked=%s', !!blankedVideoSender);
             await videoSender.replaceTrack(track).catch(e => console.warn('[VV] replaceTrack', e));
-            _vvSetSenderBitrate(videoSender);
-            // If the sender was blanked (track was null), replaceTrack alone is not
-            // enough: the remote receiver's track stays muted and ontrack never
-            // re-fires. We must renegotiate so the remote SDP reflects an active
-            // sender and the receiver's track gets unmuted.
+            await _vvSetSenderBitrate(videoSender);
+            // Log encoding state post-replaceTrack for diagnosis
+            const p = videoSender.getParameters();
+            console.log('[VV:addTrack] post-replaceTrack encoding active=%s maxBitrate=%s',
+                p?.encodings?.[0]?.active, p?.encodings?.[0]?.maxBitrate);
             if (blankedVideoSender) {
                 console.log('[VV:addTrack] blanked sender — forcing renegotiation');
                 await _vvRenegotiate(pc);
@@ -333,8 +333,12 @@ async function _vvSetSenderBitrate(sender) {
         const params = sender.getParameters();
         if (!params.encodings || !params.encodings.length) params.encodings = [{}];
         params.encodings[0].maxBitrate = VV_QUALITY[vvQuality].bitrate;
+        // Explicitly re-enable encoding — after replaceTrack(null) Chromium sets
+        // active=false on the encoding. replaceTrack(newTrack) does NOT reset it,
+        // so the sender transmits nothing and the receiver track stays muted=true.
+        params.encodings[0].active = true;
         await sender.setParameters(params);
-    } catch(e) {}
+    } catch(e) { console.warn('[VV] setParameters failed', e); }
 }
 
 // Remote stream registry: uid → MediaStream
