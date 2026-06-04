@@ -287,9 +287,22 @@ async function _vvRenegotiate(pc) {
         const me    = _vvMe();   if (!me) { console.error('[VV:renegotiate] ABORT — no me'); return; }
         const gRef  = db.collection('voice_sessions').doc(group.code);
 
-        const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+        // Set all video transceivers to sendrecv before creating the offer.
+        // offerToReceiveVideo:true is a legacy option and causes Chromium to
+        // emit direction=recvonly when the sender's track is null after
+        // replaceTrack(null). Explicitly setting the transceiver direction
+        // overrides this — the browser will then emit sendrecv or sendonly.
+        pc.getTransceivers().forEach(tc => {
+            if (tc.stopped) return;
+            if (tc.direction === 'inactive' || tc.direction === 'recvonly') {
+                tc.direction = 'sendrecv';
+                console.log('[VV:renegotiate] corrected transceiver to sendrecv, mid=%s', tc.mid);
+            }
+        });
+
+        const offer = await pc.createOffer();
         const videoDir = offer.sdp.match(/m=video[\s\S]*?a=(sendrecv|sendonly|recvonly|inactive)/)?.[1] || 'not found';
-        console.log('[VV:renegotiate] offer created, sdp has video m-line=true direction=%s', videoDir);
+        console.log('[VV:renegotiate] offer created, direction=%s', videoDir);
         await pc.setLocalDescription(offer);
 
         await gRef.collection('signals').add({
