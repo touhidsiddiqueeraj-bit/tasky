@@ -48,6 +48,28 @@ function _vvMe()        { const u = _vvUser(); return u ? u.uid : null; }
 function _vvGroup()     { return window.currentGroup || null; }
 function _vvEsc(s)      { return typeof escHtml === 'function' ? escHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// ─── Avatar helper for video tiles ───────────────────────────────────────
+function _vvAvatarContent(uid, handle) {
+    const cache = window._vcAvatarCache || {};
+    const url   = cache[uid];
+    const init  = (handle || uid || 'U')[0].toUpperCase();
+    if (url) return `<img src="${url.replace(/"/g,'&quot;')}" alt="${init}" style="width:100%;height:100%;object-fit:cover;display:block;">`;
+    return init;
+}
+
+// Refresh a tile's avatar overlay when photo is loaded
+function _vvRefreshTileAvatar(uid) {
+    const ov = document.getElementById('vv-ov-' + uid);
+    if (!ov) return;
+    const avatarEl = ov.querySelector('.vv-tile-avatar');
+    if (!avatarEl) return;
+    const partic = _vvPartic();
+    const p = partic[uid] || {};
+    const handle = p.handle || uid.slice(0,6);
+    avatarEl.innerHTML = _vvAvatarContent(uid, handle);
+}
+
+
 // vcActive, vcPeers, vcParticipants, vcLocalStream are plain `let` in
 // tasky-voice.js — never exported to window.  Bridge via:
 //   window._vvCallActive    set by our vcJoin / vcLeave wrappers
@@ -908,7 +930,11 @@ function _vvBuildVideoGrid() {
                 <button class="vv-ctrl vv-ctrl--close" id="vv-btn-close" title="Close video panel">✕</button>
             </div>
         </div>
-        <div class="vv-tiles" id="vv-tiles"></div>`;
+        <div class="vv-tiles" id="vv-tiles"></div>
+        <div class="vv-grid-hint" id="vv-grid-hint">
+            <span class="vv-grid-hint-icon">💡</span>
+            <span><strong>Turn on your camera</strong> with 📷, or share your screen with 🖥️. Double-click any tile to fullscreen. Pin a speaker with 📍.</span>
+        </div>`;
 
     document.body.appendChild(grid);
     vvVideoGrid = grid;
@@ -1009,6 +1035,10 @@ function _vvRenderVideoGrid() {
         }
     });
 
+    // Hide hint once tiles are populated
+    const hintEl = document.getElementById('vv-grid-hint');
+    if (hintEl) hintEl.style.display = allTiles.length > 0 ? 'none' : 'flex';
+
     // Label
     const label = document.getElementById('vv-grid-label');
     if (label) label.textContent = `Video · ${allTiles.length} ${allTiles.length === 1 ? 'person' : 'people'}`;
@@ -1103,8 +1133,9 @@ function _vvMakeTile(uid, isLocal, p, isFeatured) {
     ov.className = `vv-tile-overlay ${hasVideo ? 'vv-tile-overlay--hidden' : ''}`;
     ov.id = 'vv-ov-' + uid;
     const handle = p.handle || (isLocal ? (window.currentHandle || 'You') : uid.slice(0,6));
-    ov.innerHTML = `<div class="vv-tile-avatar">${handle[0].toUpperCase()}</div>
-                    <div class="vv-tile-name">@${_vvEsc(handle)}${isLocal ? ' (you)' : ''}</div>`;
+    ov.innerHTML = `<div class="vv-tile-avatar">${_vvAvatarContent(uid, handle)}</div>
+                    <div class="vv-tile-name">@${_vvEsc(handle)}${isLocal ? ' (you)' : ''}</div>
+                    <div class="vv-tile-cam-off">Camera off</div>`;
     tile.appendChild(ov);
 
     // Bottom bar
