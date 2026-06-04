@@ -285,6 +285,15 @@ async function _vvRenegotiate(pc) {
         const db    = (typeof _vcDb === 'function' ? _vcDb() : null) || window.db || null; if (!db) { console.error('[VV:renegotiate] ABORT — no db'); return; }
         const group = _vvGroup(); if (!group) { console.error('[VV:renegotiate] ABORT — no group'); return; }
         const me    = _vvMe();   if (!me) { console.error('[VV:renegotiate] ABORT — no me'); return; }
+
+        // Only the lexicographically-lower uid sends renegotiation offers,
+        // matching the same convention used by _vcOffer in tasky-voice.js.
+        // This prevents glare when both peers toggle video simultaneously.
+        if (me > uid) {
+            console.log('[VV:renegotiate] deferring — remote uid is lower, they will initiate');
+            return;
+        }
+
         const gRef  = db.collection('voice_sessions').doc(group.code);
 
         const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
@@ -469,9 +478,42 @@ function _vvWatchPeers() {
             if (!pcMap.has(pc)) _vvResolveUID(pc, pcMap);
         });
 
-        // Also sync on signaling state changes — catches post-renegotiation stable state
+        // On every renegotiation completing (signalingState → stable), scan all
+        // receivers for video tracks that are now live but weren't wired up.
+        // This is necessary because ontrack fires only ONCE per track — on first
+        // negotiation. When a blanked sender is reactivated via replaceTrack +
+        // renegotiate, the remote's receiver track already exists from the original
+        // negotiation; it just goes from muted→unmuted. ontrack never re-fires.
         pc.addEventListener('signalingstatechange', () => {
-            if (pc.signalingState === 'stable') _vvSyncAllUIDs(pcMap);
+            if (pc.signalingState !== 'stable') return;
+            _vvSyncAllUIDs(pcMap);
+
+            const uid = pcMap.get(pc);
+            if (!uid) return;
+
+            pc.getReceivers().forEach(receiver => {
+                const track = receiver.track;
+                if (!track || track.kind !== 'video') return;
+
+                console.log('[VV:sigstate→stable] receiver video track readyState=%s muted=%s uid=%s', track.readyState, track.muted, uid);
+
+                const stream = new MediaStream([track]);
+
+                const doAttach = () => {
+                    console.log('[VV:sigstate→stable] attaching uid=%s muted=%s', uid, track.muted);
+                    _vvAttachRemoteVideo(uid, stream);
+                };
+
+                // Attach immediately so the tile/registry is updated.
+                // If still muted (no frames yet), also listen for unmute.
+                doAttach();
+                if (track.muted) {
+                    track.addEventListener('unmute', () => {
+                        console.log('[VV:sigstate→stable:unmute] uid=%s', uid);
+                        doAttach();
+                    }, { once: true });
+                }
+            });
         });
 
         return pc;
