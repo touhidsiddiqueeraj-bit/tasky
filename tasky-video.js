@@ -288,7 +288,8 @@ async function _vvRenegotiate(pc) {
         const gRef  = db.collection('voice_sessions').doc(group.code);
 
         const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
-        console.log('[VV:renegotiate] offer created, sdp has video m-line=%s', /m=video/.test(offer.sdp));
+        const videoDir = offer.sdp.match(/m=video[\s\S]*?a=(sendrecv|sendonly|recvonly|inactive)/)?.[1] || 'not found';
+        console.log('[VV:renegotiate] offer created, sdp has video m-line=true direction=%s', videoDir);
         await pc.setLocalDescription(offer);
 
         await gRef.collection('signals').add({
@@ -329,15 +330,18 @@ async function _vvRemoveCameraTrack() {
 
 async function _vvSetSenderBitrate(sender) {
     if (!sender || !sender.getParameters) return;
+    // setParameters must be called in a fresh task after replaceTrack completes.
+    // Calling it in the same microtask chain as replaceTrack causes
+    // InvalidModificationError in Chromium. Use setTimeout(0) to defer.
+    await new Promise(resolve => setTimeout(resolve, 0));
     try {
         const params = sender.getParameters();
+        console.log('[VV:setBitrate] encodings count=%d', params?.encodings?.length);
         if (!params.encodings || !params.encodings.length) params.encodings = [{}];
         params.encodings[0].maxBitrate = VV_QUALITY[vvQuality].bitrate;
-        // Explicitly re-enable encoding — after replaceTrack(null) Chromium sets
-        // active=false on the encoding. replaceTrack(newTrack) does NOT reset it,
-        // so the sender transmits nothing and the receiver track stays muted=true.
         params.encodings[0].active = true;
         await sender.setParameters(params);
+        console.log('[VV:setBitrate] OK active=true maxBitrate=%d', VV_QUALITY[vvQuality].bitrate);
     } catch(e) { console.warn('[VV] setParameters failed', e); }
 }
 
@@ -1294,6 +1298,16 @@ function _vvPatchVcLeave() {
             };
             check();
             return result;
+        };
+    }
+
+    // Patch _vcAnswer to log the SDP direction for the incoming renegotiation offer
+    const origAnswer = window._vcAnswer;
+    if (origAnswer) {
+        window._vcAnswer = async function(peerUid, sdp) {
+            const videoDir = sdp.match(/m=video[\s\S]*?a=(sendrecv|sendonly|recvonly|inactive)/)?.[1] || 'no-video-mline';
+            console.log('[VV:_vcAnswer] from=%s videoDir=%s', peerUid, videoDir);
+            return origAnswer.apply(this, arguments);
         };
     }
 }
