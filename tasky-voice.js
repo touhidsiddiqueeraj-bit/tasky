@@ -54,6 +54,38 @@ function _vcIsSup()      { return window.isSupervisor  != null ? window.isSuperv
 function _vcDb()         { return window.db || (typeof db !== 'undefined' ? db : null); }
 function _vcEsc(s)       { return typeof escHtml === 'function' ? escHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+
+// ─── Avatar helper ────────────────────────────────────────────────────────
+// Returns an <img> or initial letter for a participant tile.
+// Looks up window._vcAvatarCache[uid] which is populated from Firestore
+// users/{uid}.avatarDataUrl or avatarUrl fields.
+function _vcAvatarHtml(uid, handle, extraClass) {
+    const cls   = extraClass || '';
+    const init  = (handle || 'U')[0].toUpperCase();
+    const cache = window._vcAvatarCache || {};
+    const url   = cache[uid];
+    if (url) {
+        return `<img src="${url.replace(/"/g,'&quot;')}" alt="${init}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">`;
+    }
+    return init;
+}
+
+// Pre-fetch avatars for a list of uids from Firestore users collection
+async function _vcPrefetchAvatars(uids) {
+    if (!window._vcAvatarCache) window._vcAvatarCache = {};
+    const db = _vcDb();
+    if (!db) return;
+    const toFetch = uids.filter(uid => !(uid in window._vcAvatarCache));
+    if (!toFetch.length) return;
+    await Promise.all(toFetch.map(async uid => {
+        try {
+            const snap = await db.collection('users').doc(uid).get();
+            const data = snap.data() || {};
+            window._vcAvatarCache[uid] = data.avatarDataUrl || data.avatarUrl || null;
+        } catch(e) { window._vcAvatarCache[uid] = null; }
+    }));
+}
+
 function _vcGroupRef() {
     const d = _vcDb(), g = _vcGroup();
     if (!d || !g) return null;
@@ -174,7 +206,7 @@ function _vcShowIncomingModal(callerHandle) {
                 <div class="vc-ring-circle vc-ring-c1"></div>
                 <div class="vc-ring-circle vc-ring-c2"></div>
                 <div class="vc-ring-circle vc-ring-c3"></div>
-                <div class="vc-incoming-avatar">${(callerHandle || '?')[0].toUpperCase()}</div>
+                <div class="vc-incoming-avatar">${_vcAvatarHtml(vcIncomingCallerId || '', callerHandle)}</div>
             </div>
             <div class="vc-incoming-label">Incoming voice call</div>
             <div class="vc-incoming-caller">@${_vcEsc(callerHandle || 'Someone')}</div>
@@ -731,6 +763,13 @@ function _vcRenderParticipants() {
         return;
     }
 
+    // Prefetch avatars for all participants (no-op if already cached)
+    _vcPrefetchAvatars(entries.map(([uid]) => uid)).then(() => {
+        // Re-render after avatars load if any were missing
+        const wasEmpty = entries.some(([uid]) => !(window._vcAvatarCache || {})[uid] && !(window._vcAvatarCache || {})[uid] === null);
+        if (wasEmpty) _vcRenderParticipants();
+    });
+
     entries.forEach(([uid, p]) => {
         const isMe  = uid === me;
         const isSup = _vcGroup()?.supervisorUid === uid;
@@ -739,7 +778,7 @@ function _vcRenderParticipants() {
         card.className = `vc-p-card ${p.speaking && !p.muted ? 'vc-p-card--speaking' : ''}`;
         card.innerHTML = `
             <div class="vc-p-avatar ${p.speaking && !p.muted ? 'vc-p-avatar--speaking' : ''} ${isSup ? 'vc-p-avatar--sup' : ''}">
-                ${(p.handle || 'U')[0].toUpperCase()}
+                ${_vcAvatarHtml(uid, p.handle)}
             </div>
             <div class="vc-p-info">
                 <span class="vc-p-name">@${_vcEsc(p.handle || uid.slice(0,6))}${isMe ? ' (you)' : ''}${isSup ? ' 👑' : ''}</span>
@@ -757,12 +796,24 @@ function _vcRenderParticipants() {
         container.appendChild(card);
     });
 
-    // Show "waiting" hint when only self is present
+    // Show helpful hints when only self is present
     if (entries.length === 1 && entries[0][0] === me) {
-        const hint = document.createElement('div');
-        hint.className = 'vc-empty';
-        hint.textContent = 'Waiting for others to join…';
-        container.appendChild(hint);
+        const hintWrap = document.createElement('div');
+        hintWrap.innerHTML = `
+            <div class="vc-empty" style="margin-bottom:8px;">Waiting for others to join…</div>
+            <div class="vc-hint-row">
+                <span class="vc-hint-icon">🔇</span>
+                <span class="vc-hint-text"><strong>Mute / Unmute</strong> with the button below, or press <strong>M</strong></span>
+            </div>
+            <div class="vc-hint-row">
+                <span class="vc-hint-icon">📹</span>
+                <span class="vc-hint-text"><strong>Video &amp; screen share</strong> available once you click the Video button</span>
+            </div>
+            <div class="vc-hint-row">
+                <span class="vc-hint-icon">─</span>
+                <span class="vc-hint-text">Click <strong>─</strong> to minimise this panel without leaving the call</span>
+            </div>`;
+        container.appendChild(hintWrap);
     }
 
     const mini = document.getElementById('vc-mini-count');
