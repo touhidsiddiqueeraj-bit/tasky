@@ -449,6 +449,49 @@ body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
   padding:2px 7px;border-radius:5px;background:rgba(139,92,246,0.2);
   border:1px solid rgba(139,92,246,0.3);color:#a78bfa;flex-shrink:0;
 }
+
+/* ── Hint tooltips (global) ─────────────────────────────────────────────── */
+[title]:not(input):not(select):not(textarea) { position: relative; }
+/* Native title tooltips are enough; we add a styled one for .tasky-hint-tip */
+.tasky-hint-tip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px; height: 15px;
+    border-radius: 50%;
+    background: rgba(139,92,246,0.15);
+    border: 1px solid rgba(139,92,246,0.28);
+    color: rgba(196,181,253,0.72);
+    font-size: 9.5px; font-weight: 700;
+    cursor: help;
+    margin-left: 5px;
+    vertical-align: middle;
+    flex-shrink: 0;
+    transition: background 0.13s;
+}
+.tasky-hint-tip:hover { background: rgba(139,92,246,0.28); color: #e2d9ff; }
+
+/* Hint banner that can be inserted anywhere */
+.tasky-inline-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    padding: 8px 11px;
+    border-radius: 8px;
+    background: rgba(139,92,246,0.05);
+    border: 1px solid rgba(139,92,246,0.12);
+    font-size: 12px;
+    color: rgba(180,170,220,0.7);
+    line-height: 1.45;
+    margin: 6px 0;
+}
+.tasky-inline-hint strong { color: rgba(220,210,255,0.9); font-weight: 600; }
+body.light-mode .tasky-inline-hint {
+    background: rgba(109,40,217,0.04);
+    border-color: rgba(109,40,217,0.10);
+    color: rgba(79,60,153,0.65);
+}
+body.light-mode .tasky-inline-hint strong { color: #4c1d95; }
 </style>
 <style>
 /* ── Assign modal: group selection ── */
@@ -883,11 +926,11 @@ body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
         <span class="brand-chevron">▼</span>
   </button>
   <div class="dropdown-menu" id="dropdown">
-    <button class="dropdown-item collab-dd-item" id="collab-create-dd-btn" onclick="openCollabModal('create')">
+    <button class="dropdown-item collab-dd-item" id="collab-create-dd-btn" onclick="openCollabModal('create')" title="Create a shared board — invite teammates with a link">
       <span>👥</span>
       <span>Create Collaboration</span>
     </button>
-    <button class="dropdown-item collab-dd-item" id="collab-join-dd-btn" onclick="openCollabModal('join')">
+    <button class="dropdown-item collab-dd-item" id="collab-join-dd-btn" onclick="openCollabModal('join')" title="Join a teammate's board using an invite code or link">
       <span>🔗</span>
       <span>Join Collaboration</span>
     </button>
@@ -965,13 +1008,13 @@ body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
           <div class="column-header-left">
             <h2 class="column-title">📝 To Do</h2>
             <div class="filter-dots">
-              <span class="filter-dot high"   onclick="toggleFilter('todo','high',this)"   title="Filter High"></span>
-              <span class="filter-dot medium" onclick="toggleFilter('todo','medium',this)" title="Filter Medium"></span>
-              <span class="filter-dot low"    onclick="toggleFilter('todo','low',this)"    title="Filter Low"></span>
+              <span class="filter-dot high"   onclick="toggleFilter('todo','high',this)"   title="Filter: show only High priority tasks"></span>
+              <span class="filter-dot medium" onclick="toggleFilter('todo','medium',this)" title="Filter: show only Medium priority tasks"></span>
+              <span class="filter-dot low"    onclick="toggleFilter('todo','low',this)"    title="Filter: show only Low priority tasks"></span>
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
-            <button id="cal-mini-btn" onclick="openCalendarView()" title="Calendar view"
+            <button id="cal-mini-btn" onclick="openCalendarView()" title="Calendar view — see tasks with due dates on a monthly calendar"
               style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:8px;
                      padding:3px 8px;font-size:13px;cursor:pointer;color:rgba(255,255,255,0.55);
                      display:flex;align-items:center;gap:4px;transition:background .15s,border-color .15s,color .15s;
@@ -984,7 +1027,7 @@ body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
         <div class="task-list" id="todo-list" ondrop="drop(event)" ondragover="allowDrop(event)">
           <div class="todo-empty-state" id="todo-empty-state">
             <div class="todo-empty-icon">✏️</div>
-            <div class="todo-empty-text">Press any key to add your first task</div>
+            <div class="todo-empty-text">Press any key or <strong>click anywhere</strong> to add your first task</div>
           </div>
         </div>
       </div>
@@ -997,9 +1040,9 @@ body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
           <div class="column-header-left">
             <h2 class="column-title">⚡ Working On</h2>
             <div class="filter-dots">
-              <span class="filter-dot high"   onclick="toggleFilter('working','high',this)"   title="Filter High"></span>
-              <span class="filter-dot medium" onclick="toggleFilter('working','medium',this)" title="Filter Medium"></span>
-              <span class="filter-dot low"    onclick="toggleFilter('working','low',this)"    title="Filter Low"></span>
+              <span class="filter-dot high"   onclick="toggleFilter('working','high',this)"   title="Filter: show only High priority tasks"></span>
+              <span class="filter-dot medium" onclick="toggleFilter('working','medium',this)" title="Filter: show only Medium priority tasks"></span>
+              <span class="filter-dot low"    onclick="toggleFilter('working','low',this)"    title="Filter: show only Low priority tasks"></span>
             </div>
           </div>
           <span class="task-count" id="working-count">0</span>
@@ -1019,7 +1062,7 @@ body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
           </div>
         </div>
         <div class="task-list" id="done-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
-        <button class="clear-done-btn" onclick="clearDoneTasks()">Clear All Done</button>
+        <button class="clear-done-btn" onclick="clearDoneTasks()" title="Permanently remove all completed tasks (cannot be undone)">Clear All Done</button>
       </div>
     </div>
   </div>
@@ -1030,8 +1073,8 @@ body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
   <input type="text" class="floating-input" id="floating-input"
     placeholder="Type to add task or group name…" maxlength="120">
   <div class="floating-input-hint">
-    <span><kbd>Enter</kbd> to add</span>
-    <span><kbd>Esc</kbd> to cancel</span>
+    <span><kbd>Enter</kbd> add &nbsp;·&nbsp; <kbd>Esc</kbd> cancel</span>
+    <span title="Try: high, medium, or low priority — or due dates like 20may">Add <code>!high</code> or <code>!low</code> to set priority</span>
     <span id="floating-group-hint" style="display:none;color:#a78bfa;">⊞ group match — <kbd>↑</kbd><kbd>↓</kbd> navigate, <kbd>Enter</kbd> expand</span>
     <span id="floating-assign-hint" style="display:none;color:#67e8f9;">👥 assign: <code>task text to::handle priority::high date::20may</code></span>
   </div>
@@ -1048,7 +1091,7 @@ body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
 <span class="enc-indicator" id="enc-indicator"></span>
 
 <div class="shortcuts-hint">
-  <span>Select task: <kbd>←</kbd><kbd>→</kbd> move · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority · <kbd>Del</kbd> delete · <kbd>Esc</kbd> deselect · Hold <kbd>Space</kbd> voice</span>
+  <span>Task selected: <kbd>←</kbd><kbd>→</kbd> move column · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority · <kbd>E</kbd> edit · <kbd>Del</kbd> delete · <kbd>Esc</kbd> deselect · Hold <kbd>Space</kbd> voice input</span>
 </div>
 
 <!-- Voice overlay -->
@@ -1668,6 +1711,8 @@ async function _safeEnableNotifs() {
 function _boot() {
   initOnboarding();
   patchFloatingInput();
+  // Load saved avatar after a short delay (auth may not be ready yet)
+  setTimeout(() => { if (typeof _stLoadSavedAvatar === 'function') _stLoadSavedAvatar(); }, 1200);
 }
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', _boot);
@@ -1714,6 +1759,41 @@ function showConfirm(title, body, okLabel = 'Delete') {
   </div>
   <div id="settings-body">
 
+    <!-- ── PROFILE ── -->
+    <div class="st-group-label">👤 Profile</div>
+
+      <!-- Avatar upload -->
+      <div class="st-row st-row--stack">
+        <div class="st-row-label">
+          <span class="st-row-icon">🖼️</span>
+          <span>Profile Picture</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;width:100%;padding-top:6px;">
+          <div id="st-avatar-preview" style="
+            width:56px;height:56px;border-radius:50%;
+            background:linear-gradient(140deg,#8B5CF6,#6d28d9);
+            color:#fff;font-size:22px;font-weight:700;
+            display:flex;align-items:center;justify-content:center;
+            overflow:hidden;flex-shrink:0;
+            border:2px solid rgba(139,92,246,0.30);
+            cursor:pointer;" onclick="document.getElementById('st-avatar-input').click()" title="Click to change photo">
+            <span id="st-avatar-initial">?</span>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:11.5px;color:var(--st-text-dim,rgba(200,192,240,0.6));margin-bottom:6px;line-height:1.4;">
+              Shown in voice &amp; video calls. JPG or PNG, max 1 MB.
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="st-btn" onclick="document.getElementById('st-avatar-input').click()" style="flex:1;">Choose Photo</button>
+              <button class="st-btn" id="st-avatar-clear-btn" onclick="stClearAvatar()" style="display:none;">Remove</button>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="st-avatar-input" accept="image/jpeg,image/png,image/webp"
+          style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;"
+          onchange="stHandleAvatarUpload(this)">
+      </div>
+
     <!-- ── APPEARANCE ── -->
     <div class="st-group-label">🎨 Appearance</div>
 
@@ -1754,7 +1834,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
       <div class="st-row st-row--stack">
         <div class="st-row-label">
           <span class="st-row-icon">🖼️</span>
-          <span>Background Image</span>
+          <span>Background Image</span><span style="font-size:10.5px;color:var(--st-text-dim,rgba(180,170,220,0.5));margin-left:auto;">any JPG/PNG</span>
         </div>
         <div style="display:flex;gap:8px;width:100%;">
           <button class="st-btn" onclick="triggerBgUpload()" style="flex:1;">Choose Image</button>
@@ -1911,6 +1991,7 @@ function showConfirm(title, body, okLabel = 'Delete') {
   --st-text:    #e2d9ff;
   --st-muted:   rgba(255,255,255,0.4);
   --st-section: rgba(255,255,255,0.03);
+  --st-text-dim: rgba(180,170,220,0.5);
   --st-hover:   rgba(255,255,255,0.06);
 }
 body.light-mode {
@@ -2143,12 +2224,105 @@ body.light-mode .st-theme-btn:hover {
 </style>
 
 <script>
+
+// ── Avatar / Profile Picture ────────────────────────────────────────────
+async function stHandleAvatarUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 1.2 * 1024 * 1024) { showTaskyToast('⚠️ Image too large — max 1 MB'); return; }
+    const reader = new FileReader();
+    reader.onload = async e => {
+        const resized = await _stResizeAvatar(e.target.result, 128);
+        _stApplyAvatar(resized);
+        localStorage.setItem('tasky_avatar', resized);
+        const user = window.currentUser;
+        if (user && !user.isAnonymous && window.db) {
+            window.db.collection('users').doc(user.uid)
+                .set({ avatarDataUrl: resized }, { merge: true })
+                .catch(e => console.warn('[Avatar]', e));
+        }
+        if (!window._vcAvatarCache) window._vcAvatarCache = {};
+        if (user) window._vcAvatarCache[user.uid] = resized;
+        showTaskyToast('✅ Profile picture updated');
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+}
+function _stResizeAvatar(dataUrl, maxPx) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const s = Math.min(1, maxPx / Math.max(img.width, img.height));
+            const c = document.createElement('canvas');
+            c.width = Math.round(img.width*s); c.height = Math.round(img.height*s);
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            resolve(c.toDataURL('image/jpeg', 0.82));
+        };
+        img.src = dataUrl;
+    });
+}
+function _stApplyAvatar(dataUrl) {
+    const preview  = document.getElementById('st-avatar-preview');
+    const initial  = document.getElementById('st-avatar-initial');
+    const clearBtn = document.getElementById('st-avatar-clear-btn');
+    if (!preview) return;
+    let img = preview.querySelector('img.st-av-img');
+    if (dataUrl) {
+        if (!img) {
+            img = document.createElement('img'); img.className = 'st-av-img';
+            img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;';
+            preview.style.position = 'relative';
+            preview.appendChild(img);
+        }
+        img.src = dataUrl;
+        if (initial)  initial.style.display  = 'none';
+        if (clearBtn) clearBtn.style.display = 'block';
+    } else {
+        if (img) img.remove();
+        if (initial)  initial.style.display  = '';
+        if (clearBtn) clearBtn.style.display = 'none';
+    }
+    // Update header avatar
+    const ha = document.getElementById('user-avatar');
+    if (ha) ha.innerHTML = dataUrl
+        ? `<img src="${dataUrl}" style="width:18px;height:18px;border-radius:50%;object-fit:cover;">`
+        : (window.currentUser?.email ? window.currentUser.email[0].toUpperCase() : '');
+    // Update global cache
+    const user = window.currentUser;
+    if (user) { if (!window._vcAvatarCache) window._vcAvatarCache = {}; window._vcAvatarCache[user.uid] = dataUrl || null; }
+}
+function stClearAvatar() {
+    _stApplyAvatar(null);
+    localStorage.removeItem('tasky_avatar');
+    const user = window.currentUser;
+    if (user && !user.isAnonymous && window.db) {
+        window.db.collection('users').doc(user.uid)
+            .update({ avatarDataUrl: window.firebase?.firestore?.FieldValue?.delete?.() || null })
+            .catch(() => {});
+    }
+    showTaskyToast('🗑️ Profile picture removed');
+}
+function _stLoadSavedAvatar() {
+    const user = window.currentUser;
+    const initial = document.getElementById('st-avatar-initial');
+    if (initial) initial.textContent = user && !user.isAnonymous ? (user.email||'?')[0].toUpperCase() : '?';
+    const saved = localStorage.getItem('tasky_avatar');
+    if (saved) { _stApplyAvatar(saved); return; }
+    if (user && !user.isAnonymous && window.db) {
+        window.db.collection('users').doc(user.uid).get().then(snap => {
+            const url = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
+            if (url) { _stApplyAvatar(url); localStorage.setItem('tasky_avatar', url); }
+        }).catch(() => {});
+    }
+}
+
 // ── Settings panel ────────────────────────────────────────────────────────
 function openSettings() {
     document.getElementById('dropdown').classList.remove('show');
     document.getElementById('settings-backdrop').style.display = 'block';
     document.getElementById('settings-panel').classList.add('open');
     _stSyncUI();
+    _stLoadSavedAvatar(); // refresh avatar preview each time settings opens
 }
 function closeSettings() {
     document.getElementById('settings-backdrop').style.display = 'none';
