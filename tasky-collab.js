@@ -3314,7 +3314,7 @@ async function _mbDelete(msgId,isReply,replyId) {
 // ─── File attach ──────────────────────────────────────────────────────────
 function _mbHandleFile(input) {
     const file=input.files[0]; if(!file) return;
-    if(file.size>3*1024*1024){_collabToast('⚠️ Max 3 MB');input.value='';return;}
+    if(file.size>10*1024*1024){_collabToast('⚠️ Max 10 MB');input.value='';return;}
     const reader=new FileReader();
     reader.onload=e=>{
         _mbPendingFile={name:file.name,type:file.type,dataUrl:e.target.result};
