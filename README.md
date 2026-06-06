@@ -16,12 +16,16 @@ A keyboard-first task tracker with three Kanban-style panels, team collaboration
 - **Due dates** — pick a date; overdue tasks highlighted red
 - **Undo** — 3-second undo toast on delete and move
 - **Workspaces** — multiple independent boards, each with its own tasks, counter, and optional collaboration link. Switch via the top pill bar.
+- **Subtasks** — one-level checklist per task with `☐` toggle on each card
+- **Task timers** — stopwatch and Pomodoro (25m work / 5m break) modes with auto-transition and notifications
+- **Command palette** (`Ctrl+K` / `Cmd+K`) — fuzzy-search all tasks and actions; arrow-key navigable
 
 ### Collaboration
 - **Task Groups** — create reusable templates; type the group name to expand onto the board
 - **Team Collaboration** — supervisor creates a group; members join with a 6-character code; assign tasks, comment feed, live activity
 - **Message board** — team chat with reply threads, emoji reactions, file attachments (up to 10 MB)
 - **Read-only share board** — share a live read-only board via `?view=CODE` link
+- **Whiteboard** — shared canvas with pen/rect/circle/line/eraser tools; Firestore-synced with live user cursors
 
 ### Voice & Video Calls
 - **Voice calls** — peer-to-peer WebRTC mesh via Firestore signaling; mute/deafen; voice activity detection; supervisor kick; minimize bar; call recording
@@ -40,6 +44,8 @@ A keyboard-first task tracker with three Kanban-style panels, team collaboration
 
 ### Extended
 - **Recurring tasks** — daily / weekly / monthly; auto-duplicate on completion; manager UI in Settings
+- **Bulk actions** — multi-select mode via `☑ Bulk` toggle; floating action bar for move/delete/priority on multiple tasks
+- **Activity feed** — `📋 Activity` panel with per-task timeline; Firestore-synced for collab; filterable by event type
 - **CSV import / export** — import from CSV via Settings; export all tasks with status, priority, dates
 - **@Mentions** — mention team members in comments with autocomplete and Firestore push notification
 - **Supervisor locks** — restrict task assignment and deletion to the group supervisor
@@ -64,20 +70,28 @@ A keyboard-first task tracker with three Kanban-style panels, team collaboration
 
 ```
 tasky/
-├── index.html             — App shell, inline boot logic, Firebase CDN, PWA meta, onboarding
-├── manifest.json          — PWA manifest (standalone display, SVG icons)
-├── sw.js                  — Service worker (cache-first, offline fallback)
-├── tasky.css              — All styles, animations, themes, responsive layout
-├── tasky.js               — Core: state, rendering, keyboard, drag & drop, Firebase, encryption
-├── tasky-collab.js        — Collaboration: groups, supervisor, task assignment, message board
-├── tasky-features.js      — Extended: recurring tasks, CSV import, @mentions, supervisor locks
-├── tasky-calendar.js      — Calendar: monthly/weekly views, drag-to-reschedule, keyboard nav
-├── tasky-calendar.css     — Calendar panel styles
-├── tasky-voice.js         — WebRTC mesh voice calls via Firestore signaling
-├── tasky-voice.css        — Voice call UI styles
-├── tasky-video.js         — Video calls: camera, screen share, recording, PiP, grid/speaker view
-├── tasky-video.css        — Video call UI styles
-├── tasky-deps-search.js   — Global search (Alt+R), task dependencies, Markdown renderer
+├── index.html              — App shell, inline boot logic, Firebase CDN, PWA meta, onboarding
+├── manifest.json           — PWA manifest (standalone display, SVG icons)
+├── sw.js                   — Service worker (cache-first, offline fallback)
+├── tasky.css               — All styles, animations, themes, responsive layout
+├── tasky.js                — Core: state, rendering, keyboard, drag & drop, Firebase, encryption
+├── tasky-subtask.js        — Subtasks: one-level checklist per task
+├── tasky-timer.js          — Task timers: stopwatch and Pomodoro modes
+├── tasky-timer.css         — Timer UI styles
+├── tasky-bulk.js           — Bulk actions: multi-select, batch move/delete/priority
+├── tasky-activity.js       — Activity feed: per-task timeline, filterable
+├── tasky-palette.js        — Command palette: Ctrl+K fuzzy-search tasks + actions
+├── tasky-whiteboard.js     — Whiteboard: shared canvas with drawing tools
+├── tasky-whiteboard.css    — Whiteboard panel styles
+├── tasky-collab.js         — Collaboration: groups, supervisor, task assignment, message board
+├── tasky-features.js       — Extended: recurring tasks, CSV import, @mentions, supervisor locks
+├── tasky-calendar.js       — Calendar: monthly/weekly views, drag-to-reschedule, keyboard nav
+├── tasky-calendar.css      — Calendar panel styles
+├── tasky-voice.js          — WebRTC mesh voice calls via Firestore signaling
+├── tasky-voice.css         — Voice call UI styles
+├── tasky-video.js          — Video calls: camera, screen share, recording, PiP, grid/speaker view
+├── tasky-video.css         — Video call UI styles
+├── tasky-deps-search.js    — Global search (Alt+R), task dependencies, Markdown renderer
 ├── README.md
 └── LICENSE
 ```
@@ -91,13 +105,17 @@ Zero build step, vanilla JS only. Files load via `<script defer>` in a strict or
 1. **`index.html`** — HTML shell + inline `<style>` for onboarding
 2. **`tasky.js`** — core engine; defines `renderAllColumns`, `createTaskCard`, keyboard, drag-drop, Firebase CRUD
 3. **`tasky.css`** — all stylesheets
-4. **`tasky-voice.css`** / **`tasky-video.css`** / **`tasky-calendar.css`**
+4. **`tasky-voice.css`** / **`tasky-video.css`** / **`tasky-calendar.css`** / **`tasky-timer.css`** / **`tasky-whiteboard.css`**
 5. **`tasky-voice.js`** — WebRTC voice layer; attaches to `window.*` globals
 6. **`tasky-video.js`** — extends voice layer with video; wraps `vcJoin`/`vcLeave`
 7. **`tasky-calendar.js`** — replaces the `_renderCalendar` stub left in features.js
-8. **`tasky-features.js`** — recurring tasks, CSV import, @mentions
-9. **`tasky-collab.js`** — replaces `createTaskCard` by wrapping the original; adds group/team logic
-10. **`tasky-deps-search.js`** — global search overlay; renders last
+8. **`tasky-subtask.js`** / **`tasky-timer.js`** / **`tasky-bulk.js`** — subtasks, timers, bulk actions (each wraps `createTaskCard`)
+9. **`tasky-activity.js`** — activity feed panel
+10. **`tasky-whiteboard.js`** — shared canvas whiteboard
+11. **`tasky-deps-search.js`** — global search overlay, task dependencies
+12. **`tasky-features.js`** — recurring tasks, CSV import, @mentions, supervisor locks
+13. **`tasky-collab.js`** — replaces `createTaskCard` by wrapping the original; adds group/team logic
+14. **`tasky-palette.js`** — command palette (`Ctrl+K`); loads last so all functions are available
 
 Inline `<script>` blocks (after deferred scripts) handle onboarding, PWA registration, and the custom confirm dialog.
 
@@ -130,6 +148,7 @@ You can also open `index.html` directly via `file://` — all features except cl
 | Service Worker API | Offline cache, PWA installability |
 | Web Speech API | Voice dictation input |
 | AES-256-GCM + PBKDF2 | Local encryption at rest |
+| Canvas API (`<canvas>`) | Whiteboard drawing tools |
 
 ---
 
@@ -149,6 +168,7 @@ You can also open `index.html` directly via `file://` — all features except cl
 | `Alt`+`G` | Board | Enter goto mode — type number + Enter |
 | `Alt`+`R` | Anywhere | Open global search |
 | `Alt`+`M` | Anywhere | Open calendar |
+| `Ctrl+K` / `Cmd+K` | Anywhere | Open command palette |
 | `Tab` | Board | Cycle to next workspace |
 | Hold `Space` | Board | Voice dictation |
 | `↑` / `↓` | Search / TG suggestions | Navigate results |
