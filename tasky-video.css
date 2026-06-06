@@ -243,10 +243,17 @@
     gap:            8px;
     /* Solid fill — covers any residual video frame completely */
     background:     var(--vv-bg);
-    transition:     opacity 0.18s;
+    /* Fade IN smoothly (showing avatar) — hide instantly (no frozen-frame gap) */
+    transition:     opacity 0.15s ease;
     z-index:        2;
+    opacity:        1;
 }
-.vv-tile-overlay--hidden { opacity: 0; pointer-events: none; }
+/* When hiding: zero duration so the solid overlay always snaps away after video is already live */
+.vv-tile-overlay--hidden {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0s;  /* instant hide — video is already playing by this point */
+}
 
 .vv-tile-avatar {
     width:       52px; height: 52px;
