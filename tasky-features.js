@@ -969,3 +969,82 @@ document.addEventListener('keydown', function(e) {
     const next = e.shiftKey ? (cur - 1 + ids.length) % ids.length : (cur + 1) % ids.length;
     if (typeof switchWorkspace === 'function') switchWorkspace(ids[next]);
 }, true);
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FEATURE 7: DUE DATE REMINDERS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const _REMINDER_LS_KEY = 'tasky_reminder_lead_hours';
+const _REMINDER_SENT_KEY = 'tasky_reminder_sent_v1';
+
+function _getReminderLeadHours() {
+    var v = parseInt(localStorage.getItem(_REMINDER_LS_KEY));
+    return isNaN(v) ? 0 : v;
+}
+
+function _setReminderLeadHours(h) {
+    localStorage.setItem(_REMINDER_LS_KEY, String(h));
+}
+
+function _reminderSent(taskId, dueDate) {
+    var map = {};
+    try { map = JSON.parse(localStorage.getItem(_REMINDER_SENT_KEY)) || {}; } catch(e) {}
+    return map[taskId + '_' + dueDate];
+}
+
+function _markReminderSent(taskId, dueDate) {
+    var map = {};
+    try { map = JSON.parse(localStorage.getItem(_REMINDER_SENT_KEY)) || {}; } catch(e) {}
+    map[taskId + '_' + dueDate] = Date.now();
+    localStorage.setItem(_REMINDER_SENT_KEY, JSON.stringify(map));
+}
+
+function _clearStaleReminders() {
+    var map = {};
+    try { map = JSON.parse(localStorage.getItem(_REMINDER_SENT_KEY)) || {}; } catch(e) {}
+    var changed = false;
+    Object.keys(map).forEach(function(k) {
+        var parts = k.split('_');
+        var tid = parseInt(parts[0]);
+        var exists = false;
+        ['todo','working','done'].forEach(function(c) {
+            if ((typeof tasks !== 'undefined' && (tasks[c] || []).some(function(t) { return t.id === tid; }))) exists = true;
+        });
+        if (!exists) { delete map[k]; changed = true; }
+    });
+    if (changed) localStorage.setItem(_REMINDER_SENT_KEY, JSON.stringify(map));
+}
+
+function _checkDueDateReminders() {
+    var leadH = _getReminderLeadHours();
+    if (leadH <= 0 || typeof tasks === 'undefined') return;
+    var now = Date.now();
+    var leadMs = leadH * 3600000;
+    ['todo','working','done'].forEach(function(col) {
+        (tasks[col] || []).forEach(function(t) {
+            if (!t.dueDate) return;
+            var dueMs = new Date(t.dueDate + 'T23:59:59').getTime();
+            var diff = dueMs - now;
+            if (diff <= 0 || diff > leadMs) return;
+            if (_reminderSent(t.id, t.dueDate)) return;
+            _markReminderSent(t.id, t.dueDate);
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                try {
+                    new Notification('⏰ Task Due Soon', {
+                        body: '"' + t.text + '" due ' + new Date(t.dueDate).toLocaleDateString(),
+                        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%230a0a1a"/><rect x="4" y="5" width="24" height="6" rx="3" fill="%238B5CF6"/><rect x="4" y="13" width="17" height="6" rx="3" fill="%23F59E0B"/><rect x="4" y="21" width="12" height="6" rx="3" fill="%2310B981"/></svg>'
+                    });
+                } catch(_) {}
+            }
+            if (typeof showToast === 'function') showToast('⏰ "' + t.text + '" due ' + new Date(t.dueDate).toLocaleDateString(), function(){});
+        });
+    });
+}
+
+// Check on load + every minute
+window.addEventListener('load', function() { setTimeout(function() { _clearStaleReminders(); _checkDueDateReminders(); }, 4000); });
+setInterval(_checkDueDateReminders, 60000);
+
+// Expose for Settings panel
+window._getReminderLeadHours = _getReminderLeadHours;
+window._setReminderLeadHours = _setReminderLeadHours;

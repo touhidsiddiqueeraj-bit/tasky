@@ -1,0 +1,32 @@
+.tmr-toggle { background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:12px;padding:0 6px; }
+.tmr-toggle:hover { color:#a78bfa; }
+.tmr-toggle.running { color:#10B981;animation:tmr-pulse 1.5s ease infinite; }
+@keyframes tmr-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+.tmr-badge { font-size:11px;color:rgba(255,255,255,0.4);margin-left:6px; }
+.tmr-container { padding:4px 10px 8px 28px;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px; }
+.tmr-display { font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;text-align:center;padding:6px 0;color:#a78bfa;letter-spacing:1px; }
+.tmr-controls { display:flex;gap:6px;justify-content:center;padding:4px 0 6px; }
+.tmr-btn { background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.25);border-radius:8px;color:#a78bfa;font-size:12px;font-weight:600;padding:5px 14px;cursor:pointer;transition:background .12s; }
+.tmr-btn:hover { background:rgba(139,92,246,0.25); }
+.tmr-btn.active { background:#8B5CF6;color:#fff; }
+.tmr-btn--stop { border-color:rgba(239,68,68,0.4);color:#ef4444;background:rgba(239,68,68,0.1); }
+.tmr-btn--stop:hover { background:rgba(239,68,68,0.2); }
+.tmr-mode-row { display:flex;gap:4px;justify-content:center;padding:0 0 4px; }
+.tmr-mode-btn { background:none;border:1px solid transparent;border-radius:6px;color:rgba(255,255,255,0.3);font-size:11px;padding:3px 10px;cursor:pointer; }
+.tmr-mode-btn.active { border-color:rgba(139,92,246,0.3);color:#a78bfa;background:rgba(139,92,246,0.08); }
+.tmr-logs { max-height:120px;overflow-y:auto;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px;padding-top:4px; }
+.tmr-log-row { font-size:11px;color:rgba(255,255,255,0.4);padding:2px 0;display:flex;justify-content:space-between; }
+.tmr-total { font-size:11px;color:rgba(255,255,255,0.5);text-align:center;padding:2px 0;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px; }
+
+body.light-mode .tmr-toggle { color:rgba(0,0,0,0.3); }
+body.light-mode .tmr-badge { color:rgba(0,0,0,0.3); }
+body.light-mode .tmr-container { border-top-color:rgba(0,0,0,0.08); }
+body.light-mode .tmr-display { color:#7C3AED; }
+body.light-mode .tmr-btn { background:rgba(139,92,246,0.08);border-color:rgba(139,92,246,0.15);color:#7C3AED; }
+body.light-mode .tmr-btn:hover { background:rgba(139,92,246,0.15); }
+body.light-mode .tmr-btn.active { background:#7C3AED;color:#fff; }
+body.light-mode .tmr-mode-btn { color:rgba(0,0,0,0.25); }
+body.light-mode .tmr-mode-btn.active { border-color:rgba(139,92,246,0.2);color:#7C3AED; }
+body.light-mode .tmr-logs { border-top-color:rgba(0,0,0,0.08); }
+body.light-mode .tmr-log-row { color:rgba(0,0,0,0.3); }
+body.light-mode .tmr-total { border-top-color:rgba(0,0,0,0.08);color:rgba(0,0,0,0.4); }
