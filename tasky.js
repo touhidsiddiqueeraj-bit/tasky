@@ -2112,19 +2112,6 @@
             _touchDrag = null;
         }
 
-        // ─── Menu ─────────────────────────────────────────────────────────────────
-        function toggleMenu() {
-            document.getElementById('dropdown').classList.toggle('show');
-        }
-
-        document.addEventListener('click', (e) => {
-            const topMenu = document.querySelector('.top-menu');
-            const dropdown = document.getElementById('dropdown');
-            if (topMenu && dropdown && !topMenu.contains(e.target)) {
-                dropdown.classList.remove('show');
-            }
-        });
-
         function toggleTheme() {
             document.body.classList.toggle('light-mode');
             isLightMode = document.body.classList.contains('light-mode');
@@ -2261,7 +2248,8 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            document.getElementById('dropdown').classList.remove('show');
+            var dd = document.getElementById('dropdown');
+            if (dd) dd.classList.remove('show');
         }
 
         // ─── Reset ────────────────────────────────────────────────────────────────
@@ -2290,7 +2278,8 @@
             renderWorkspaceSwitcher();
             deselectTask();
             exitTaskSelector();
-            document.getElementById('dropdown').classList.remove('show');
+            var dd = document.getElementById('dropdown');
+            if (dd) dd.classList.remove('show');
             showToast('All data reset', () => {});
         }
 

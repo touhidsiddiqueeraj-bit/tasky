@@ -168,11 +168,11 @@ document.addEventListener('keydown', function(e) {
     }
 }, true);
 
-// Inject bulk toggle button into the board toolbar
+// Inject bulk toggle button into the floating toolbox
 (function _bulkInject() {
     var check = setInterval(function() {
-        var toolbar = document.querySelector('.board-toolbar');
-        if (!toolbar) return;
+        var toolbox = document.getElementById('toolbox');
+        if (!toolbox) return;
         clearInterval(check);
         var btn = document.createElement('button');
         btn.className = 'tb-btn';
@@ -180,7 +180,7 @@ document.addEventListener('keydown', function(e) {
         btn.textContent = '☑ Bulk';
         btn.title = 'Toggle bulk select mode';
         btn.addEventListener('click', _bulkToggle);
-        toolbar.appendChild(btn);
+        toolbox.appendChild(btn);
     }, 500);
 })();
 

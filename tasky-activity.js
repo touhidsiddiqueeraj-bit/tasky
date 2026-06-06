@@ -287,15 +287,15 @@ document.addEventListener('timer:stop', function(e) {
 // Inject activity toggle button
 (function _actInject() {
     var check = setInterval(function() {
-        var toolbar = document.querySelector('.board-toolbar');
-        if (!toolbar) return;
+        var toolbox = document.getElementById('toolbox');
+        if (!toolbox) return;
         clearInterval(check);
         var btn = document.createElement('button');
         btn.className = 'tb-btn';
         btn.id = 'act-toggle-btn';
         btn.textContent = '📋 Activity';
         btn.addEventListener('click', _actOpenPanel);
-        toolbar.appendChild(btn);
+        toolbox.appendChild(btn);
     }, 600);
 })();
 

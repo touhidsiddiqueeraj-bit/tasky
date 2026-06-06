@@ -50,6 +50,10 @@ var KP_ACTIONS = [
     { id: 'darkmode', icon: '🌓', label: 'Toggle Dark Mode', action: function() { _kpClose(); setTimeout(function() { if (typeof toggleTheme === 'function') toggleTheme(); }, 80); } },
     { id: 'timer-view', icon: '⏱', label: 'Show Running Timers', action: function() { _kpClose(); setTimeout(function() { _kpShowRunningTimers(); }, 80); } },
     { id: 'bulk', icon: '☑', label: 'Toggle Bulk Select', action: function() { _kpClose(); setTimeout(function() { if (typeof _bulkToggle === 'function') _bulkToggle(); }, 80); } },
+    { id: 'collab-create', icon: '👥', label: 'Create Collaboration', action: function() { _kpClose(); setTimeout(function() { if (typeof openCollabModal === 'function') openCollabModal('create'); }, 80); } },
+    { id: 'collab-join', icon: '🔗', label: 'Join Collaboration', action: function() { _kpClose(); setTimeout(function() { if (typeof openCollabModal === 'function') openCollabModal('join'); }, 80); } },
+    { id: 'task-groups', icon: '⊞', label: 'Task Groups', action: function() { _kpClose(); setTimeout(function() { if (typeof openTgModal === 'function') openTgModal(); }, 80); } },
+    { id: 'how-to-use', icon: '❓', label: 'How to Use', action: function() { _kpClose(); setTimeout(function() { if (typeof openHowToUse === 'function') openHowToUse(); }, 80); } },
 ];
 
 var KP_TASK_ACTIONS = [

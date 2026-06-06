@@ -645,7 +645,8 @@ function renderCollabBadge() {
         badge = document.createElement('div');
         badge.id = 'collab-badge';
         badge.className = 'collab-badge';
-        document.querySelector('.top-menu').appendChild(badge);
+        var target = document.querySelector('.container') || document.body;
+        target.appendChild(badge);
     }
     if (currentGroup) {
         badge.style.display = 'flex';
