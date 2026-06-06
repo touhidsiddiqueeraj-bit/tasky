@@ -1,0 +1,504 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   TASKY — VOICE CALL STYLES  (minimalist professional)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+    --vc-bg:           #0d0c14;
+    --vc-surface:      #131220;
+    --vc-surface2:     #1a1828;
+    --vc-border:       rgba(255,255,255,0.07);
+    --vc-border-focus: rgba(139,92,246,0.38);
+    --vc-accent:       #8B5CF6;
+    --vc-green:        #22c55e;
+    --vc-red:          #ef4444;
+    --vc-amber:        #f59e0b;
+    --vc-text:         #e8e3f8;
+    --vc-text-2:       rgba(200,192,240,0.58);
+    --vc-text-3:       rgba(200,192,240,0.30);
+    --vc-radius:       12px;
+    --vc-radius-sm:    8px;
+}
+
+/* ─── Call button states ──────────────────────────────────────────────────── */
+.vc-call-btn--active {
+    background:   rgba(239, 68, 68, 0.14) !important;
+    border-color: rgba(239, 68, 68, 0.40) !important;
+    color: #fca5a5 !important;
+}
+.vc-call-btn--active:hover {
+    background: rgba(239, 68, 68, 0.22) !important;
+}
+.vc-call-btn--ringing {
+    background:   rgba(245, 158, 11, 0.13) !important;
+    border-color: rgba(245, 158, 11, 0.42) !important;
+    color: #fcd34d !important;
+    animation: vc-ring-shake 0.45s ease infinite;
+}
+@keyframes vc-ring-shake {
+    0%,100% { transform: translateX(0)    rotate(0deg); }
+    20%     { transform: translateX(-2px) rotate(-4deg); }
+    40%     { transform: translateX( 2px) rotate( 4deg); }
+    60%     { transform: translateX(-1px) rotate(-2deg); }
+    80%     { transform: translateX( 1px) rotate( 2deg); }
+}
+
+.vc-btn-pulse {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--vc-red);
+    display: inline-block;
+    flex-shrink: 0;
+    animation: vc-pulse 1.4s ease-in-out infinite;
+}
+@keyframes vc-pulse {
+    0%,100% { opacity: 1;   transform: scale(1);   }
+    50%     { opacity: 0.4; transform: scale(0.6); }
+}
+
+/* ─── Incoming call modal ─────────────────────────────────────────────────── */
+.vc-incoming-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9900;
+    background: rgba(5, 3, 14, 0.72);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+.vc-incoming-modal--visible { opacity: 1; pointer-events: all; }
+
+.vc-incoming-inner {
+    background: var(--vc-surface);
+    border: 1px solid var(--vc-border);
+    border-radius: 18px;
+    padding: 36px 32px 28px;
+    text-align: center;
+    min-width: 280px;
+    max-width: 320px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(139,92,246,0.08);
+    animation: vc-modal-pop 0.28s cubic-bezier(0.34, 1.42, 0.64, 1) both;
+}
+@keyframes vc-modal-pop {
+    from { transform: scale(0.88) translateY(12px); opacity: 0; }
+    to   { transform: scale(1)    translateY(0);    opacity: 1; }
+}
+
+/* Ripple ring */
+.vc-incoming-ring-anim {
+    position: relative;
+    width: 76px; height: 76px;
+    margin: 0 auto 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.vc-ring-circle {
+    position: absolute;
+    border-radius: 50%;
+    border: 1.5px solid rgba(139, 92, 246, 0.35);
+    animation: vc-ripple 2s ease-out infinite;
+}
+.vc-ring-c1 { width:  76px; height:  76px; animation-delay: 0s;    }
+.vc-ring-c2 { width: 100px; height: 100px; animation-delay: 0.6s;  }
+.vc-ring-c3 { width: 124px; height: 124px; animation-delay: 1.2s;  }
+@keyframes vc-ripple {
+    0%   { opacity: 0.6; transform: scale(0.75); }
+    100% { opacity: 0;   transform: scale(1.3);  }
+}
+
+/* Avatar in incoming modal — shows photo or initial */
+.vc-incoming-avatar {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(140deg, #8B5CF6 0%, #6d28d9 100%);
+    color: #fff;
+    font-size: 22px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+    box-shadow: 0 0 0 3px rgba(139,92,246,0.22), 0 4px 14px rgba(109,40,217,0.38);
+}
+.vc-incoming-avatar img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.vc-incoming-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--vc-text-3);
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+.vc-incoming-caller {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--vc-text);
+    margin-bottom: 3px;
+    word-break: break-all;
+}
+.vc-incoming-group {
+    font-size: 12px;
+    color: var(--vc-text-2);
+    margin-bottom: 26px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.vc-incoming-btns {
+    display: flex;
+    gap: 10px;
+}
+.vc-incoming-btn {
+    flex: 1;
+    padding: 11px 6px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: transform 0.12s, filter 0.12s;
+    letter-spacing: 0.01em;
+}
+.vc-incoming-btn:hover  { transform: translateY(-1px); filter: brightness(1.08); }
+.vc-incoming-btn:active { transform: scale(0.96); }
+.vc-incoming-btn--decline {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.28);
+}
+.vc-incoming-btn--accept {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(34,197,94,0.30);
+}
+
+/* ─── Floating call panel ────────────────────────────────────────────────── */
+.vc-panel {
+    position: fixed;
+    bottom: 22px; right: 22px;
+    width: 280px;
+    max-height: 440px;
+    background: var(--vc-surface);
+    border: 1px solid var(--vc-border);
+    border-radius: var(--vc-radius);
+    box-shadow: 0 12px 48px rgba(0,0,0,0.52), 0 0 0 1px rgba(139,92,246,0.06);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 9500;
+    animation: vc-panel-in 0.22s cubic-bezier(0.34, 1.42, 0.64, 1) both;
+}
+@keyframes vc-panel-in {
+    from { opacity: 0; transform: translateY(18px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.vc-panel--minimized { display: none; }
+
+.vc-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 13px 10px;
+    border-bottom: 1px solid var(--vc-border);
+    gap: 6px;
+    flex-shrink: 0;
+}
+.vc-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--vc-text);
+    min-width: 0;
+    letter-spacing: 0.01em;
+}
+.vc-group-name {
+    font-size: 11px;
+    color: var(--vc-text-2);
+    background: rgba(139, 92, 246, 0.10);
+    border-radius: 5px;
+    padding: 1px 7px;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+}
+.vc-header-right {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-shrink: 0;
+}
+.vc-live-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--vc-green);
+    flex-shrink: 0;
+    animation: vc-pulse 1.6s ease-in-out infinite;
+}
+.vc-call-status {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--vc-amber);
+    animation: vc-pulse 1.8s ease-in-out infinite;
+    white-space: nowrap;
+}
+.vc-duration {
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--vc-text-2);
+    font-weight: 600;
+    white-space: nowrap;
+}
+.vc-close-btn {
+    background: none; border: none;
+    color: var(--vc-text-3);
+    cursor: pointer;
+    font-size: 14px; line-height: 1;
+    padding: 2px 4px;
+    border-radius: 5px;
+    transition: color 0.15s, background 0.15s;
+}
+.vc-close-btn:hover { color: var(--vc-text); background: rgba(255,255,255,0.06); }
+
+/* Tooltip wrapper — add title hints throughout */
+[data-hint] { position: relative; }
+[data-hint]:hover::after {
+    content: attr(data-hint);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%; transform: translateX(-50%);
+    background: rgba(10,8,20,0.96);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--vc-text);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 9px;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 99999;
+    letter-spacing: 0.01em;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+}
+
+/* ─── Participants list ───────────────────────────────────────────────────── */
+.vc-participants {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139,92,246,0.20) transparent;
+}
+.vc-participants::-webkit-scrollbar { width: 3px; }
+.vc-participants::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.20); border-radius: 3px; }
+
+.vc-empty {
+    font-size: 12px;
+    color: var(--vc-text-3);
+    text-align: center;
+    padding: 18px 0;
+    font-style: italic;
+}
+
+.vc-p-card {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 9px;
+    border-radius: var(--vc-radius-sm);
+    background: rgba(255,255,255,0.025);
+    border: 1px solid transparent;
+    transition: border-color 0.2s, background 0.2s;
+}
+.vc-p-card--speaking {
+    border-color: rgba(34, 197, 94, 0.35);
+    background: rgba(34, 197, 94, 0.05);
+}
+
+/* Participant avatar — supports photo */
+.vc-p-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: rgba(139, 92, 246, 0.18);
+    color: #c4b5fd;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+    flex-shrink: 0;
+    border: 1.5px solid transparent;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    overflow: hidden;
+}
+.vc-p-avatar img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.vc-p-avatar--speaking {
+    border-color: rgba(34, 197, 94, 0.55);
+    box-shadow: 0 0 0 2px rgba(34,197,94,0.15);
+    animation: vc-speaking-ring 0.75s ease-in-out infinite alternate;
+}
+@keyframes vc-speaking-ring {
+    from { box-shadow: 0 0 0 1px rgba(34,197,94,0.18); }
+    to   { box-shadow: 0 0 0 4px rgba(34,197,94,0.05); }
+}
+.vc-p-avatar--sup { background: rgba(245, 158, 11, 0.15); color: #fcd34d; }
+
+.vc-p-info { flex: 1; min-width: 0; }
+.vc-p-name {
+    display: block;
+    font-size: 12.5px; font-weight: 600;
+    color: var(--vc-text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.vc-p-status { display: flex; gap: 3px; margin-top: 2px; flex-wrap: wrap; }
+.vc-status-chip {
+    font-size: 10.5px; padding: 0 4px; border-radius: 4px;
+}
+.vc-status-chip.muted      { background: rgba(239,68,68,0.10);  color: #fca5a5; }
+.vc-status-chip.speaking   { background: rgba(34,197,94,0.10);  color: #86efac; }
+.vc-status-chip.connecting { background: rgba(245,158,11,0.10); color: #fcd34d; }
+
+.vc-p-actions { flex-shrink: 0; }
+.vc-kick-btn {
+    background: none;
+    border: 1px solid rgba(239,68,68,0.20); color: rgba(239,68,68,0.42);
+    border-radius: 5px; width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; cursor: pointer;
+    transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+.vc-kick-btn:hover { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.45); color: #fca5a5; }
+
+/* Controls bar */
+.vc-controls {
+    display: flex; gap: 5px;
+    padding: 8px 10px 11px;
+    border-top: 1px solid var(--vc-border);
+    flex-shrink: 0;
+}
+.vc-ctrl-btn {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 3px;
+    padding: 7px 4px 5px;
+    border-radius: var(--vc-radius-sm);
+    border: 1px solid var(--vc-border);
+    background: rgba(255,255,255,0.03);
+    color: var(--vc-text-2);
+    cursor: pointer; font-size: 16px;
+    transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+.vc-ctrl-btn span {
+    font-size: 9px; font-weight: 600;
+    color: var(--vc-text-3);
+    letter-spacing: 0.02em;
+}
+.vc-ctrl-btn:hover { background: rgba(255,255,255,0.07); border-color: rgba(139,92,246,0.32); color: var(--vc-text); }
+.vc-ctrl-btn:hover span { color: var(--vc-text-2); }
+.vc-ctrl-btn--active { background: rgba(239,68,68,0.11); border-color: rgba(239,68,68,0.30); color: #fca5a5; }
+.vc-ctrl-btn--active span { color: rgba(252,165,165,0.55); }
+.vc-ctrl-btn--leave { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.22); color: #fca5a5; }
+.vc-ctrl-btn--leave:hover { background: rgba(239,68,68,0.18); border-color: rgba(239,68,68,0.45); }
+.vc-ctrl-btn--leave span { color: rgba(252,165,165,0.55); }
+
+/* ─── Mini bar ───────────────────────────────────────────────────────────── */
+.vc-mini-bar {
+    position: fixed;
+    bottom: 14px; right: 14px;
+    display: flex; align-items: center; gap: 7px;
+    padding: 6px 12px;
+    background: var(--vc-surface);
+    border: 1px solid var(--vc-border-focus);
+    border-radius: 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.38);
+    z-index: 9500;
+    font-size: 12px; color: #c4b5fd; font-weight: 600;
+    animation: vc-panel-in 0.2s ease both;
+}
+.vc-mini-bar button {
+    background: none; border: none; cursor: pointer;
+    font-size: 13px; line-height: 1;
+    padding: 1px 3px; border-radius: 5px;
+    color: var(--vc-text-2);
+    transition: color 0.14s, background 0.14s;
+}
+.vc-mini-bar button:hover  { color: var(--vc-text); background: rgba(255,255,255,0.06); }
+.vc-mini-leave:hover       { color: #fca5a5 !important; }
+
+/* ─── Fallback toast ─────────────────────────────────────────────────────── */
+.vc-toast {
+    position: fixed; bottom: 72px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(13,12,20,0.96);
+    border: 1px solid rgba(139,92,246,0.24);
+    color: #c4b5fd; padding: 7px 15px;
+    border-radius: 8px; font-size: 12.5px; font-weight: 600;
+    z-index: 9600; pointer-events: none; white-space: nowrap;
+    animation: vc-panel-in 0.16s ease both;
+}
+
+/* ─── Hint chips shown inside empty state ────────────────────────────────── */
+.vc-hint-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    padding: 8px 10px;
+    margin: 4px 0;
+    border-radius: var(--vc-radius-sm);
+    background: rgba(139,92,246,0.05);
+    border: 1px solid rgba(139,92,246,0.12);
+    font-size: 11.5px;
+    color: var(--vc-text-2);
+    line-height: 1.45;
+}
+.vc-hint-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+.vc-hint-text strong { color: var(--vc-text); font-weight: 600; }
+
+/* ─── Light mode ─────────────────────────────────────────────────────────── */
+body.light-mode {
+    --vc-bg:       #f8f7ff;
+    --vc-surface:  #ffffff;
+    --vc-surface2: #ede9fe;
+    --vc-border:   rgba(0,0,0,0.07);
+    --vc-border-focus: rgba(109,40,217,0.28);
+    --vc-text:     #1e1b4b;
+    --vc-text-2:   rgba(79,60,153,0.60);
+    --vc-text-3:   rgba(79,60,153,0.32);
+}
+body.light-mode .vc-panel,
+body.light-mode .vc-incoming-inner,
+body.light-mode .vc-mini-bar { background: #ffffff; border-color: rgba(109,40,217,0.14); }
+body.light-mode [data-hint]:hover::after { background: #1e1b4b; }
+body.light-mode .vc-p-card { background: rgba(0,0,0,0.025); }
+body.light-mode .vc-p-card--speaking { background: rgba(34,197,94,0.06); }
+body.light-mode .vc-ctrl-btn { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); color: #4c1d95; }
+body.light-mode .vc-ctrl-btn:hover { background: rgba(109,40,217,0.08); }
+body.light-mode .vc-hint-row { background: rgba(109,40,217,0.05); border-color: rgba(109,40,217,0.1); }
+
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 520px) {
+    .vc-panel { right: 8px; bottom: 8px; width: calc(100vw - 16px); max-height: 52vh; border-radius: 12px; }
+    .vc-mini-bar { right: 8px; bottom: 8px; }
+    .vc-incoming-inner { padding: 28px 20px 22px; min-width: 240px; }
+    .vc-incoming-caller { font-size: 18px; }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "Tasky — Keyboard-first Task Tracker",
+  "short_name": "Tasky",
+  "description": "Three columns. Zero friction. Keyboard shortcuts, voice input, drag-and-drop, cloud sync.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0a0a1a",
+  "theme_color": "#0a0a1a",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230a0a1a'/><rect x='24' y='28' width='144' height='38' rx='12' fill='%238B5CF6'/><rect x='24' y='78' width='102' height='38' rx='12' fill='%23F59E0B'/><rect x='24' y='128' width='72' height='38' rx='12' fill='%2310B981'/><path d='M42 47 L54 59 L75 37' stroke='white' stroke-width='8' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='80' fill='%230a0a1a'/><rect x='64' y='72' width='384' height='100' rx='30' fill='%238B5CF6'/><rect x='64' y='206' width='272' height='100' rx='30' fill='%23F59E0B'/><rect x='64' y='340' width='192' height='100' rx='30' fill='%2310B981'/><path d='M112 122 L144 154 L200 96' stroke='white' stroke-width='20' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "screenshots": []
+}
