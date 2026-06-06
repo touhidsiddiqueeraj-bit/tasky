@@ -38,6 +38,7 @@ body.light-mode .kp-footer kbd { background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.
 document.head.appendChild(style);
 })();
 
+console.log('tasky-palette.js loaded');
 var _kpOpen = false;
 var _kpFocus = -1;
 var _kpItems = [];
@@ -67,6 +68,11 @@ var KP_TASK_ACTIONS = [
 ];
 
 function openPalette() {
+    console.log('openPalette called');
+    console.log('tasks at palette scope:', typeof tasks, tasks === undefined ? 'UNDEFINED!' : 'defined', tasks === null ? 'NULL!' : 'not null');
+    if (typeof tasks !== 'undefined' && tasks) {
+        console.log('tasks keys:', Object.keys(tasks), 'todo:', tasks.todo?.length, 'working:', tasks.working?.length, 'done:', tasks.done?.length);
+    }
     var overlay = document.getElementById('kp-overlay');
     if (!overlay) _kpBuild();
     overlay = document.getElementById('kp-overlay');
@@ -97,11 +103,20 @@ function _kpBuild() {
 }
 
 function _kpGetAllTasks() {
+    console.log('tasks exists:', typeof tasks, 'isUndefined:', tasks === undefined);
     var all = [];
     ['todo','working','done'].forEach(function(col) {
-        (tasks[col] || []).forEach(function(t) {
-            all.push({ task: t, column: col, label: '#' + t.number + ' ' + t.text, searchText: (t.number + ' ' + t.text).toLowerCase() });
-        });
+        try {
+            var arr = tasks[col] || [];
+            console.log('col ' + col + ' length:', arr.length);
+            arr.forEach(function(t) {
+                console.log('palette task:', t);
+                var label = '#' + (t.number || '?') + ' ' + (t.text != null && t.text !== 'undefined' && t.text !== 'null' ? t.text : '(untitled)');
+                all.push({ task: t, column: col, label: label, searchText: label.toLowerCase() });
+            });
+        } catch(e) {
+            console.error('kpGetAllTasks error for col ' + col + ':', e);
+        }
     });
     return all;
 }
@@ -183,7 +198,7 @@ function _kpRender(query) {
             var t = c.data;
             var idx = _kpItems.length;
             var colLabel = t.column;
-            html += '<div class="kp-item' + (_kpFocus === idx ? ' kp-focused' : '') + '" data-kp-idx="' + idx + '"><span class="kp-item-icon">#</span><span class="kp-item-text">' + _kpHighlight('#' + t.task.number + ' ' + t.task.text, q) + '</span><span class="kp-item-col">' + colLabel + '</span></div>';
+            html += '<div class="kp-item' + (_kpFocus === idx ? ' kp-focused' : '') + '" data-kp-idx="' + idx + '"><span class="kp-item-icon">#</span><span class="kp-item-text">' + _kpHighlight(t.label, q) + '</span><span class="kp-item-col">' + colLabel + '</span></div>';
             _kpItems.push({ type: 'task', data: t });
             taskCount++;
         });
@@ -199,7 +214,7 @@ function _kpRender(query) {
         });
         el.addEventListener('mouseenter', function() {
             _kpFocus = parseInt(this.dataset.kpIdx);
-            _kpHighlight();
+            _kpUpdateFocus();
         });
     });
 }
@@ -215,11 +230,11 @@ function _kpKeyNav(e) {
     if (e.key === 'ArrowDown') {
         e.preventDefault();
         _kpFocus = Math.min(_kpFocus + 1, _kpItems.length - 1);
-        _kpHighlight();
+        _kpUpdateFocus();
     } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         _kpFocus = Math.max(_kpFocus - 1, 0);
-        _kpHighlight();
+        _kpUpdateFocus();
     } else if (e.key === 'Enter') {
         e.preventDefault();
         if (_kpFocus >= 0) _kpExecute(_kpFocus);
@@ -229,7 +244,7 @@ function _kpKeyNav(e) {
     }
 }
 
-function _kpHighlight() {
+function _kpUpdateFocus() {
     var items = document.querySelectorAll('#kp-results .kp-item');
     items.forEach(function(el, i) {
         el.classList.toggle('kp-focused', i === _kpFocus);
