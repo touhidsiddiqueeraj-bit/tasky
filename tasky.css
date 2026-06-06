@@ -1087,6 +1087,136 @@
             51%, 100% { opacity: 0; }
         }
 
+        /* Top right menu */
+        .top-menu {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 200;
+        }
+
+        .brand-btn {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #a78bfa;
+            padding: 9px 16px 9px 12px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .tasky-logo {
+            flex-shrink: 0;
+            display: block;
+            transition: transform 0.3s ease;
+        }
+
+        .brand-btn:hover .tasky-logo {
+            transform: rotate(-6deg) scale(1.08);
+        }
+
+        .brand-chevron {
+            font-size: 11px;
+            opacity: 0.6;
+            margin-left: -2px;
+            transition: transform 0.25s ease;
+        }
+
+        .brand-btn[aria-expanded="true"] .brand-chevron,
+        .brand-btn.active .brand-chevron {
+            transform: rotate(180deg);
+        }
+
+        body.light-mode .brand-btn {
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: #7c3aed;
+        }
+
+        .brand-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2);
+        }
+
+        body.light-mode .brand-btn:hover {
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: auto;
+            margin-bottom: 8px;
+            background: rgba(20, 20, 40, 0.95);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 8px;
+            min-width: 180px;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        body.light-mode .dropdown-menu {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .dropdown-menu.show {
+            display: flex;
+        }
+
+        .dropdown-item {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.8);
+            padding: 10px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: left;
+            transition: background 0.2s ease, color 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        body.light-mode .dropdown-item {
+            color: rgba(0, 0, 0, 0.7);
+        }
+
+        .dropdown-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        body.light-mode .dropdown-item:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+
+        /* Dropdown divider */
+        .dropdown-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 4px 0;
+        }
+        body.light-mode .dropdown-divider {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
         /* Sync status indicator */
         .sync-status {
             position: fixed;

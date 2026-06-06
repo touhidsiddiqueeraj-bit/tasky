@@ -2112,6 +2112,18 @@
             _touchDrag = null;
         }
 
+        function toggleMenu() {
+            document.getElementById('dropdown').classList.toggle('show');
+        }
+
+        document.addEventListener('click', (e) => {
+            const topMenu = document.querySelector('.top-menu');
+            const dropdown = document.getElementById('dropdown');
+            if (topMenu && dropdown && !topMenu.contains(e.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+
         function toggleTheme() {
             document.body.classList.toggle('light-mode');
             isLightMode = document.body.classList.contains('light-mode');
