@@ -2293,3 +2293,67 @@
             document.getElementById('dropdown').classList.remove('show');
             showToast('All data reset', () => {});
         }
+
+        // ─── Floating toolbox ────────────────────────────────────────────────
+        (function _initToolbox() {
+            var toolbox = document.getElementById('toolbox');
+            if (!toolbox) return;
+
+            function makeBtn(id, label, title, action) {
+                var btn = document.createElement('button');
+                btn.className = 'tb-btn';
+                btn.id = id;
+                btn.title = title;
+                btn.textContent = label;
+                btn.addEventListener('click', action);
+                toolbox.appendChild(btn);
+            }
+
+            makeBtn('tb-subtask', '\u2610 Subtasks', 'Subtasks (select a task first)', function() {
+                if (!selectedTask) { showToast('Select a task first', function(){}); return; }
+                var card = document.getElementById('task-' + selectedTask.taskId);
+                if (!card) return;
+                var container = card.querySelector('.subtask-container');
+                if (container) container.style.display = container.style.display === 'none' ? '' : 'none';
+            });
+
+            makeBtn('tb-timer', '\u23F1 Timer', 'Timer (select a task first)', function() {
+                if (!selectedTask) { showToast('Select a task first', function(){}); return; }
+                var card = document.getElementById('task-' + selectedTask.taskId);
+                if (!card) return;
+                var container = card.querySelector('.tmr-container');
+                if (container) container.style.display = container.style.display === 'none' ? '' : 'none';
+            });
+
+            makeBtn('tb-comments', '\uD83D\uDCAC Comments', 'Comments (select a task first)', function() {
+                if (!selectedTask) { showToast('Select a task first', function(){}); return; }
+                var task = _stFindTask(selectedTask.taskId);
+                if (!task) { showToast('Task not found', function(){}); return; }
+                if (typeof openComments === 'function') {
+                    openComments(selectedTask.taskId, task.text, selectedTask.column);
+                } else {
+                    showToast('Comments not available', function(){});
+                }
+            });
+
+            makeBtn('tb-recur', '\uD83D\uDD01 Recurring', 'Set recurring schedule (select a task first)', function() {
+                if (!selectedTask) { showToast('Select a task first', function(){}); return; }
+                if (typeof openRecurModal === 'function') {
+                    openRecurModal(selectedTask.column, selectedTask.taskId);
+                } else {
+                    showToast('Recurring tasks not available', function(){});
+                }
+            });
+
+            makeBtn('tb-deps', '\uD83D\uDD17 Deps', 'Manage dependencies (select a task first)', function() {
+                if (!selectedTask) { showToast('Select a task first', function(){}); return; }
+                var col = selectedTask.column;
+                var task = (tasks[col] || []).find(function(t) { return t.id === selectedTask.taskId; });
+                if (!task) { showToast('Task not found', function(){}); return; }
+                if (typeof openDepModal === 'function') {
+                    openDepModal(task, col);
+                } else {
+                    showToast('Dependencies not available', function(){});
+                }
+            });
+        })();

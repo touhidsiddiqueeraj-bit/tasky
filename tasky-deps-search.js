@@ -640,23 +640,6 @@ function _patchCreateTaskCard() {
                 });
                 taskLeft.appendChild(chipRow);
             }
-
-            // Add deps button to hover controls
-            const hoverControls = card.querySelector('.task-hover-controls');
-            if (hoverControls) {
-                const depsBtn = document.createElement('button');
-                depsBtn.className = 'edit-btn';
-                depsBtn.title = 'Manage dependencies (Blocked by)';
-                depsBtn.textContent = '🔗';
-                depsBtn.style.cssText = 'font-size:13px;';
-                depsBtn.addEventListener('click', e => {
-                    e.stopPropagation();
-                    openDepModal(task, column);
-                });
-                // Insert before delete button
-                const del = hoverControls.querySelector('.delete-btn');
-                hoverControls.insertBefore(depsBtn, del || null);
-            }
         }
         return card;
     };

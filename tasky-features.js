@@ -731,7 +731,7 @@ window._removeRecur = function(column, taskId) {
     if (typeof showToast === 'function') showToast('🔁 Recurrence removed', () => {});
 };
 
-// ── Patch createTaskCard to show recur badge + 🔁 button ─────────────────
+// ── Patch createTaskCard to show recur badge ───────────────────────────
 window.addEventListener('load', function() {
     setTimeout(function() {
         const _prevCard2 = createTaskCard;
@@ -745,13 +745,6 @@ window.addEventListener('load', function() {
                 const meta = card.querySelector('.task-left');
                 if (meta) meta.appendChild(badge);
             }
-            const recurBtn = document.createElement('button');
-            recurBtn.className = 'date-btn';
-            recurBtn.title = 'Set recurring schedule';
-            recurBtn.textContent = '🔁';
-            recurBtn.addEventListener('click', e => { e.stopPropagation(); openRecurModal(column, task.id); });
-            const hoverControls = card.querySelector('.task-hover-controls');
-            if (hoverControls) hoverControls.insertBefore(recurBtn, hoverControls.querySelector('.delete-btn') || null);
             return card;
         };
     }, 250);

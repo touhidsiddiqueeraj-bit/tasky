@@ -1,8 +1,6 @@
 (function() {
 var style = document.createElement('style');
 style.textContent = `
-.subtask-toggle { background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:11px;padding:0 6px;white-space:nowrap; }
-.subtask-toggle:hover { color:#a78bfa; }
 .subtask-container { padding:4px 10px 8px 28px;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px; }
 .subtask-row { display:flex;align-items:center;gap:6px;padding:2px 0; }
 .subtask-row.done .subtask-text { text-decoration:line-through;opacity:0.4; }
@@ -17,7 +15,6 @@ style.textContent = `
 .subtask-badge { font-size:11px;color:rgba(255,255,255,0.4);margin-left:6px;cursor:pointer; }
 .subtask-badge:hover { color:#a78bfa; }
 
-body.light-mode .subtask-toggle { color:rgba(0,0,0,0.3); }
 body.light-mode .subtask-container { border-top-color:rgba(0,0,0,0.08); }
 body.light-mode .subtask-text { color:rgba(0,0,0,0.7); }
 body.light-mode .subtask-input { background:rgba(0,0,0,0.04);border-color:rgba(0,0,0,0.12);color:rgba(0,0,0,0.8); }
@@ -31,20 +28,6 @@ createTaskCard = function(task, column) {
     var card = _origSTCreateTaskCard(task, column);
     var subtasks = task.subtasks || [];
     var doneCount = subtasks.filter(function(s) { return s.done; }).length;
-
-    var hoverControls = card.querySelector('.task-hover-controls');
-    if (hoverControls) {
-        var stBtn = document.createElement('button');
-        stBtn.className = 'subtask-toggle';
-        stBtn.title = 'Subtasks';
-        stBtn.textContent = '☐';
-        stBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var container = card.querySelector('.subtask-container');
-            if (container) container.style.display = container.style.display === 'none' ? '' : 'none';
-        });
-        hoverControls.appendChild(stBtn);
-    }
 
     if (subtasks.length > 0) {
         var left = card.querySelector('.task-left');

@@ -1,7 +1,3 @@
-.tmr-toggle { background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:12px;padding:0 6px; }
-.tmr-toggle:hover { color:#a78bfa; }
-.tmr-toggle.running { color:#10B981;animation:tmr-pulse 1.5s ease infinite; }
-@keyframes tmr-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
 .tmr-badge { font-size:11px;color:rgba(255,255,255,0.4);margin-left:6px; }
 .tmr-container { padding:4px 10px 8px 28px;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px; }
 .tmr-phase-label { text-align:center;font-size:13px;font-weight:600;color:rgba(255,255,255,0.5);padding:2px 0 0; }
@@ -20,7 +16,6 @@ body.light-mode .tmr-phase-label { color:rgba(0,0,0,0.4); }
 .tmr-log-row { font-size:11px;color:rgba(255,255,255,0.4);padding:2px 0;display:flex;justify-content:space-between; }
 .tmr-total { font-size:11px;color:rgba(255,255,255,0.5);text-align:center;padding:2px 0;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px; }
 
-body.light-mode .tmr-toggle { color:rgba(0,0,0,0.3); }
 body.light-mode .tmr-badge { color:rgba(0,0,0,0.3); }
 body.light-mode .tmr-container { border-top-color:rgba(0,0,0,0.08); }
 body.light-mode .tmr-display { color:#7C3AED; }

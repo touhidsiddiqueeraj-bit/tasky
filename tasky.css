@@ -854,6 +854,34 @@
             color: #7C3AED;
         }
         body.light-mode .tb-btn--new { color: #7C3AED; border-color: rgba(139, 92, 246, 0.2); }
+
+        .toolbox {
+            position: fixed;
+            bottom: 88px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 99;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 5px 8px;
+            background: rgba(20, 18, 34, 0.88);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
+        }
+        .toolbox .tb-btn {
+            height: 30px;
+            padding: 0 10px;
+            font-size: 12px;
+            border-radius: 8px;
+        }
+        body.light-mode .toolbox {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(0, 0, 0, 0.08);
+        }
+
         .date-btn, .move-btn, .delete-btn, .edit-btn {
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.12);
@@ -2013,38 +2041,6 @@ body.light-mode .tst-pct { color: rgba(0,0,0,0.4); }
 body.light-mode .summary-total-label { color: rgba(0,0,0,0.4); }
 body.light-mode .summary-total-sep { background: rgba(0,0,0,0.08); }
 body.light-mode .summary-total-num { color: #2d3748; }
-
-/* ═══════════════════════════════════════════════════
-   TASK COMMENT BUTTON & BADGE
-   ═══════════════════════════════════════════════════ */
-.comment-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  color: rgba(255,255,255,0.4);
-  padding: 4px 7px;
-  border-radius: 7px;
-  transition: background .15s, color .15s;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  line-height: 1;
-}
-.comment-btn:hover { background: rgba(139,92,246,0.15); color: #a78bfa; }
-body.light-mode .comment-btn { color: rgba(0,0,0,0.32); }
-body.light-mode .comment-btn:hover { background: rgba(109,40,217,0.1); color: #7c3aed; }
-
-.comment-count {
-  font-size: 10px;
-  font-weight: 700;
-  background: rgba(139,92,246,0.28);
-  color: #c4b5fd;
-  border-radius: 6px;
-  padding: 1px 5px;
-  line-height: 1.5;
-}
-body.light-mode .comment-count { background: rgba(109,40,217,0.13); color: #6d28d9; }
 
 /* ═══════════════════════════════════════════════════
    COMMENTS PANEL (modal overlay)

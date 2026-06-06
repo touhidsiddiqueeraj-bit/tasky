@@ -5,25 +5,8 @@ var _tmrActiveCol = null;
 var _origTMRCreateTaskCard = createTaskCard;
 createTaskCard = function(task, column) {
     var card = _origTMRCreateTaskCard(task, column);
-    var hoverControls = card.querySelector('.task-hover-controls');
-    if (!hoverControls) return card;
-
     var timer = task.timer || {};
     var running = timer.startedAt && !timer.pausedAt;
-
-    var btn = document.createElement('button');
-    btn.className = 'tmr-toggle' + (running ? ' running' : '');
-    btn.title = 'Timer';
-    if (running) {
-        btn.title = (timer.mode === 'pomodoro') ? _tmrFormat(_tmrPomodoroRemaining(timer)) : _tmrFormat(_tmrGetElapsed(timer));
-    }
-    btn.textContent = running ? '⏱' : '⏱';
-    btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var container = card.querySelector('.tmr-container');
-        if (container) container.style.display = container.style.display === 'none' ? '' : 'none';
-    });
-    hoverControls.appendChild(btn);
 
     if (timer.logs && timer.logs.length > 0) {
         var left = card.querySelector('.task-left');
@@ -219,13 +202,6 @@ function _tmrUpdateDisplay(taskId) {
         if (timer.startedAt && !timer.pausedAt && val <= 0) {
             _tmrPomodoroComplete(task, taskId);
         }
-    }
-
-    // Update button tooltip
-    var card = document.getElementById('task-' + taskId);
-    if (card) {
-        var btn = card.querySelector('.tmr-toggle');
-        if (btn) btn.title = _tmrFormat(val);
     }
 }
 

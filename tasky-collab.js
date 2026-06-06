@@ -2657,16 +2657,6 @@ const _commentPatchOrigCreateTaskCard = createTaskCard;
 createTaskCard = function(task, column) {
     const card = _commentPatchOrigCreateTaskCard(task, column);
 
-    // Count cloud comments from cache if available; just show a 💬 icon
-    const commentBtn = document.createElement('button');
-    commentBtn.className = 'comment-btn';
-    commentBtn.title = 'Comments & Activity';
-    commentBtn.innerHTML = '💬';
-    commentBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        openComments(task.id, task.text, column);
-    });
-
     // ── Inline comment strip (always visible below card) ──────────────────
     const inlineStrip = document.createElement('div');
     inlineStrip.className = 'ic-strip';
@@ -2674,7 +2664,7 @@ createTaskCard = function(task, column) {
     inlineStrip.style.display = 'none';
     card.appendChild(inlineStrip);
 
-    // Load comments async; update badge and inline strip together
+    // Load comments async; update inline strip
     if (currentGroup) {
         const key = `comments_${String(task.id).replace(/[^a-z0-9]/gi,'_')}`;
         const memberUids = (currentGroup.members || []).map(m => m.uid);
@@ -2691,10 +2681,6 @@ createTaskCard = function(task, column) {
                 }
             });
             allEntries.sort((a, b) => a.ts > b.ts ? 1 : -1);
-            const count = allEntries.filter(e => e.type === 'comment').length;
-            if (count > 0) {
-                commentBtn.innerHTML = `💬<span class="comment-count">${count}</span>`;
-            }
             _renderInlineComments(task.id, allEntries);
         }).catch(() => {});
     } else {
@@ -2703,13 +2689,6 @@ createTaskCard = function(task, column) {
         if (soloEntries.length > 0) {
             _renderInlineComments(task.id, soloEntries);
         }
-    }
-
-    const hoverControls = card.querySelector('.task-hover-controls');
-    if (hoverControls) {
-        // Insert before delete button
-        const delBtn = hoverControls.querySelector('.delete-btn');
-        hoverControls.insertBefore(commentBtn, delBtn || null);
     }
     return card;
 };
