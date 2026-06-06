@@ -13,7 +13,10 @@ createTaskCard = function(task, column) {
 
     var btn = document.createElement('button');
     btn.className = 'tmr-toggle' + (running ? ' running' : '');
-    btn.title = running ? _tmrFormat(timer.accumulated + (Date.now() - new Date(timer.startedAt).getTime())) : 'Timer';
+    btn.title = 'Timer';
+    if (running) {
+        btn.title = (timer.mode === 'pomodoro') ? _tmrFormat(_tmrPomodoroRemaining(timer)) : _tmrFormat(_tmrGetElapsed(timer));
+    }
     btn.textContent = running ? '⏱' : '⏱';
     btn.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -45,13 +48,26 @@ createTaskCard = function(task, column) {
 function _tmrRenderContainer(container, task, column) {
     var timer = task.timer || {};
     var running = timer.startedAt && !timer.pausedAt;
-    var elapsed = _tmrGetElapsed(timer);
+    var isPomo = (timer.mode || 'stopwatch') === 'pomodoro';
+    var elapsed = isPomo ? _tmrPomodoroRemaining(timer) : _tmrGetElapsed(timer);
     container.innerHTML = '';
 
     var display = document.createElement('div');
     display.className = 'tmr-display';
     display.id = 'tmr-disp-' + task.id;
-    display.textContent = _tmrFormat(elapsed);
+
+    if (isPomo) {
+        var phase = timer.pomodoroPhase || 'work';
+        var phaseLabel = phase === 'work' ? '🍅 Work' : '☕ Break';
+        var phaseEl = document.createElement('div');
+        phaseEl.className = 'tmr-phase-label';
+        phaseEl.textContent = phaseLabel;
+        container.appendChild(phaseEl);
+
+        display.textContent = _tmrFormat(elapsed);
+    } else {
+        display.textContent = _tmrFormat(elapsed);
+    }
     container.appendChild(display);
 
     var modeRow = document.createElement('div');
@@ -65,6 +81,9 @@ function _tmrRenderContainer(container, task, column) {
                 if (!task.timer) task.timer = {};
                 task.timer.mode = mode;
                 task.timer.accumulated = 0;
+                task.timer.pomodoroPhase = 'work';
+                task.timer.pomodoroDuration = 1500000;
+                task.timer.pomodoroBreakDuration = 300000;
                 saveAll();
                 _tmrRenderContainer(container, task, column);
             }
@@ -122,10 +141,13 @@ function _tmrRenderContainer(container, task, column) {
         var logContainer = document.createElement('div');
         logContainer.className = 'tmr-logs';
         var total = logs.reduce(function(s, l) { return s + (l.duration || 0); }, 0);
+        var logCount = {};
         logs.forEach(function(l) {
+            var t = l.type || 'session';
+            logCount[t] = (logCount[t] || 0) + 1;
             var row = document.createElement('div');
             row.className = 'tmr-log-row';
-            row.innerHTML = '<span>' + (l.type || 'session') + '</span><span>' + _tmrFormat(l.duration || 0) + '</span>';
+            row.innerHTML = '<span>' + t + '</span><span>' + _tmrFormat(l.duration || 0) + '</span>';
             logContainer.appendChild(row);
         });
         container.appendChild(logContainer);
@@ -133,6 +155,11 @@ function _tmrRenderContainer(container, task, column) {
         var totalEl = document.createElement('div');
         totalEl.className = 'tmr-total';
         totalEl.textContent = 'Total: ' + _tmrFormat(total);
+        if (logCount.pomodoro && logCount.break) {
+            totalEl.textContent += ' — ' + logCount.pomodoro + '🍅 ' + logCount.break + '☕';
+        } else if (logCount.pomodoro) {
+            totalEl.textContent += ' — ' + logCount.pomodoro + '🍅';
+        }
         container.appendChild(totalEl);
     }
 }
@@ -144,8 +171,21 @@ function _tmrGetElapsed(timer) {
     return base + (Date.now() - new Date(timer.startedAt).getTime());
 }
 
+function _tmrPomodoroRemaining(timer) {
+    if (!timer || !timer.startedAt) return (timer.pomodoroDuration || 1500000);
+    var phase = timer.pomodoroPhase || 'work';
+    var duration = phase === 'work' ? (timer.pomodoroDuration || 1500000) : (timer.pomodoroBreakDuration || 300000);
+    if (timer.pausedAt) {
+        var pausedSince = new Date(timer.pausedAt).getTime();
+        var elapsed = new Date(timer.pausedAt).getTime() - new Date(timer.startedAt).getTime();
+        return Math.max(0, duration - elapsed);
+    }
+    var elapsed = Date.now() - new Date(timer.startedAt).getTime();
+    return Math.max(0, duration - elapsed);
+}
+
 function _tmrFormat(ms) {
-    var totalSec = Math.floor(ms / 1000);
+    var totalSec = Math.floor(Math.max(0, ms) / 1000);
     var h = Math.floor(totalSec / 3600);
     var m = Math.floor((totalSec % 3600) / 60);
     var s = totalSec % 60;
@@ -158,31 +198,111 @@ function _tmrUpdateDisplay(taskId) {
     if (!disp) return;
     var task = _stFindTask(taskId);
     if (!task) return;
-    disp.textContent = _tmrFormat(_tmrGetElapsed(task.timer || {}));
+    var timer = task.timer || {};
+    var isPomo = (timer.mode || 'stopwatch') === 'pomodoro';
+    var val = isPomo ? _tmrPomodoroRemaining(timer) : _tmrGetElapsed(timer);
+    disp.textContent = _tmrFormat(val);
+
+    // Update phase label
+    if (isPomo) {
+        var container = disp.parentNode;
+        var phaseEl = container.querySelector('.tmr-phase-label');
+        if (!phaseEl) {
+            phaseEl = document.createElement('div');
+            phaseEl.className = 'tmr-phase-label';
+            container.insertBefore(phaseEl, disp);
+        }
+        var phase = timer.pomodoroPhase || 'work';
+        phaseEl.textContent = phase === 'work' ? '🍅 Work' : '☕ Break';
+
+        // Check if pomodoro completed
+        if (timer.startedAt && !timer.pausedAt && val <= 0) {
+            _tmrPomodoroComplete(task, taskId);
+        }
+    }
 
     // Update button tooltip
     var card = document.getElementById('task-' + taskId);
     if (card) {
         var btn = card.querySelector('.tmr-toggle');
-        if (btn) btn.title = _tmrFormat(_tmrGetElapsed(task.timer || {}));
+        if (btn) btn.title = _tmrFormat(val);
+    }
+}
+
+function _tmrPomodoroComplete(task, taskId) {
+    var timer = task.timer;
+    if (!timer) return;
+
+    var phase = timer.pomodoroPhase || 'work';
+    var phaseDuration = phase === 'work' ? (timer.pomodoroDuration || 1500000) : (timer.pomodoroBreakDuration || 300000);
+
+    if (!timer.logs) timer.logs = [];
+    if (phase === 'work') {
+        timer.logs.push({ start: timer.startedAt, end: new Date().toISOString(), duration: phaseDuration, type: 'pomodoro' });
+    } else {
+        timer.logs.push({ start: timer.startedAt, end: new Date().toISOString(), duration: phaseDuration, type: 'break' });
+    }
+
+    // Switch phase
+    var nextPhase = phase === 'work' ? 'break' : 'work';
+    timer.pomodoroPhase = nextPhase;
+    timer.startedAt = new Date().toISOString();
+    timer.pausedAt = null;
+    saveAll();
+
+    // Notify
+    try {
+        if (typeof showToast === 'function') {
+            var msg = phase === 'work' ? '🍅 Pomodoro complete! Time for a break.' : '☕ Break over! Time to focus.';
+            showToast(msg, function() {});
+        }
+        if ('Notification' in window && Notification.permission === 'granted') {
+            var title = phase === 'work' ? 'Pomodoro Complete' : 'Break Over';
+            var body = phase === 'work' ? 'Good work! Take a 5 min break.' : 'Break is done, back to focus!';
+            new Notification(title, { body: body });
+        }
+        document.dispatchEvent(new CustomEvent('timer:pomodoro', { detail: { taskId: task.id, phase: nextPhase } }));
+    } catch(_) {}
+
+    // Re-render container
+    var cont = document.getElementById('st-cont-' + taskId);
+    var card = document.getElementById('task-' + taskId);
+    if (card) {
+        var tmrCont = card.querySelector('.tmr-container');
+        if (tmrCont) {
+            var col = '';
+            for (var ci = 0; ci < ['todo','working','done'].length; ci++) {
+                if ((tasks[['todo','working','done'][ci]] || []).find(function(t) { return t.id === taskId; })) {
+                    col = ['todo','working','done'][ci];
+                    break;
+                }
+            }
+            _tmrRenderContainer(tmrCont, task, col);
+        }
     }
 }
 
 function _tmrStart(task, column, container) {
-    if (!task.timer) task.timer = { mode: 'stopwatch', accumulated: 0, logs: [] };
+    if (!task.timer) {
+        task.timer = { mode: 'stopwatch', accumulated: 0, logs: [], pomodoroPhase: 'work', pomodoroDuration: 1500000, pomodoroBreakDuration: 300000 };
+    }
     task.timer.startedAt = new Date().toISOString();
     task.timer.pausedAt = null;
-    task.timer.accumulated = task.timer.accumulated || 0;
+    if (task.timer.mode !== 'pomodoro') {
+        task.timer.accumulated = task.timer.accumulated || 0;
+    }
     saveAll();
     _tmrRenderContainer(container, task, column);
     _tmrStartGlobalTick();
 }
 
 function _tmrPause(task, column, container) {
-    if (!task.timer) return;
+    if (!task.timer || !task.timer.startedAt) return;
     var now = Date.now();
     var started = new Date(task.timer.startedAt).getTime();
-    task.timer.accumulated = (task.timer.accumulated || 0) + (now - started);
+    if (task.timer.mode !== 'pomodoro') {
+        task.timer.accumulated = (task.timer.accumulated || 0) + (now - started);
+    }
     task.timer.pausedAt = new Date().toISOString();
     saveAll();
     _tmrRenderContainer(container, task, column);
@@ -202,14 +322,31 @@ function _tmrStop(task, column, container) {
     if (!task.timer) return;
     var now = Date.now();
     var duration;
-    if (task.timer.pausedAt) {
-        duration = task.timer.accumulated || 0;
+    var isPomo = (task.timer.mode || 'stopwatch') === 'pomodoro';
+
+    if (isPomo) {
+        var phase = task.timer.pomodoroPhase || 'work';
+        var phaseDuration = phase === 'work' ? (task.timer.pomodoroDuration || 1500000) : (task.timer.pomodoroBreakDuration || 300000);
+        if (task.timer.pausedAt) {
+            var elapsed = new Date(task.timer.pausedAt).getTime() - new Date(task.timer.startedAt).getTime();
+            duration = elapsed;
+        } else {
+            var elapsed = now - new Date(task.timer.startedAt).getTime();
+            duration = elapsed;
+        }
+        if (!task.timer.logs) task.timer.logs = [];
+        task.timer.logs.push({ start: task.timer.startedAt, end: new Date().toISOString(), duration: duration, type: 'pomodoro-manual' });
     } else {
-        var started = new Date(task.timer.startedAt).getTime();
-        duration = (task.timer.accumulated || 0) + (now - started);
+        if (task.timer.pausedAt) {
+            duration = task.timer.accumulated || 0;
+        } else {
+            var started = new Date(task.timer.startedAt).getTime();
+            duration = (task.timer.accumulated || 0) + (now - started);
+        }
+        if (!task.timer.logs) task.timer.logs = [];
+        task.timer.logs.push({ start: task.timer.startedAt || new Date().toISOString(), end: new Date().toISOString(), duration: duration, type: 'stopwatch' });
     }
-    if (!task.timer.logs) task.timer.logs = [];
-    task.timer.logs.push({ start: task.timer.startedAt || new Date().toISOString(), end: new Date().toISOString(), duration: duration, type: task.timer.mode || 'stopwatch' });
+
     task.timer.startedAt = null;
     task.timer.pausedAt = null;
     task.timer.accumulated = 0;
@@ -232,7 +369,6 @@ function _tmrReset(task, column, container) {
 function _tmrStartGlobalTick() {
     if (_tmrInterval) return;
     _tmrInterval = setInterval(function() {
-        // Update all running timer displays
         document.querySelectorAll('.tmr-display').forEach(function(disp) {
             var taskId = parseInt(disp.id.replace('tmr-disp-', ''));
             if (isNaN(taskId)) return;

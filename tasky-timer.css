@@ -4,6 +4,8 @@
 @keyframes tmr-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
 .tmr-badge { font-size:11px;color:rgba(255,255,255,0.4);margin-left:6px; }
 .tmr-container { padding:4px 10px 8px 28px;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px; }
+.tmr-phase-label { text-align:center;font-size:13px;font-weight:600;color:rgba(255,255,255,0.5);padding:2px 0 0; }
+body.light-mode .tmr-phase-label { color:rgba(0,0,0,0.4); }
 .tmr-display { font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;text-align:center;padding:6px 0;color:#a78bfa;letter-spacing:1px; }
 .tmr-controls { display:flex;gap:6px;justify-content:center;padding:4px 0 6px; }
 .tmr-btn { background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.25);border-radius:8px;color:#a78bfa;font-size:12px;font-weight:600;padding:5px 14px;cursor:pointer;transition:background .12s; }

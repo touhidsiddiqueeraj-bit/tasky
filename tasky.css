@@ -806,6 +806,54 @@
             color: #1a1040;
         }
 
+        .board-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            flex-wrap: wrap;
+        }
+        .tb-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: rgba(255, 255, 255, 0.5);
+            height: 28px;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 0 10px;
+            white-space: nowrap;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }
+        .tb-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            color: #fff;
+        }
+        .tb-btn.active {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: rgba(139, 92, 246, 0.3);
+            color: #a78bfa;
+        }
+        .tb-btn--new { color: #a78bfa; border-color: rgba(139, 92, 246, 0.25); }
+        body.light-mode .tb-btn {
+            background: rgba(0, 0, 0, 0.04);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: rgba(0, 0, 0, 0.45);
+        }
+        body.light-mode .tb-btn:hover {
+            background: rgba(0, 0, 0, 0.1);
+            color: #111;
+        }
+        body.light-mode .tb-btn.active {
+            background: rgba(139, 92, 246, 0.08);
+            border-color: rgba(139, 92, 246, 0.2);
+            color: #7C3AED;
+        }
+        body.light-mode .tb-btn--new { color: #7C3AED; border-color: rgba(139, 92, 246, 0.2); }
         .date-btn, .move-btn, .delete-btn, .edit-btn {
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.12);

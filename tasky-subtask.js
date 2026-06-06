@@ -64,6 +64,16 @@ createTaskCard = function(task, column) {
     var container = document.createElement('div');
     container.className = 'subtask-container';
     container.style.display = 'none';
+    container.id = 'st-cont-' + task.id;
+    _stRenderContainer(container, task, column);
+    card.appendChild(container);
+
+    return card;
+};
+
+function _stRenderContainer(container, task, column) {
+    var subtasks = task.subtasks || [];
+    container.innerHTML = '';
     subtasks.forEach(function(s) {
         var row = document.createElement('div');
         row.className = 'subtask-row' + (s.done ? ' done' : '');
@@ -74,11 +84,17 @@ createTaskCard = function(task, column) {
     addRow.className = 'subtask-add-row';
     addRow.innerHTML = '<input type="text" class="subtask-input" placeholder="+ Add subtask…" data-st-new="' + task.id + '" data-st-col="' + column + '">';
     container.appendChild(addRow);
-    card.insertBefore(container, card.querySelector('.drag-handle') ? null : null);
-    card.appendChild(container);
 
-    return card;
-};
+    // Update badge if present
+    var card = document.getElementById('task-' + task.id);
+    if (card) {
+        var badge = card.querySelector('.subtask-badge');
+        if (badge) {
+            var doneCount = subtasks.filter(function(s) { return s.done; }).length;
+            badge.textContent = doneCount + '/' + subtasks.length;
+        }
+    }
+}
 
 document.addEventListener('change', function(e) {
     if (e.target.matches('.st-cb')) {
@@ -88,7 +104,12 @@ document.addEventListener('change', function(e) {
         var task = _stFindTask(taskId);
         if (!task) return;
         var sub = (task.subtasks || []).find(function(s) { return s.id === subId; });
-        if (sub) { sub.done = e.target.checked; saveAll(); renderColumn(col); }
+        if (sub) {
+            sub.done = e.target.checked;
+            saveAll();
+            var cont = document.getElementById('st-cont-' + taskId);
+            if (cont) _stRenderContainer(cont, task, col);
+        }
     }
 });
 
@@ -101,12 +122,15 @@ document.addEventListener('click', function(e) {
         if (!task || !task.subtasks) return;
         task.subtasks = task.subtasks.filter(function(s) { return s.id !== subId; });
         saveAll();
-        renderColumn(col);
+        var cont = document.getElementById('st-cont-' + taskId);
+        if (cont) _stRenderContainer(cont, task, col);
     }
 });
 
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && e.target.matches('[data-st-new]')) {
+        e.preventDefault();
+        e.stopPropagation();
         var taskId = parseInt(e.target.dataset.stTask);
         var col = e.target.dataset.stCol;
         var text = e.target.value.trim();
@@ -117,7 +141,8 @@ document.addEventListener('keydown', function(e) {
         task.subtasks.push({ id: Date.now() + Math.floor(Math.random() * 1000), text: text, done: false });
         e.target.value = '';
         saveAll();
-        renderColumn(col);
+        var cont = document.getElementById('st-cont-' + taskId);
+        if (cont) _stRenderContainer(cont, task, col);
     }
 });
 

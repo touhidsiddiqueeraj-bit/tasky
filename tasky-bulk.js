@@ -1,9 +1,6 @@
 (function() {
 var style = document.createElement('style');
 style.textContent = `
-#bulk-toggle-btn { background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:12px;padding:4px 10px;cursor:pointer;white-space:nowrap; }
-#bulk-toggle-btn:hover { border-color:rgba(139,92,246,0.3);color:#a78bfa; }
-#bulk-toggle-btn.active { background:rgba(139,92,246,0.15);border-color:#8B5CF6;color:#a78bfa; }
 .task-card.bulk-selected { outline:2px solid #8B5CF6;outline-offset:1px;border-radius:12px; }
 #bulk-bar { position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9000;background:rgba(20,20,40,0.92);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:8px 16px;display:none;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.4); }
 .bulk-count { font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);padding-right:8px;border-right:1px solid rgba(255,255,255,0.1);white-space:nowrap; }
@@ -14,9 +11,6 @@ style.textContent = `
 .bulk-act--clear { background:none;border-color:transparent;color:rgba(255,255,255,0.3); }
 .bulk-act--clear:hover { color:rgba(255,255,255,0.6); }
 
-body.light-mode #bulk-toggle-btn { background:rgba(0,0,0,0.04);border-color:rgba(0,0,0,0.1);color:rgba(0,0,0,0.4); }
-body.light-mode #bulk-toggle-btn:hover { border-color:rgba(139,92,246,0.3);color:#7C3AED; }
-body.light-mode #bulk-toggle-btn.active { background:rgba(139,92,246,0.08);border-color:#7C3AED;color:#7C3AED; }
 body.light-mode .task-card.bulk-selected { outline-color:#7C3AED; }
 body.light-mode #bulk-bar { background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.1); }
 body.light-mode .bulk-count { color:rgba(0,0,0,0.6);border-right-color:rgba(0,0,0,0.1); }
@@ -180,10 +174,8 @@ document.addEventListener('keydown', function(e) {
         var toolbar = document.querySelector('.board-toolbar');
         if (!toolbar) return;
         clearInterval(check);
-        var sep = document.createElement('span');
-        sep.style.cssText = 'width:1px;height:20px;background:rgba(255,255,255,0.08);margin:0 6px;';
-        toolbar.appendChild(sep);
         var btn = document.createElement('button');
+        btn.className = 'tb-btn';
         btn.id = 'bulk-toggle-btn';
         btn.textContent = '☑ Bulk';
         btn.title = 'Toggle bulk select mode';

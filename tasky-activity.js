@@ -1,9 +1,6 @@
 (function() {
 var style = document.createElement('style');
 style.textContent = `
-#act-toggle-btn { background:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:12px;padding:4px 10px;cursor:pointer; }
-#act-toggle-btn:hover { border-color:rgba(139,92,246,0.3);color:#a78bfa; }
-#act-toggle-btn.has-new { border-color:#8B5CF6;color:#a78bfa; }
 #act-overlay { position:fixed;inset:0;z-index:9500;display:none;background:rgba(6,5,10,0.5);backdrop-filter:blur(4px); }
 #act-overlay.visible { display:block; }
 #act-panel { position:fixed;top:0;right:0;bottom:0;width:380px;max-width:100vw;z-index:9501;background:rgba(16,14,28,0.96);backdrop-filter:blur(20px);border-left:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease; }
@@ -294,6 +291,7 @@ document.addEventListener('timer:stop', function(e) {
         if (!toolbar) return;
         clearInterval(check);
         var btn = document.createElement('button');
+        btn.className = 'tb-btn';
         btn.id = 'act-toggle-btn';
         btn.textContent = '📋 Activity';
         btn.addEventListener('click', _actOpenPanel);
