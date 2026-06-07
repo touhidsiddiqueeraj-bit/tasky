@@ -103,7 +103,29 @@ function _stRenderContainer(container, task, column) {
     });
     var addRow = document.createElement('div');
     addRow.className = 'subtask-add-row';
-    addRow.innerHTML = '<input type="text" class="subtask-input" placeholder="+ Add subtask…" data-st-new="' + task.id + '" data-st-col="' + column + '">';
+    var newInput = document.createElement('input');
+    newInput.type = 'text';
+    newInput.className = 'subtask-input';
+    newInput.placeholder = '+ Add subtask…';
+    newInput.dataset.stNew = task.id;
+    newInput.dataset.stCol = column;
+    newInput.addEventListener('keydown', function(ev) {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        var text = this.value.trim();
+        if (!text) return;
+        var t = _stFindTask(task.id);
+        if (!t) return;
+        if (!t.subtasks) t.subtasks = [];
+        t.subtasks.push({ id: Date.now() + Math.floor(Math.random() * 1000), text: text, done: false });
+        this.value = '';
+        saveAll();
+        var cont = document.getElementById('st-cont-' + task.id);
+        if (cont) _stRenderContainer(cont, t, column);
+        this.focus();
+    });
+    addRow.appendChild(newInput);
     container.appendChild(addRow);
 
     container.addEventListener('dragover', _stOnDragOver);
@@ -227,26 +249,6 @@ document.addEventListener('click', function(e) {
         saveAll();
         var cont = document.getElementById('st-cont-' + taskId);
         if (cont) _stRenderContainer(cont, task, col);
-    }
-});
-
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && e.target.matches('[data-st-new]')) {
-        e.preventDefault();
-        e.stopPropagation();
-        var taskId = parseInt(e.target.dataset.stTask);
-        var col = e.target.dataset.stCol;
-        var text = e.target.value.trim();
-        if (!text) return;
-        var task = _stFindTask(taskId);
-        if (!task) return;
-        if (!task.subtasks) task.subtasks = [];
-        task.subtasks.push({ id: Date.now() + Math.floor(Math.random() * 1000), text: text, done: false });
-        e.target.value = '';
-        saveAll();
-        var cont = document.getElementById('st-cont-' + taskId);
-        if (cont) _stRenderContainer(cont, task, col);
-        e.target.focus();
     }
 });
 
