@@ -291,6 +291,8 @@ function startGroupListener(code) {
         renderGroupUI();
 
         if (isSupervisor) {
+            stopTasksListener();
+            teamTasksCache = {};
             startTasksListener(code);
         } else {
             stopTasksListener();
@@ -667,6 +669,10 @@ function renderGroupUI() {
         // Workspace wants a collab code
         if (!g || g.code !== wsCode) {
             // Wrong code or no listener yet — restart with the right code
+            var staleCol = document.getElementById('collab-team-column');
+            if (staleCol) staleCol.remove();
+            teamPanelMember = null;
+            teamTasksCache = {};
             if (g) stopGroupListener();
             stopTasksListener();
             startGroupListener(wsCode);
@@ -2387,6 +2393,8 @@ window.__onWorkspaceSwitch = function(newId, oldId) {
         // onto every workspace you switch to, making all workspaces appear to have a collab
         // and breaking the else branch permanently.
         localStorage.setItem(LS_GROUP_KEY, ws.collabCode);
+        teamPanelMember = null;
+        teamTasksCache = {};
         startGroupListener(ws.collabCode);
         // Immediately show/hide collab features based on lock rather than
         // waiting for the listener to fire (which may be delayed).
