@@ -27,6 +27,7 @@ let teamPanelMember   = null;   // handle being inspected in team panel
 // conditions when switching workspaces.
 function _isCollabLockActive() {
     if (!currentGroup || typeof workspaces === 'undefined' || typeof activeWorkspaceId === 'undefined') return false;
+    if (activeWorkspaceId === 1) return false; // Personal workspace — never show collab features
     var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
     return ws && ws.collabCode === currentGroup.code;
 }
@@ -659,6 +660,7 @@ function renderGroupUI() {
         ? workspaces.find(function(w) { return w.id === activeWorkspaceId; })
         : null;
     var wsCode = ws ? ws.collabCode : null;
+    if (activeWorkspaceId === 1) wsCode = null; // Personal workspace — force non-collab
     var g = currentGroup;
 
     if (wsCode) {
