@@ -632,6 +632,17 @@ function renderGroupUI() {
     const board = document.querySelector('.board');
     if (!board) return;
 
+    // Guard: only render collab UI if current workspace owns this group code
+    if (currentGroup && typeof workspaces !== 'undefined') {
+        var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
+        if (!ws || ws.collabCode !== currentGroup.code) {
+            currentGroup = null;
+            _syncCollabState();
+            isSupervisor = false;
+            _syncCollabState();
+        }
+    }
+
     // Update board class
     board.classList.toggle('board-4col', !!(currentGroup && isSupervisor));
 
