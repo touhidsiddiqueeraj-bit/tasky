@@ -30,6 +30,8 @@ let vvMediaRecorder   = null;
 let vvRecordChunks    = [];
 let vvRecordStartTime = null;
 let vvRecordInterval  = null;
+let vvRecordMimeType  = null;
+let vvRecordResolve   = null;
 let vvPipWindow       = null;   // Picture-in-Picture window ref
 let vvPipActive       = false;
 let vvVideoGrid       = null;   // the floating video grid panel DOM node
@@ -698,16 +700,17 @@ async function _vvStartRecording() {
     // Build a composite stream: local audio + local video (if any) + remote audio
     const tracks = [];
 
-    // Local audio
+    // Local audio — clone so toggling mute/camera doesn't kill the recording track
     const ls = _vvLocalStream();
-    if (ls) ls.getAudioTracks().forEach(t => tracks.push(t));
+    if (ls) ls.getAudioTracks().forEach(t => tracks.push(t.clone()));
 
-    // Local video
+    // Local video — clone for the same reason
     const vid = vvCameraOn ? vvCameraStream : (vvScreenOn ? vvScreenStream : null);
-    if (vid) vid.getVideoTracks().forEach(t => tracks.push(t));
+    if (vid) vid.getVideoTracks().forEach(t => tracks.push(t.clone()));
 
     // Remote audio elements — capture via Web Audio + MediaStreamDestination
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    try { await ctx.resume(); } catch(e) {}
     const dest = ctx.createMediaStreamDestination();
     document.querySelectorAll('[id^="vc-audio-"]').forEach(el => {
         if (el.srcObject) {
@@ -720,27 +723,42 @@ async function _vvStartRecording() {
     dest.stream.getAudioTracks().forEach(t => tracks.push(t));
 
     const composite = new MediaStream(tracks);
+    const hasVideo = composite.getVideoTracks().length > 0;
 
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-        ? 'video/webm;codecs=vp9,opus'
-        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-        ? 'video/webm;codecs=vp8,opus'
-        : 'video/webm';
+    const mimeType = hasVideo
+        ? MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+            ? 'video/webm;codecs=vp9,opus'
+            : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+            ? 'video/webm;codecs=vp8,opus'
+            : 'video/webm'
+        : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : 'audio/webm';
 
     try {
         vvMediaRecorder = new MediaRecorder(composite, { mimeType, videoBitsPerSecond: VV_QUALITY[vvQuality].bitrate });
     } catch(e) {
-        _vvToast('⚠️ Recording not supported in this browser'); return;
+        try {
+            vvMediaRecorder = new MediaRecorder(composite);
+        } catch(e2) {
+            ctx.close().catch(() => {});
+            _vvToast('⚠️ Recording not supported in this browser'); return;
+        }
     }
 
     vvRecordChunks    = [];
     vvRecordStartTime = Date.now();
+    vvRecordMimeType  = vvMediaRecorder.mimeType || mimeType;
     vvRecording       = true;
 
     vvMediaRecorder.ondataavailable = e => { if (e.data.size > 0) vvRecordChunks.push(e.data); };
-    vvMediaRecorder.onstop = () => _vvSaveRecording(ctx);
+    vvMediaRecorder.onstop = () => {
+        if (vvRecordResolve) vvRecordResolve();
+        vvRecordResolve = null;
+        _vvSaveRecording(ctx);
+    };
 
-    vvMediaRecorder.start(1000); // 1-second chunks
+    vvMediaRecorder.start(100); // 100ms timeslice so short recordings still produce data
     vvRecordInterval = setInterval(_vvUpdateRecordTimer, 1000);
 
     _vvUpdateVideoControls();
@@ -748,17 +766,19 @@ async function _vvStartRecording() {
 }
 
 function _vvStopRecording() {
-    if (!vvMediaRecorder || !vvRecording) return;
+    if (!vvMediaRecorder || !vvRecording) return Promise.resolve();
     vvRecording = false;
     clearInterval(vvRecordInterval); vvRecordInterval = null;
+    const done = new Promise(resolve => { vvRecordResolve = resolve; });
     vvMediaRecorder.stop();
     _vvUpdateVideoControls();
     _vvToast('⏹️ Processing recording…');
+    return done;
 }
 
 async function _vvSaveRecording(ctx) {
     if (ctx) ctx.close().catch(() => {});
-    const blob = new Blob(vvRecordChunks, { type: 'video/webm' });
+    const blob = new Blob(vvRecordChunks, { type: vvRecordMimeType || 'video/webm' });
     vvRecordChunks = [];
 
     // Try Firebase Storage first
@@ -1335,8 +1355,8 @@ function _vvPatchRenderPanel() {
 // ──────────────────────────────────────────────────────────────────────────
 //  CLEANUP — extend vcLeave to teardown video
 // ──────────────────────────────────────────────────────────────────────────
-function _vvCleanup() {
-    if (vvRecording) _vvStopRecording();
+async function _vvCleanup() {
+    if (vvRecording) await _vvStopRecording();
 
     _vvClosePiP();
 
@@ -1380,7 +1400,7 @@ function _vvPatchVcLeave() {
     // Wrap vcLeave
     window.vcLeave = async function() {
         window._vvCallActive = false;
-        _vvCleanup();
+        await _vvCleanup();
         return origLeave.apply(this, arguments);
     };
 
