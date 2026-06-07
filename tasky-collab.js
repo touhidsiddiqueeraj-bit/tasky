@@ -196,7 +196,15 @@ async function loadActiveGroup() {
         var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
         if (ws && ws.collabCode) localCode = ws.collabCode;
     }
-    if (!localCode) localCode = localStorage.getItem(LS_GROUP_KEY);
+    if (!localCode) {
+        var lsCode = localStorage.getItem(LS_GROUP_KEY);
+        var matchingWs = workspaces.find(function(w) { return w.collabCode === lsCode; });
+        if (matchingWs) {
+            localCode = lsCode;
+        } else {
+            localStorage.removeItem(LS_GROUP_KEY);
+        }
+    }
     if (localCode) {
         startGroupListener(localCode);
     }
