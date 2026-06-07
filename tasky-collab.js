@@ -554,6 +554,7 @@ let notifListener = null;
 // Pull tasks from this user's group subcollection and merge into local board
 async function syncGroupTasksToBoard() {
     if (!currentUser || !currentGroup) return;
+    if (!_isCollabLockActive()) return;
     try {
         const snap = await db.collection('groups').doc(currentGroup.code)
             .collection('tasks').doc(currentUser.uid).get();
@@ -623,6 +624,7 @@ function scheduleGroupSync() {
 
 async function writeGroupTasks() {
     if (!currentGroup || !currentUser) return;
+    if (!_isCollabLockActive()) return;
     try {
         await db.collection('groups').doc(currentGroup.code)
             .collection('tasks').doc(currentUser.uid).set({
