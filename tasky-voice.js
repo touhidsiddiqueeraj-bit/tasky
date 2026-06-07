@@ -838,11 +838,22 @@ window.addEventListener('load', function _vcInstallHooks() {
         const _vcOrig = renderGroupUI;
         renderGroupUI = function() {
             _vcOrig.apply(this, arguments);
-            setTimeout(_vcInjectCallButtons, 80);
             const u = _vcUser(), g = _vcGroup();
             if (g && u && !u.isAnonymous) {
+                setTimeout(_vcInjectCallButtons, 80);
                 _vcStartRingListener();
             } else {
+                // No active collab on this workspace — remove all call buttons and panels
+                ['vc-call-btn', 'vc-call-btn-member'].forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el) el.remove();
+                });
+                var panel = document.getElementById('vc-panel');
+                if (panel) panel.remove();
+                var miniBar = document.getElementById('vc-mini-bar');
+                if (miniBar) miniBar.remove();
+                var incomingModal = document.getElementById('vc-incoming-modal');
+                if (incomingModal) incomingModal.remove();
                 _vcStopRingListener();
                 if (vcActive) window.vcLeave();
             }
