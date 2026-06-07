@@ -103,6 +103,9 @@ async function createGroup(groupName) {
         if (typeof window.linkWorkspaceToCollab === 'function') {
             window.linkWorkspaceToCollab(activeWorkspaceId, code, groupName);
         }
+        if (typeof window.renderWorkspaceSwitcher === 'function') {
+            window.renderWorkspaceSwitcher();
+        }
         startGroupListener(code);
     }
     // Note: for Personal, createWorkspace already sets collabCode on the new workspace.
