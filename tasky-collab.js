@@ -90,15 +90,25 @@ async function createGroup(groupName) {
     };
     await db.collection('groups').doc(code).set(groupData);
     await db.collection('users').doc(currentUser.uid).set({ activeGroup: code }, { merge: true });
-    // Create a workspace for this collaboration and switch to it
-    if (typeof window.createWorkspace === 'function') {
-        var wsId = window.createWorkspace(groupName, code);
-        if (typeof window.switchWorkspace === 'function') window.switchWorkspace(wsId);
+    // Link collab to a workspace
+    if (activeWorkspaceId === 1) {
+        // Personal workspace — create a new workspace for the collab (existing behavior)
+        if (typeof window.createWorkspace === 'function') {
+            var wsId = window.createWorkspace(groupName, code);
+            if (typeof window.switchWorkspace === 'function') window.switchWorkspace(wsId);
+        }
+    } else {
+        // Non-Personal workspace — link collab directly to the current workspace
+        saveGroupCodeLocally(code);
+        if (typeof window.linkWorkspaceToCollab === 'function') {
+            window.linkWorkspaceToCollab(activeWorkspaceId, code, groupName);
+        }
+        startGroupListener(code);
     }
-    // Note: createWorkspace already sets collabCode on the new workspace.
+    // Note: for Personal, createWorkspace already sets collabCode on the new workspace.
     // __onWorkspaceSwitch (called inside switchWorkspace's timeout) handles LS_GROUP_KEY.
-    // Do NOT call saveGroupCodeLocally() here — activeWorkspaceId hasn't switched yet,
-    // so it would stamp the code on the OLD workspace (e.g. Personal).
+    // Do NOT call saveGroupCodeLocally() in the Personal branch — activeWorkspaceId
+    // hasn't switched yet, so it would stamp the code on Personal.
     return code;
 }
 
