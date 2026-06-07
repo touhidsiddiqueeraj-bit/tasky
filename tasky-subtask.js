@@ -241,7 +241,7 @@ document.addEventListener('change', function(e) {
 document.addEventListener('click', function(e) {
     if (e.target.matches('[data-st-del]')) {
         var taskId = parseInt(e.target.dataset.stTask);
-        var subId = parseInt(e.target.dataset.stId);
+        var subId = parseInt(e.target.dataset.stDel);
         var col = e.target.dataset.stCol;
         var task = _stFindTask(taskId);
         if (!task || !task.subtasks) return;
