@@ -123,6 +123,24 @@
 }
 .vv-ctrl--close:hover { color: var(--vv-red) !important; background: rgba(239,68,68,0.09) !important; border-color: rgba(239,68,68,0.28) !important; }
 
+.vv-controls-sep {
+    width: 1px;
+    height: 22px;
+    background: var(--vv-border);
+    margin: 0 3px;
+    flex-shrink: 0;
+}
+.vv-ctrl--leave {
+    color: #fca5a5 !important;
+    background: rgba(239,68,68,0.12) !important;
+    border-color: rgba(239,68,68,0.30) !important;
+}
+.vv-ctrl--leave:hover {
+    background: rgba(239,68,68,0.20) !important;
+    border-color: rgba(239,68,68,0.50) !important;
+    color: #fca5a5 !important;
+}
+
 /* Toolbar hint tooltips */
 .vv-ctrl[title]:hover::after,
 .vv-ctrl[data-hint]:hover::after {

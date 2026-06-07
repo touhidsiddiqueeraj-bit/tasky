@@ -829,6 +829,7 @@ function _vcUpdateControls() {
     if (db) { db.className = `vc-ctrl-btn ${vcDeafened ? 'vc-ctrl-btn--active' : ''}`; db.innerHTML = `${vcDeafened ? '🔕' : '🔊'}<span>${vcDeafened ? 'Undeafen' : 'Deafen'}</span>`; }
     const mm = document.getElementById('vc-mini-mute');
     if (mm) { mm.textContent = vcMuted ? '🔇' : '🎙️'; }
+    if (typeof window._vvUpdateVideoControls === 'function') window._vvUpdateVideoControls();
 }
 
 // ─── Install hooks after all scripts have parsed ─────────────────────────
@@ -895,3 +896,5 @@ window._vcAnswer      = _vcAnswer;
 Object.defineProperty(window, '_vcParticipantsRef', { get: () => vcParticipants, configurable: true });
 Object.defineProperty(window, '_vcPeersRef',        { get: () => vcPeers,        configurable: true });
 Object.defineProperty(window, '_vcLocalStreamRef',  { get: () => vcLocalStream,  configurable: true });
+Object.defineProperty(window, '_vcMutedRef',        { get: () => vcMuted,        configurable: true });
+Object.defineProperty(window, '_vcDeafenedRef',     { get: () => vcDeafened,     configurable: true });
