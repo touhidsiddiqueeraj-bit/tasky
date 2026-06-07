@@ -213,9 +213,11 @@ async function loadActiveGroup() {
     if (!localCode) {
         var lsCode = localStorage.getItem(LS_GROUP_KEY);
         var matchingWs = workspaces.find(function(w) { return w.collabCode === lsCode; });
-        if (matchingWs) {
+        if (matchingWs && matchingWs.id === activeWorkspaceId) {
+            // Only activate if this collab belongs to the current workspace
             localCode = lsCode;
         } else {
+            // Stale LS_GROUP_KEY — belongs to a different workspace or no workspace has it
             localStorage.removeItem(LS_GROUP_KEY);
         }
     }
