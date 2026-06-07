@@ -632,17 +632,6 @@ function renderGroupUI() {
     const board = document.querySelector('.board');
     if (!board) return;
 
-    // Guard: only render collab UI if current workspace owns this group code
-    if (currentGroup && typeof workspaces !== 'undefined') {
-        var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
-        if (!ws || ws.collabCode !== currentGroup.code) {
-            currentGroup = null;
-            _syncCollabState();
-            isSupervisor = false;
-            _syncCollabState();
-        }
-    }
-
     // Update board class
     board.classList.toggle('board-4col', !!(currentGroup && isSupervisor));
 
@@ -2267,6 +2256,36 @@ window.STATE = {
     get tasks() { return tasks; }
 };
 
+// ─── Repair corrupted workspace collabCode metadata ───────────────────────
+// Bug: saveGroupCodeLocally() was called inside __onWorkspaceSwitch after
+// activeWorkspaceId was already updated to the new workspace, causing the
+// collab code to be stamped onto every workspace the user visited.
+// This one-time repair removes collabCode from any workspace that has a
+// duplicate — keeping only the first workspace that legitimately holds each code.
+(function _repairWorkspaceCollabCodes() {
+    try {
+        var meta = localStorage.getItem('workspaces_meta');
+        if (!meta) return;
+        var ws = JSON.parse(meta);
+        if (!Array.isArray(ws)) return;
+        var seen = {};
+        var dirty = false;
+        ws.forEach(function(w) {
+            if (!w.collabCode) return;
+            if (seen[w.collabCode]) {
+                // Duplicate — this workspace got the code stamped on it incorrectly
+                w.collabCode = null;
+                dirty = true;
+            } else {
+                seen[w.collabCode] = true;
+            }
+        });
+        if (dirty) {
+            localStorage.setItem('workspaces_meta', JSON.stringify(ws));
+        }
+    } catch(_) {}
+})();
+
 // ─── Boot ─────────────────────────────────────────────────────────────────
 // Use window 'load' (not DOMContentLoaded) so tasky.js has fully run and
 // Firebase 'app' + 'db' globals are guaranteed to exist before we touch them.
@@ -2282,10 +2301,16 @@ window.__onWorkspaceSwitch = function(newId, oldId) {
     stopGroupListener();
     var ws = typeof workspaces !== 'undefined' ? workspaces.find(function(w) { return w.id === newId; }) : null;
     if (ws && ws.collabCode) {
-        saveGroupCodeLocally(ws.collabCode);
+        // Update localStorage key only — do NOT call saveGroupCodeLocally() here because
+        // saveGroupCodeLocally() calls linkWorkspaceToCollab(activeWorkspaceId, code) and
+        // activeWorkspaceId is already newId at this point, which stamps the collab code
+        // onto every workspace you switch to, making all workspaces appear to have a collab
+        // and breaking the else branch permanently.
+        localStorage.setItem(LS_GROUP_KEY, ws.collabCode);
         startGroupListener(ws.collabCode);
     } else {
-        saveGroupCodeLocally(null);
+        // No collab on this workspace — clear group state entirely
+        localStorage.removeItem(LS_GROUP_KEY);
         currentGroup = null;
         _syncCollabState();
         isSupervisor = false;
