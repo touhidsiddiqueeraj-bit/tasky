@@ -874,13 +874,14 @@ async function vvTogglePiP() {
 }
 
 function _vvClosePiP() {
+    var wasActive = vvPipActive || !!document.pictureInPictureElement || vvPipWindow;
     if (document.pictureInPictureElement) {
         document.exitPictureInPicture().catch(() => {});
     }
     if (vvPipWindow) { try { vvPipWindow.close(); } catch(_) {} vvPipWindow = null; }
     vvPipActive = false;
     _vvUpdateVideoControls();
-    _vvToast('📺 PiP closed');
+    if (wasActive) _vvToast('📺 PiP closed');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
