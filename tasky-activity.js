@@ -296,8 +296,34 @@ document.addEventListener('timer:stop', function(e) {
         btn.textContent = '📋 Activity';
         btn.addEventListener('click', _actOpenPanel);
         toolbox.appendChild(btn);
+        // Set initial visibility
+        _actUpdateButtonVisibility();
     }, 600);
 })();
+
+// Show activity button only on workspaces that have a collab attached
+function _actUpdateButtonVisibility() {
+    var btn = document.getElementById('act-toggle-btn');
+    if (!btn) return;
+    var isCollab = (typeof window.currentGroup !== 'undefined' && window.currentGroup) ||
+                   (typeof workspaces !== 'undefined' && typeof activeWorkspaceId !== 'undefined' &&
+                    workspaces.find(function(w) { return w.id === activeWorkspaceId && w.collabCode; }));
+    btn.style.display = isCollab ? '' : 'none';
+    // Close panel if open and no longer on a collab workspace
+    if (!isCollab && _actOpen) _actClose();
+}
+
+// Hook into renderGroupUI (set by tasky-collab.js) to update visibility on workspace/collab changes
+window.addEventListener('load', function() {
+    if (typeof renderGroupUI === 'function') {
+        var _actOrigRenderGroupUI = renderGroupUI;
+        renderGroupUI = function() {
+            _actOrigRenderGroupUI.apply(this, arguments);
+            _actUpdateButtonVisibility();
+        };
+    }
+});
+
 
 // Load persisted activity
 _activityFeed = _actLoad();
