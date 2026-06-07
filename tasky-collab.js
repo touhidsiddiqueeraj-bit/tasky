@@ -408,7 +408,7 @@ addTaskToTodo = function(text) {
         // Validate assignee is in group
         const member = currentGroup.members.find(m => m.handle === parsed.assignedTo);
         if (!member) {
-            showTaskyToast(`⚠️ No member "@${parsed.assignedTo}" in this collaboration`);
+            _collabToast(`⚠️ No member "@${parsed.assignedTo}" in this collaboration`);
             return;
         }
         addCollabTask(parsed);
@@ -430,7 +430,8 @@ async function addCollabTask(parsed) {
         createdAt: new Date().toISOString(),
         assignedTo: parsed.assignedTo,
         assignedBy: currentHandle || null,
-        groupCode: currentGroup.code
+        groupCode: currentGroup.code,
+        blockedBy: []
     };
 
     try {
@@ -460,12 +461,12 @@ async function addCollabTask(parsed) {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        showTaskyToast(`✅ Assigned "${task.text}" → @${task.assignedTo}`);
+        _collabToast(`✅ Assigned "${task.text}" → @${task.assignedTo}`);
         pushAssignmentNotification(task);
         // Refresh team panel so supervisor sees updated counts immediately
         renderTeamPanel();
     } catch(e) {
-        showTaskyToast(`⚠️ Failed to assign task: ${e.message}`);
+        _collabToast(`⚠️ Failed to assign task: ${e.message}`);
     }
 }
 
@@ -534,7 +535,7 @@ function startNotifListener() {
             snap.docChanges().forEach(change => {
                 if (change.type === 'added') {
                     const n = change.doc.data();
-                    showTaskyToast(`📋 New task from @${n.fromHandle}: "${n.taskText}"`);
+                    _collabToast(`📋 New task from @${n.fromHandle}: "${n.taskText}"`);
                     // Mark read
                     change.doc.ref.update({ read: true }).catch(() => {});
                     // Merge the new task from the group subcollection into the local board
@@ -1347,7 +1348,7 @@ async function handleAssignGroupSubmit() {
     const msg = skipped
         ? `⊞ \"${group.name}\" assigned to @${handle} — ${assigned} sent, ${skipped} failed`
         : `⊞ \"${group.name}\" — ${assigned} task${assigned !== 1 ? 's' : ''} assigned to @${handle}`;
-    showTaskyToast(msg);
+    _collabToast(msg);
 }
 
 function closeAssignModal() {
@@ -1627,7 +1628,7 @@ function copyGroupCode() {
     const code = currentGroup ? currentGroup.code :
         document.getElementById('collab-share-code')?.textContent;
     if (!code) return;
-    navigator.clipboard.writeText(code).then(() => showTaskyToast('📋 Code copied!')).catch(() => {});
+    navigator.clipboard.writeText(code).then(() => _collabToast('📋 Code copied!')).catch(() => {});
 }
 
 // ─── Invite Link ──────────────────────────────────────────────────────────
@@ -1644,8 +1645,8 @@ function copyInviteLink() {
     const preview = document.getElementById('collab-invite-link-preview');
     if (preview) { preview.textContent = url; preview.style.display = 'block'; }
     navigator.clipboard.writeText(url)
-        .then(() => showTaskyToast('🤝 Invite link copied! Send it to your teammate.'))
-        .catch(() => { showTaskyToast('🤝 Invite link: ' + url); });
+        .then(() => _collabToast('🤝 Invite link copied! Send it to your teammate.'))
+        .catch(() => { _collabToast('🤝 Invite link: ' + url); });
 }
 
 function shareInviteLink() {
@@ -1675,8 +1676,8 @@ function copyShareableBoardLink() {
     const preview = document.getElementById('collab-share-link-preview');
     if (preview) { preview.textContent = url; preview.style.display = 'block'; }
     navigator.clipboard.writeText(url)
-        .then(() => showTaskyToast('🔗 Share link copied! Send it to your client.'))
-        .catch(() => { showTaskyToast('🔗 Link: ' + url); });
+        .then(() => _collabToast('🔗 Share link copied! Send it to your client.'))
+        .catch(() => { _collabToast('🔗 Link: ' + url); });
 }
 
 function openShareableBoard() {
@@ -2563,7 +2564,7 @@ async function openComments(taskId, taskText, column, ownerUid) {
                 _renderCommentFeed(taskId, entries);
             }
         } catch(e) {
-            showTaskyToast('⚠️ Failed to save comment');
+            _collabToast('⚠️ Failed to save comment');
         }
         sendBtn.disabled = false;
         input.focus();
