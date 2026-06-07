@@ -215,12 +215,26 @@ async function loadActiveGroup() {
         const serverCode = snap.exists ? (snap.data().activeGroup || null) : null;
 
         if (serverCode !== localCode) {
-            // Server is authoritative — update local cache and restart listener
-            saveGroupCodeLocally(serverCode);
             stopGroupListener();
             if (serverCode) {
-                startGroupListener(serverCode);
+                if (localCode) {
+                    // Workspace already linked to a code — update and restart
+                    saveGroupCodeLocally(serverCode);
+                    startGroupListener(serverCode);
+                } else {
+                    // Workspace has no collabCode — don't link it
+                    localStorage.setItem(LS_GROUP_KEY, serverCode);
+                    var wsWithCode = workspaces.find(function(w) { return w.collabCode === serverCode; });
+                    if (wsWithCode && wsWithCode.id !== activeWorkspaceId && typeof switchWorkspace !== 'undefined') {
+                        switchWorkspace(wsWithCode.id);
+                        return;
+                    }
+                    currentGroup = null;
+                    _syncCollabState();
+                    renderGroupUI();
+                }
             } else {
+                saveGroupCodeLocally(null);
                 currentGroup = null;
                 _syncCollabState();
                 renderGroupUI();
