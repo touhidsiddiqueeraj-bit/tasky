@@ -822,7 +822,7 @@ function _vvUpdateRecordTimer() {
 // ══════════════════════════════════════════════════════════════════════════
 async function vvTogglePiP() {
     if (vvPipActive) {
-        _vvClosePiP(); return;
+        _vvClosePiP(); _vvToast('📺 PiP closed'); return;
     }
 
     // Choose video source: local cam > screen > first remote
@@ -874,14 +874,12 @@ async function vvTogglePiP() {
 }
 
 function _vvClosePiP() {
-    var wasActive = vvPipActive || !!document.pictureInPictureElement || vvPipWindow;
     if (document.pictureInPictureElement) {
         document.exitPictureInPicture().catch(() => {});
     }
     if (vvPipWindow) { try { vvPipWindow.close(); } catch(_) {} vvPipWindow = null; }
     vvPipActive = false;
     _vvUpdateVideoControls();
-    if (wasActive) _vvToast('📺 PiP closed');
 }
 
 // ══════════════════════════════════════════════════════════════════════════
