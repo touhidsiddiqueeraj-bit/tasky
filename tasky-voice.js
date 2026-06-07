@@ -599,6 +599,8 @@ function _vcUpdateDuration() {
 
 // ─── Inject buttons (called after renderGroupUI settles) ──────────────────
 function _vcInjectCallButtons() {
+    // Only inject if the collab lock is active for this workspace
+    if (typeof window._isCollabLockActive !== 'function' || !window._isCollabLockActive()) return;
     // Supervisor: inject after #tc-board-btn in the Team column header
     if (!document.getElementById('vc-call-btn')) {
         const boardBtn = document.getElementById('tc-board-btn');
@@ -839,7 +841,8 @@ window.addEventListener('load', function _vcInstallHooks() {
         renderGroupUI = function() {
             _vcOrig.apply(this, arguments);
             const u = _vcUser(), g = _vcGroup();
-            if (g && u && !u.isAnonymous) {
+            var lockActive = typeof window._isCollabLockActive === 'function' && window._isCollabLockActive();
+            if (g && u && !u.isAnonymous && lockActive) {
                 setTimeout(_vcInjectCallButtons, 80);
                 _vcStartRingListener();
             } else {
@@ -873,7 +876,8 @@ window.addEventListener('load', function _vcInstallHooks() {
     // Trigger initial injection in case group is already active on load
     setTimeout(_vcInjectCallButtons, 200);
     const u = _vcUser(), g = _vcGroup();
-    if (g && u && !u.isAnonymous) _vcStartRingListener();
+    var lockActive = typeof window._isCollabLockActive === 'function' && window._isCollabLockActive();
+    if (g && u && !u.isAnonymous && lockActive) _vcStartRingListener();
 });
 
 // ─── Exports ──────────────────────────────────────────────────────────────

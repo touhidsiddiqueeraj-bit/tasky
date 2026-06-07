@@ -305,9 +305,7 @@ document.addEventListener('timer:stop', function(e) {
 function _actUpdateButtonVisibility() {
     var btn = document.getElementById('act-toggle-btn');
     if (!btn) return;
-    var isCollab = (typeof window.currentGroup !== 'undefined' && window.currentGroup) ||
-                   (typeof workspaces !== 'undefined' && typeof activeWorkspaceId !== 'undefined' &&
-                    workspaces.find(function(w) { return w.id === activeWorkspaceId && w.collabCode; }));
+    var isCollab = typeof window._isCollabLockActive === 'function' && window._isCollabLockActive();
     btn.style.display = isCollab ? '' : 'none';
     // Close panel if open and no longer on a collab workspace
     if (!isCollab && _actOpen) _actClose();

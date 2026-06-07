@@ -22,6 +22,16 @@ let groupListener     = null;   // Firestore onSnapshot unsubscribe
 let tasksListener     = null;   // Firestore onSnapshot for tasks subcollection (supervisor)
 let teamPanelMember   = null;   // handle being inspected in team panel
 
+// Collab lock: only show collab features when the current workspace's collabCode
+// matches the active group's code. This prevents cross-collab leaks and race
+// conditions when switching workspaces.
+function _isCollabLockActive() {
+    if (!currentGroup || typeof workspaces === 'undefined' || typeof activeWorkspaceId === 'undefined') return false;
+    var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
+    return ws && ws.collabCode === currentGroup.code;
+}
+window._isCollabLockActive = _isCollabLockActive;
+
 // ─── Handle / Identity ────────────────────────────────────────────────────
 async function ensureHandle() {
     if (!currentUser) return null;
@@ -156,9 +166,13 @@ async function leaveGroup() {
     }
     await db.collection('users').doc(currentUser.uid).update({ activeGroup: firebase.firestore.FieldValue.delete() });
     saveGroupCodeLocally(null);
-    // Unlink collab code from active workspace
+    // Unlink collab code from active workspace (both via API and direct object update)
     if (typeof window.linkWorkspaceToCollab === 'function') {
         window.linkWorkspaceToCollab(typeof activeWorkspaceId !== 'undefined' ? activeWorkspaceId : 1, null, null);
+    }
+    if (typeof workspaces !== 'undefined' && typeof activeWorkspaceId !== 'undefined') {
+        var _ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
+        if (_ws) { _ws.collabCode = null; if (typeof saveWorkspacesMeta === 'function') saveWorkspacesMeta(); }
     }
     stopGroupListener();
     currentGroup = null;
@@ -632,13 +646,15 @@ function renderGroupUI() {
     const board = document.querySelector('.board');
     if (!board) return;
 
+    var lockActive = _isCollabLockActive();
+
     // Update board class
-    board.classList.toggle('board-4col', !!(currentGroup && isSupervisor));
+    board.classList.toggle('board-4col', !!(lockActive && isSupervisor));
 
     // Update collab badge in header
     renderCollabBadge();
 
-    if (currentGroup && isSupervisor) {
+    if (lockActive && isSupervisor) {
         // Inject 4th column once; reuse on subsequent renders
         var teamCol = document.getElementById('collab-team-column');
         if (!teamCol) {
@@ -671,7 +687,7 @@ function renderCollabBadge() {
         var target = document.querySelector('.top-menu') || document.body;
         target.appendChild(badge);
     }
-    if (currentGroup) {
+    if (_isCollabLockActive()) {
         badge.style.display = 'flex';
         badge.innerHTML = `
             <span class="collab-badge-dot ${isSupervisor ? 'supervisor' : 'member'}"></span>
@@ -998,7 +1014,7 @@ function renderMemberDetail(list) {
 async function renderCollabSummary() {
     let bar = document.getElementById('collab-summary-bar');
 
-    if (!currentGroup || !isSupervisor) {
+    if (!_isCollabLockActive() || !isSupervisor) {
         if (bar) bar.remove();
         return;
     }
@@ -1067,8 +1083,8 @@ function renderCollabDropdownItems() {
     const divider    = document.getElementById('collab-dd-divider');
     if (!createBtn) return; // HTML not ready yet
 
-    if (!currentGroup) {
-        // Not in a collab — show Create / Join
+    if (!_isCollabLockActive()) {
+        // Not in a collab on this workspace — show Create / Join
         createBtn.style.display = '';
         joinBtn.style.display   = '';
         infoBtn.style.display   = 'none';
@@ -2308,6 +2324,9 @@ window.__onWorkspaceSwitch = function(newId, oldId) {
         // and breaking the else branch permanently.
         localStorage.setItem(LS_GROUP_KEY, ws.collabCode);
         startGroupListener(ws.collabCode);
+        // Immediately show/hide collab features based on lock rather than
+        // waiting for the listener to fire (which may be delayed).
+        renderGroupUI();
     } else {
         // No collab on this workspace — clear group state entirely
         localStorage.removeItem(LS_GROUP_KEY);
@@ -2324,14 +2343,14 @@ window.__onWorkspaceSwitch = function(newId, oldId) {
 function updateAssignHintVisibility() {
     const hint = document.getElementById('floating-assign-hint');
     if (!hint) return;
-    hint.style.display = (currentGroup && isSupervisor) ? 'inline' : 'none';
+    hint.style.display = (_isCollabLockActive() && isSupervisor) ? 'inline' : 'none';
 }
 
 // Also update placeholder
 function updateInputPlaceholder() {
     const input = document.getElementById('floating-input');
     if (!input) return;
-    if (currentGroup && isSupervisor) {
+    if (_isCollabLockActive() && isSupervisor) {
         input.placeholder = 'Add task — or: fix auth to::jon priority::high date::20may';
     } else {
         input.placeholder = 'Type to add task or template name…';
@@ -3516,7 +3535,7 @@ function _mbShowEmojiPicker(msgId,isReply,replyId,anchor) {
 const _origRenderGroupUI_mb = renderGroupUI;
 renderGroupUI = function() {
     _origRenderGroupUI_mb();
-    if (currentGroup && currentUser && !currentUser.isAnonymous) {
+    if (_isCollabLockActive() && currentUser && !currentUser.isAnonymous) {
         // Start background listener for unread count if not already running
         if (!_mbListener) {
             _mbLastSeen = _mbUnreadLS();
