@@ -75,7 +75,7 @@ createTaskCard = function(task, column) {
 
     var container = document.createElement('div');
     container.className = 'subtask-container';
-    container.style.display = 'none';
+    container.style.display = subtasks.length > 0 ? '' : 'none';
     container.id = 'st-cont-' + task.id;
     _stRenderContainer(container, task, column);
     card.appendChild(container);
