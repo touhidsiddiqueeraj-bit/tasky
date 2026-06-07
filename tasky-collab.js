@@ -26,7 +26,6 @@ let teamPanelMember   = null;   // handle being inspected in team panel
 // matches the active group's code. This prevents cross-collab leaks and race
 // conditions when switching workspaces.
 function _isCollabLockActive() {
-    console.log('_isCollabLockActive', {currentGroup, workspaces, activeWorkspaceId});
     if (!currentGroup || typeof workspaces === 'undefined' || typeof activeWorkspaceId === 'undefined') return false;
     if (activeWorkspaceId === 1) return false; // Personal workspace — never show collab features
     var ws = workspaces.find(function(w) { return w.id === activeWorkspaceId; });
@@ -705,8 +704,7 @@ function renderGroupUI() {
         if (ov) ov.remove();
         var mc = document.getElementById('mb-member-controls');
         if (mc) mc.remove();
-        // Also disconnect active call
-        if (typeof window.vcLeave === 'function') window.vcLeave();
+        // Voice hook handles vcLeave in its else branch
         board.classList.remove('board-4col');
         renderCollabBadge();
         renderCollabDropdownItems();
