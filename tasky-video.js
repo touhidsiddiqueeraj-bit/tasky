@@ -967,32 +967,26 @@ function _vvBuildVideoGrid() {
     grid.className = 'vv-grid';
 
     grid.innerHTML = `
-        <div class="vv-grid-bar">
-            <div class="vv-grid-title">
-                <span class="vv-grid-icon">🎬</span>
-                <span id="vv-grid-label">Video</span>
-            </div>
-            <div class="vv-grid-controls">
-                <span class="vv-rec-badge" id="vv-rec-badge" style="display:none;">
-                    <span class="vv-rec-dot"></span>REC <span id="vv-rec-timer">00:00</span>
-                </span>
-                <button class="vv-ctrl" id="vv-btn-cam"    title="Camera">📷</button>
-                <button class="vv-ctrl" id="vv-btn-screen" title="Screen share">🖥️</button>
-                <button class="vv-ctrl" id="vv-btn-rec"    title="Record">⏺️</button>
-                <button class="vv-ctrl" id="vv-btn-pip"    title="Picture-in-Picture">📺</button>
-                <button class="vv-ctrl" id="vv-btn-quality"title="HD/SD"><svg viewBox="0 0 24 24" width="17" height="17"><rect x="2.5" y="5" width="19" height="14" rx="3" fill="currentColor"/><text x="12" y="16.5" text-anchor="middle" font-size="9" font-weight="800" fill="#fff">HD</text></svg></button>
-                <button class="vv-ctrl" id="vv-btn-layout" title="Layout"><svg viewBox="0 0 24 24" width="17" height="17"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="13" y="3" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="3" y="13" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="13" y="13" width="8" height="8" rx="1.5" fill="currentColor"/></svg></button>
-                <span class="vv-controls-sep"></span>
-                <button class="vv-ctrl" id="vv-btn-mute"   title="Mute">🎙️</button>
-                <button class="vv-ctrl" id="vv-btn-deafen" title="Deafen">🔊</button>
-                <button class="vv-ctrl vv-ctrl--leave" id="vv-btn-leave" title="Leave call">📵</button>
-                <button class="vv-ctrl vv-ctrl--close" id="vv-btn-close" title="Close video panel">✕</button>
-            </div>
-        </div>
         <div class="vv-tiles" id="vv-tiles"></div>
         <div class="vv-grid-hint" id="vv-grid-hint">
             <span class="vv-grid-hint-icon">💡</span>
             <span><strong>Turn on your camera</strong> with 📷, or share your screen with 🖥️. Double-click any tile to fullscreen. Pin a speaker with 📍.</span>
+        </div>
+        <div id="vv-grid-toolbar">
+            <span class="vv-rec-badge" id="vv-rec-badge" style="display:none;">
+                <span class="vv-rec-dot"></span>REC <span id="vv-rec-timer">00:00</span>
+            </span>
+            <button class="vv-ctrl" id="vv-btn-cam"    title="Camera">📷</button>
+            <button class="vv-ctrl" id="vv-btn-screen" title="Screen share">🖥️</button>
+            <button class="vv-ctrl" id="vv-btn-rec"    title="Record">⏺️</button>
+            <button class="vv-ctrl" id="vv-btn-pip"    title="Picture-in-Picture">📺</button>
+            <button class="vv-ctrl" id="vv-btn-quality"title="HD/SD"><svg viewBox="0 0 24 24" width="17" height="17"><rect x="2.5" y="5" width="19" height="14" rx="3" fill="currentColor"/><text x="12" y="16.5" text-anchor="middle" font-size="9" font-weight="800" fill="#fff">HD</text></svg></button>
+            <button class="vv-ctrl" id="vv-btn-layout" title="Layout"><svg viewBox="0 0 24 24" width="17" height="17"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="13" y="3" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="3" y="13" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="13" y="13" width="8" height="8" rx="1.5" fill="currentColor"/></svg></button>
+            <span class="vv-controls-sep"></span>
+            <button class="vv-ctrl" id="vv-btn-mute"   title="Mute">🎙️</button>
+            <button class="vv-ctrl" id="vv-btn-deafen" title="Deafen">🔊</button>
+            <button class="vv-ctrl vv-ctrl--leave" id="vv-btn-leave" title="Leave call">📵</button>
+            <button class="vv-ctrl vv-ctrl--close" id="vv-btn-close" title="Close video panel">✕</button>
         </div>`;
 
     document.body.appendChild(grid);
