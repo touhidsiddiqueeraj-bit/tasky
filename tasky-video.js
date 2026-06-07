@@ -980,8 +980,8 @@ function _vvBuildVideoGrid() {
                 <button class="vv-ctrl" id="vv-btn-screen" title="Screen share">🖥️</button>
                 <button class="vv-ctrl" id="vv-btn-rec"    title="Record">⏺️</button>
                 <button class="vv-ctrl" id="vv-btn-pip"    title="Picture-in-Picture">📺</button>
-                <button class="vv-ctrl" id="vv-btn-quality"title="HD/SD">📶</button>
-                <button class="vv-ctrl" id="vv-btn-layout" title="Layout">⊞</button>
+                <button class="vv-ctrl" id="vv-btn-quality"title="HD/SD"><svg viewBox="0 0 24 24" width="17" height="17"><rect x="2.5" y="5" width="19" height="14" rx="3" fill="currentColor"/><text x="12" y="16.5" text-anchor="middle" font-size="9" font-weight="800" fill="#fff">HD</text></svg></button>
+                <button class="vv-ctrl" id="vv-btn-layout" title="Layout"><svg viewBox="0 0 24 24" width="17" height="17"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="13" y="3" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="3" y="13" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="13" y="13" width="8" height="8" rx="1.5" fill="currentColor"/></svg></button>
                 <button class="vv-ctrl vv-ctrl--close" id="vv-btn-close" title="Close video panel">✕</button>
             </div>
         </div>
@@ -1308,8 +1308,19 @@ function _vvUpdateVideoControls() {
     _vvSetBtn('vv-btn-screen', vvScreenOn,   '🖥️', '🖥️');
     _vvSetBtn('vv-btn-rec',    vvRecording,  '⏹️', '⏺️');
     _vvSetBtn('vv-btn-pip',    vvPipActive,  '📺', '📺');
-    _vvSetBtn('vv-btn-quality',false, vvQuality === 'hd' ? 'HD📶' : 'SD📶', '');
-    _vvSetBtn('vv-btn-layout', false, vvLayout === 'grid' ? '⊞' : '👤', '');
+    var qBtn = document.getElementById('vv-btn-quality');
+    if (qBtn) {
+        qBtn.className = 'vv-ctrl';
+        var isHd = vvQuality === 'hd';
+        qBtn.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17"><rect x="2.5" y="5" width="19" height="14" rx="3" fill="currentColor" opacity="' + (isHd ? '1' : '0.5') + '"/><text x="12" y="16.5" text-anchor="middle" font-size="9" font-weight="800" fill="#fff">' + (isHd ? 'HD' : 'SD') + '</text></svg>';
+    }
+    var lBtn = document.getElementById('vv-btn-layout');
+    if (lBtn) {
+        lBtn.className = 'vv-ctrl';
+        lBtn.innerHTML = vvLayout === 'grid'
+            ? '<svg viewBox="0 0 24 24" width="17" height="17"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="13" y="3" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="3" y="13" width="8" height="8" rx="1.5" fill="currentColor"/><rect x="13" y="13" width="8" height="8" rx="1.5" fill="currentColor"/></svg>'
+            : '<svg viewBox="0 0 24 24" width="17" height="17"><rect x="2" y="3" width="20" height="11" rx="2" fill="currentColor"/><rect x="2" y="16" width="9" height="5" rx="1.5" fill="currentColor"/><rect x="13" y="16" width="9" height="5" rx="1.5" fill="currentColor"/></svg>';
+    }
 
     // Call button badge (injected into vc-panel controls)
     const vidPanelBtn = document.getElementById('vv-panel-btn');
