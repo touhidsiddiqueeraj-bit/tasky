@@ -922,24 +922,25 @@
             .toolbox { display: none !important; }
             #cal-mini-btn { display: none !important; }
         }
-        }
 
         .date-btn, .move-btn, .delete-btn, .edit-btn {
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.12);
             color: rgba(255, 255, 255, 0.6);
-            height: 26px;
-            border-radius: 7px;
+            height: 28px;
+            border-radius: 10px;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 12px;
+            font-family: inherit;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+            transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
             flex-shrink: 0;
             padding: 0 8px;
             gap: 4px;
             white-space: nowrap;
+            outline: none;
         }
 
         body.light-mode .date-btn,
@@ -951,15 +952,29 @@
             color: rgba(0, 0, 0, 0.5);
         }
 
-        .date-btn:hover, .move-btn:hover {
-            background: rgba(255, 255, 255, 0.18);
-            color: #fff;
+        .date-btn:hover, .move-btn:hover, .edit-btn:hover {
+            background: rgba(139, 92, 246, 0.2);
+            color: #a78bfa;
+            border-color: rgba(139, 92, 246, 0.3);
+            transform: translateY(-1px);
+            box-shadow: 0 3px 12px rgba(139, 92, 246, 0.15);
         }
 
         body.light-mode .date-btn:hover,
-        body.light-mode .move-btn:hover {
-            background: rgba(0, 0, 0, 0.1);
-            color: #000;
+        body.light-mode .move-btn:hover,
+        body.light-mode .edit-btn:hover {
+            background: rgba(139, 92, 246, 0.12);
+            color: #7c3aed;
+            border-color: rgba(139, 92, 246, 0.25);
+            box-shadow: 0 3px 12px rgba(139, 92, 246, 0.1);
+        }
+
+        .date-btn:active, .move-btn:active, .delete-btn:active, .edit-btn:active {
+            transform: scale(0.96);
+        }
+
+        .date-btn:focus-visible, .move-btn:focus-visible, .delete-btn:focus-visible, .edit-btn:focus-visible {
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.4);
         }
 
         .delete-btn {
@@ -972,18 +987,20 @@
             background: rgba(239, 68, 68, 0.25);
             color: #ef4444;
             border-color: rgba(239, 68, 68, 0.3);
+            transform: translateY(-1px);
+            box-shadow: 0 3px 12px rgba(239, 68, 68, 0.15);
+        }
+
+        body.light-mode .delete-btn:hover {
+            background: rgba(239, 68, 68, 0.12);
+            color: #dc2626;
+            border-color: rgba(239, 68, 68, 0.25);
         }
 
         .edit-btn {
             width: 26px;
             padding: 0;
             font-size: 13px;
-        }
-
-        .edit-btn:hover {
-            background: rgba(139, 92, 246, 0.2);
-            color: #a78bfa;
-            border-color: rgba(139, 92, 246, 0.3);
         }
 
         /* When in editing mode, ✓ button turns green */
@@ -996,6 +1013,19 @@
         .task-card.editing .edit-btn:hover {
             background: rgba(16, 185, 129, 0.35);
             color: #6ee7b7;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 12px rgba(16, 185, 129, 0.15);
+        }
+
+        body.light-mode .task-card.editing .edit-btn {
+            background: rgba(16, 185, 129, 0.1);
+            color: #059669;
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        body.light-mode .task-card.editing .edit-btn:hover {
+            background: rgba(16, 185, 129, 0.2);
+            color: #047857;
         }
 
         .clear-done-btn {
