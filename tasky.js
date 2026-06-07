@@ -1594,6 +1594,25 @@
             }, 3000);
         }
 
+        function showConfirm(title, message, confirmLabel) {
+            return new Promise(function(resolve) {
+                var overlay = document.createElement('div');
+                overlay.className = 'onboarding-overlay visible';
+                overlay.style.cssText = 'display:flex;z-index:11000;';
+                overlay.innerHTML = '<div class="ob-card" style="max-width:420px;text-align:center;padding:32px;">'
+                    + '<div style="font-size:17px;font-weight:600;margin-bottom:12px;">' + title + '</div>'
+                    + '<div style="font-size:13.5px;color:rgba(255,255,255,0.6);margin-bottom:24px;line-height:1.5;">' + message + '</div>'
+                    + '<div style="display:flex;gap:10px;justify-content:center;">'
+                    + '<button id="sc-cancel" style="background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:10px 24px;color:#fff;font-size:14px;cursor:pointer;">Cancel</button>'
+                    + '<button id="sc-confirm" style="background:#ef4444;border:none;border-radius:10px;padding:10px 24px;color:#fff;font-size:14px;cursor:pointer;">' + (confirmLabel || 'Confirm') + '</button>'
+                    + '</div></div>';
+                document.body.appendChild(overlay);
+                overlay.querySelector('#sc-cancel').onclick = function() { overlay.remove(); resolve(false); };
+                overlay.querySelector('#sc-confirm').onclick = function() { overlay.remove(); resolve(true); };
+                overlay.addEventListener('click', function(e) { if (e.target === overlay) { overlay.remove(); resolve(false); } });
+            });
+        }
+
         // ─── Daily summary ────────────────────────────────────────────────────────
         function updateDailySummary() {
             const today = new Date().toDateString();
