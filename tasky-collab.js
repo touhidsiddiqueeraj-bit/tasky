@@ -94,7 +94,10 @@ async function createGroup(groupName) {
         var wsId = window.createWorkspace(groupName, code);
         if (typeof window.switchWorkspace === 'function') window.switchWorkspace(wsId);
     }
-    saveGroupCodeLocally(code);
+    // Note: createWorkspace already sets collabCode on the new workspace.
+    // __onWorkspaceSwitch (called inside switchWorkspace's timeout) handles LS_GROUP_KEY.
+    // Do NOT call saveGroupCodeLocally() here — activeWorkspaceId hasn't switched yet,
+    // so it would stamp the code on the OLD workspace (e.g. Personal).
     return code;
 }
 
@@ -135,7 +138,10 @@ async function joinGroup(code) {
             if (typeof window.switchWorkspace === 'function') window.switchWorkspace(wsId);
         }
     }
-    saveGroupCodeLocally(code.toUpperCase());
+    // Note: workspace already has collabCode (set by createWorkspace or previous join).
+    // __onWorkspaceSwitch (called inside switchWorkspace's timeout) handles LS_GROUP_KEY.
+    // Do NOT call saveGroupCodeLocally() here — activeWorkspaceId hasn't switched yet,
+    // so it would stamp the code on the OLD workspace (e.g. Personal).
     return { ok: true };
 }
 
@@ -648,12 +654,67 @@ function renderGroupUI() {
     const board = document.querySelector('.board');
     if (!board) return;
 
-    var lockActive = _isCollabLockActive();
+    // ── 1. Sync collab state to current workspace ──
+    var ws = (typeof workspaces !== 'undefined' && typeof activeWorkspaceId !== 'undefined')
+        ? workspaces.find(function(w) { return w.id === activeWorkspaceId; })
+        : null;
+    var wsCode = ws ? ws.collabCode : null;
+    var g = currentGroup;
 
-    // Update board class
+    if (wsCode) {
+        // Workspace wants a collab code
+        if (!g || g.code !== wsCode) {
+            // Wrong code or no listener yet — restart with the right code
+            if (g) stopGroupListener();
+            stopTasksListener();
+            startGroupListener(wsCode);
+            return; // re-render when listener fires with the correct data
+        }
+        // else: code matches — fall through to render
+    } else {
+        // Workspace has no collab — tear down any stale collab state
+        if (g) {
+            stopGroupListener();
+            stopTasksListener();
+            stopNotifListener();
+            _mbStopListener();
+            _mbStopNotifListener();
+        }
+        currentGroup = null;
+        _syncCollabState();
+        isSupervisor = false;
+        _syncCollabState();
+        teamPanelMember = null;
+        _mbUnreadCount = 0;
+        _mbOpen = false;
+        // Remove all collab UI elements
+        var existing4th = document.getElementById('collab-team-column');
+        if (existing4th) existing4th.remove();
+        var bar = document.getElementById('collab-summary-bar');
+        if (bar) bar.remove();
+        ['vc-call-btn', 'vc-call-btn-member', 'vc-panel', 'vc-mini-bar', 'vc-incoming-modal'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.remove();
+        });
+        var panel = document.getElementById('mb-panel');
+        if (panel) panel.remove();
+        var ov = document.getElementById('mb-overlay');
+        if (ov) ov.remove();
+        var mc = document.getElementById('mb-member-controls');
+        if (mc) mc.remove();
+        // Also disconnect active call
+        if (typeof window.vcLeave === 'function') window.vcLeave();
+        board.classList.remove('board-4col');
+        renderCollabBadge();
+        renderCollabDropdownItems();
+        return;
+    }
+
+    // ── 2. Render based on consistent state ──
+    var lockActive = !!currentGroup && wsCode === currentGroup.code;
+
     board.classList.toggle('board-4col', !!(lockActive && isSupervisor));
 
-    // Update collab badge in header
     renderCollabBadge();
 
     if (lockActive && isSupervisor) {
@@ -2337,6 +2398,11 @@ window.__onWorkspaceSwitch = function(newId, oldId) {
         isSupervisor = false;
         _syncCollabState();
         teamPanelMember = null;
+        // Also ensure no stale collabCode is stamped on this workspace
+        if (ws && ws.collabCode) {
+            ws.collabCode = null;
+            if (typeof saveWorkspacesMeta === 'function') saveWorkspacesMeta();
+        }
         renderGroupUI();
     }
 };
