@@ -805,48 +805,7 @@
             color: #1a1040;
         }
 
-        .tb-btn {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            color: rgba(255, 255, 255, 0.5);
-            height: 28px;
-            border-radius: 7px;
-            cursor: pointer;
-            font-size: 11px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 4px;
-            padding: 0 10px;
-            white-space: nowrap;
-            transition: background 0.2s, color 0.2s, border-color 0.2s;
-        }
-        .tb-btn:hover {
-            background: rgba(255, 255, 255, 0.18);
-            color: #fff;
-        }
-        .tb-btn.active {
-            background: rgba(139, 92, 246, 0.15);
-            border-color: rgba(139, 92, 246, 0.3);
-            color: #a78bfa;
-        }
-        .tb-btn--new { color: #a78bfa; border-color: rgba(139, 92, 246, 0.25); }
-        body.light-mode .tb-btn {
-            background: rgba(0, 0, 0, 0.04);
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            color: rgba(0, 0, 0, 0.45);
-        }
-        body.light-mode .tb-btn:hover {
-            background: rgba(0, 0, 0, 0.1);
-            color: #111;
-        }
-        body.light-mode .tb-btn.active {
-            background: rgba(139, 92, 246, 0.08);
-            border-color: rgba(139, 92, 246, 0.2);
-            color: #7C3AED;
-        }
-        body.light-mode .tb-btn--new { color: #7C3AED; border-color: rgba(139, 92, 246, 0.2); }
-
+        /* ── Liquid Glass toolbox ─────────────────────────────────────── */
         .toolbox {
             position: fixed;
             bottom: 88px;
@@ -855,23 +814,113 @@
             z-index: 99;
             display: flex;
             align-items: center;
-            gap: 4px;
-            padding: 5px 8px;
+            gap: 6px;
+            padding: 6px 10px;
             background: rgba(20, 18, 34, 0.88);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 14px;
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border-radius: 22px;
+            box-shadow:
+                0 8px 48px rgba(0, 0, 0, 0.45),
+                0 0 0 1px rgba(139, 92, 246, 0.12),
+                inset 0 1px 0 rgba(255, 255, 255, 0.07);
+            border: 1px solid rgba(255, 255, 255, 0.06);
         }
+
+        .toolbox::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 26px;
+            border: 2px solid rgba(59, 130, 246, 0.35);
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.15), 0 0 80px rgba(59, 130, 246, 0.08), inset 0 0 30px rgba(59, 130, 246, 0.08);
+            pointer-events: none;
+            z-index: -1;
+            will-change: opacity;
+            animation: ringGlow 4s ease-in-out infinite;
+        }
+
+        body.light-mode .toolbox::before {
+            border: 2px solid rgba(59, 130, 246, 0.2);
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.06), 0 0 80px rgba(59, 130, 246, 0.03), inset 0 0 30px rgba(59, 130, 246, 0.03);
+        }
+
         .toolbox .tb-btn {
-            height: 30px;
-            padding: 0 10px;
+            height: 34px;
+            padding: 0 14px;
             font-size: 12px;
-            border-radius: 8px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            white-space: nowrap;
+            transition: background 0.25s, color 0.25s, border-color 0.25s, transform 0.2s, box-shadow 0.25s;
         }
+
+        .toolbox .tb-btn:hover {
+            background: rgba(255, 255, 255, 0.10);
+            border-color: rgba(139, 92, 246, 0.25);
+            color: #fff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(139, 92, 246, 0.15);
+        }
+
+        .toolbox .tb-btn:active {
+            transform: translateY(0) scale(0.97);
+        }
+
+        .toolbox .tb-btn.active {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: rgba(139, 92, 246, 0.35);
+            color: #a78bfa;
+            box-shadow: inset 0 0 12px rgba(139, 92, 246, 0.08);
+        }
+
+        .toolbox .tb-btn--new {
+            color: #a78bfa;
+            border-color: rgba(139, 92, 246, 0.2);
+        }
+
         body.light-mode .toolbox {
-            background: rgba(255, 255, 255, 0.9);
-            border-color: rgba(0, 0, 0, 0.08);
+            background: rgba(245, 240, 255, 0.78);
+            box-shadow:
+                0 8px 48px rgba(0, 0, 0, 0.10),
+                0 0 0 1px rgba(139, 92, 246, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.5);
+        }
+
+        body.light-mode .toolbox .tb-btn {
+            background: rgba(0, 0, 0, 0.03);
+            border-color: rgba(0, 0, 0, 0.06);
+            color: rgba(0, 0, 0, 0.5);
+        }
+
+        body.light-mode .toolbox .tb-btn:hover {
+            background: rgba(139, 92, 246, 0.06);
+            border-color: rgba(139, 92, 246, 0.2);
+            color: #6d28d9;
+            box-shadow: 0 4px 16px rgba(139, 92, 246, 0.10);
+        }
+
+        body.light-mode .toolbox .tb-btn.active {
+            background: rgba(139, 92, 246, 0.08);
+            border-color: rgba(139, 92, 246, 0.25);
+            color: #7C3AED;
+        }
+
+        body.light-mode .toolbox .tb-btn--new {
+            color: #7C3AED;
+            border-color: rgba(139, 92, 246, 0.2);
+        }
+
+        @media (max-width: 768px) {
+            .toolbox { display: none !important; }
+        }
         }
 
         .date-btn, .move-btn, .delete-btn, .edit-btn {
