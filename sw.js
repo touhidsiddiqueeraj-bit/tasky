@@ -14,7 +14,15 @@ var STATIC_ASSETS = [
   './tasky-calendar.js',
   './tasky-features.js',
   './tasky-collab.js',
-  './tasky-deps-search.js'
+  './tasky-deps-search.js',
+  './tasky-subtask.js',
+  './tasky-timer.js',
+  './tasky-timer.css',
+  './tasky-bulk.js',
+  './tasky-activity.js',
+  './tasky-whiteboard.js',
+  './tasky-whiteboard.css',
+  './tasky-palette.js'
 ];
 
 self.addEventListener('install', function(e) {
