@@ -30,20 +30,23 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 .vv-grid {
     position:        fixed;
-    top:             56px;
-    right:           20px;
-    width:           min(780px, calc(100vw - 32px));
-    max-height:      calc(100vh - 80px);
+    top:             0;
+    left:            0;
+    right:           0;
+    bottom:          0;
+    width:           100%;
+    height:          100%;
+    max-height:      100vh;
     background:      var(--vv-surface);
     border:          1px solid var(--vv-border);
-    border-radius:   var(--vv-radius);
+    border-radius:   0;
     box-shadow:      var(--vv-shadow);
     display:         flex;
     flex-direction:  column;
     overflow:        hidden;
-    z-index:         9400;
+    z-index:         9999;
     animation:       vv-panel-in 0.24s cubic-bezier(0.34, 1.42, 0.64, 1) both;
-    resize:          both;
+    resize:          none;
     min-width:       300px;
     min-height:      200px;
 }
@@ -376,7 +379,7 @@ body.light-mode .vv-ctrl[title]:hover::after { background: #1e1b4b; }
    RESPONSIVE
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 600px) {
-    .vv-grid { top: auto; bottom: 78px; right: 8px; left: 8px; width: auto; max-height: 55vh; resize: none; }
+    .vv-grid { top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; max-height: 100vh; resize: none; border-radius: 0; }
     .vv-tiles--9 { grid-template-columns: repeat(2, 1fr); }
     .vv-grid-controls { gap: 2px; }
     .vv-ctrl { padding: 4px 7px; font-size: 12px; }

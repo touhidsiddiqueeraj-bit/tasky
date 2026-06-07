@@ -994,9 +994,6 @@ function _vvBuildVideoGrid() {
     document.body.appendChild(grid);
     vvVideoGrid = grid;
 
-    // Make draggable
-    _vvMakeDraggable(grid, grid.querySelector('.vv-grid-bar'));
-
     // Wire buttons
     grid.querySelector('#vv-btn-cam').addEventListener('click',    vvToggleCamera);
     grid.querySelector('#vv-btn-screen').addEventListener('click', vvToggleScreen);
