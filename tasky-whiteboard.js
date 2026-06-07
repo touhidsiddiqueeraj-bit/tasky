@@ -398,6 +398,7 @@ function _wbClearAll() {
 
 // Inject whiteboard button into video grid controls
 (function _wbInject() {
+    if (window.innerWidth < 768) return;
     var check = setInterval(function() {
         if (document.getElementById('vv-btn-close')) {
             clearInterval(check);

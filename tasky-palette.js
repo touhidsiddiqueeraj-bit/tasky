@@ -291,13 +291,15 @@ function _kpShowRunningTimers() {
 }
 
 // Register keyboard shortcut: Cmd+K / Ctrl+K
-document.addEventListener('keydown', function(e) {
-    if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        if (_kpOpen) _kpClose();
-        else openPalette();
-    }
-});
+if (window.innerWidth >= 768) {
+    document.addEventListener('keydown', function(e) {
+        if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+            e.preventDefault();
+            if (_kpOpen) _kpClose();
+            else openPalette();
+        }
+    });
+}
 
 window.openPalette = openPalette;
 window._kpClose = _kpClose;

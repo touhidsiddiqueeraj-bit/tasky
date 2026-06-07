@@ -2,6 +2,10 @@
    TASKY — VIDEO CALL STYLES  (minimalist professional)
    ═══════════════════════════════════════════════════════════════════════════ */
 
+@media (max-width: 768px) {
+    .vv-grid, #vv-panel-btn, .vv-grid-controls { display: none !important; }
+}
+
 :root {
     --vv-bg:          #0a0914;
     --vv-surface:     #111020;

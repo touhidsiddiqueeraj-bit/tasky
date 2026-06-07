@@ -607,6 +607,7 @@ function _getBlockerDetails(task) {
 
 // ── Inject "🔗 Deps" button + blocked badge into task cards ──
 function _patchCreateTaskCard() {
+    if (window.innerWidth < 768) return;
     if (typeof createTaskCard !== 'function') { setTimeout(_patchCreateTaskCard, 200); return; }
     const _origCreateCard = createTaskCard;
     createTaskCard = function(task, column) {
@@ -1014,21 +1015,23 @@ function _gsJumpTo(idx) {
 }
 
 // ── Register Alt+R keyboard shortcut ──
-document.addEventListener('keydown', e => {
-    // Alt+R to open search
-    if ((e.key === 'r' || e.key === 'R') && e.altKey && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        if (_gsOpen) closeGlobalSearch();
-        else openGlobalSearch();
-        return;
-    }
-    // Escape closes search if open
-    if (e.key === 'Escape' && _gsOpen) {
-        e.stopPropagation();
-        closeGlobalSearch();
-        return;
-    }
-}, true);
+if (window.innerWidth >= 768) {
+    document.addEventListener('keydown', e => {
+        // Alt+R to open search
+        if ((e.key === 'r' || e.key === 'R') && e.altKey && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            if (_gsOpen) closeGlobalSearch();
+            else openGlobalSearch();
+            return;
+        }
+        // Escape closes search if open
+        if (e.key === 'Escape' && _gsOpen) {
+            e.stopPropagation();
+            closeGlobalSearch();
+            return;
+        }
+    }, true);
+}
 
 // Expose global
 window.openGlobalSearch = openGlobalSearch;

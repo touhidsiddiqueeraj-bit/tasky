@@ -920,6 +920,7 @@
 
         @media (max-width: 768px) {
             .toolbox { display: none !important; }
+            #cal-mini-btn { display: none !important; }
         }
         }
 

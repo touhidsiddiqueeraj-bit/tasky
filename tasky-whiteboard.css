@@ -1,3 +1,5 @@
+@media (max-width: 768px) { #wb-overlay, #vv-btn-whiteboard { display: none !important; } }
+
 #wb-overlay { position:fixed;inset:0;z-index:10300;display:none;background:rgba(6,5,10,0.6);backdrop-filter:blur(6px); }
 #wb-overlay.visible { display:flex;align-items:center;justify-content:center;animation:wb-fade .15s ease; }
 @keyframes wb-fade { from{opacity:0} to{opacity:1} }

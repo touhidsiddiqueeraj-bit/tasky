@@ -1031,8 +1031,8 @@
             document.addEventListener('keydown', (e) => {
                 // Bail if calendar is open — tasky-calendar.js handles all keys
                 if (document.getElementById('cal-overlay') && document.getElementById('cal-overlay').classList.contains('visible')) return;
-                // Alt+M → open calendar view
-                if ((e.key === 'm' || e.key === 'M') && e.altKey) {
+                // Alt+M → open calendar view (desktop only)
+                if (window.innerWidth >= 768 && (e.key === 'm' || e.key === 'M') && e.altKey) {
                     e.preventDefault();
                     if (typeof openCalendarView === 'function') openCalendarView();
                     return;

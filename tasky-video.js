@@ -1328,6 +1328,7 @@ function _vvSetBtn(id, active, activeLabel, inactiveLabel) {
 
 // ─── Inject Video button into vc-panel controls bar ───────────────────────
 function _vvInjectPanelButton() {
+    if (window.innerWidth < 768) return;
     if (document.getElementById('vv-panel-btn')) return;
     const leaveBtn = document.getElementById('vc-leave-btn');
     if (!leaveBtn) return;
@@ -1341,6 +1342,7 @@ function _vvInjectPanelButton() {
 
 // ─── Patch _vcRenderPanel to inject video button ──────────────────────────
 function _vvPatchRenderPanel() {
+    if (window.innerWidth < 768) return;
     const origRender = window._vcRenderPanel;
     // Since _vcRenderPanel is not exported to window, we watch for panel creation
     const obs = new MutationObserver(() => {
