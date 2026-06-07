@@ -1033,6 +1033,9 @@ document.addEventListener('keydown', e => {
 // Expose global
 window.openGlobalSearch = openGlobalSearch;
 window.closeGlobalSearch = closeGlobalSearch;
+window.openDepModal   = openDepModal;
+window.closeDepModal  = closeDepModal;
+window.saveDepModal   = saveDepModal;
 
 /* ─────────────────────────────────────────────────────────────────────────
    BOOT — run patches once DOM + scripts are loaded
