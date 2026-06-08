@@ -245,6 +245,25 @@ function _vcShowIncomingModal(callerHandle) {
             </div>
         </div>`;
     document.body.appendChild(modal);
+    // Fetch caller avatar asynchronously and update modal when loaded
+    const _callerUid = vcIncomingCallerId || '';
+    if (_callerUid && !(window._vcAvatarCache || {})[_callerUid]) {
+        const _adb = _vcDb();
+        if (_adb) {
+            _adb.collection('users').doc(_callerUid).get().then(snap => {
+                const _url = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
+                if (_url) {
+                    if (!window._vcAvatarCache) window._vcAvatarCache = {};
+                    window._vcAvatarCache[_callerUid] = _url;
+                    const _avEl = document.querySelector('#vc-incoming-modal .vc-incoming-avatar');
+                    if (_avEl) {
+                        const _init = (callerHandle || 'U')[0].toUpperCase();
+                        _avEl.innerHTML = '<img src="' + _url.replace(/"/g,'&quot;') + '" alt="' + _init + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">';
+                    }
+                }
+            }).catch(() => {});
+        }
+    }
     modal.querySelector('#vc-accept-btn').addEventListener('click',  vcAnswerCall);
     modal.querySelector('#vc-decline-btn').addEventListener('click', vcDeclineCall);
 
