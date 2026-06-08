@@ -1,6 +1,8 @@
 # Tasky
 
-A keyboard-first task tracker with three Kanban-style panels, team collaboration, voice/video calls, calendar, global search, and PWA offline support. Zero build step — open `index.html` and go.
+The all-in-one team workspace — tasks, voice/video calls, team chat,
+calendar, whiteboard, and more. Zero build step — open `index.html` and go.
+No servers, no npm, no subscriptions.
 
 <p align="center">
   <img width="1901" alt="Tasky screenshot" src="https://github.com/user-attachments/assets/84c3815a-8058-4074-8154-3dfbd444add9">
