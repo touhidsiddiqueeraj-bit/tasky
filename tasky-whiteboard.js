@@ -399,20 +399,22 @@ function _wbClearAll() {
 (function _wbInject() {
     if (window.innerWidth < 768) return;
     var check = setInterval(function() {
-        if (document.getElementById('vv-btn-close')) {
+        if (document.getElementById('vv-btn-cam')) {
             clearInterval(check);
-            var controls = document.querySelector('.vv-grid-controls');
+            var controls = document.getElementById('vv-grid-toolbar');
             if (!controls) return;
+            var camBtn = document.getElementById('vv-btn-cam');
+            if (!camBtn) return;
             var sep = document.createElement('span');
             sep.style.cssText = 'width:1px;height:20px;background:rgba(255,255,255,0.08);margin:0 4px;display:inline-block;vertical-align:middle;';
-            controls.insertBefore(sep, controls.lastElementChild);
+            controls.insertBefore(sep, camBtn.nextSibling);
             var wbBtn = document.createElement('button');
             wbBtn.className = 'vv-ctrl';
             wbBtn.id = 'vv-btn-whiteboard';
             wbBtn.title = 'Whiteboard';
             wbBtn.textContent = '🎨';
             wbBtn.addEventListener('click', function() { openWhiteboard(false); });
-            controls.insertBefore(wbBtn, controls.lastElementChild);
+            controls.insertBefore(wbBtn, camBtn.nextSibling);
             // Start persistent listener for auto-open detection
             _wbStartFBSync();
         }
