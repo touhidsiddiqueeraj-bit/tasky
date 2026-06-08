@@ -85,7 +85,7 @@ function _wbSend(payload, opts) {
                 _wbEnqueueBatch(payload);
             }
         }
-    } else {
+    } else if (payload.type !== 'cursor') {
         _wbSendFB(payload);
     }
 }
