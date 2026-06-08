@@ -7,7 +7,7 @@ var _wbRedoStack = [];
 var _wbDrawing = false;
 var _wbColor = '#8B5CF6';
 var _wbWidth = 3;
-var _wbTool = 'pen'; // pen, rect, circle, line, eraser
+var _wbTool = 'pen';
 var _wbStartX = 0;
 var _wbStartY = 0;
 var _wbPoints = [];
@@ -17,8 +17,16 @@ var _wbFBUnsub = null;
 var _wbCursorThrottle = false;
 var _wbCursorRenderThrottle = false;
 var _wbProcessedCount = 0;
+var _wbPendingBatch = [];
+var _wbBatchTimer = null;
 
 var WB_COLORS = ['#8B5CF6','#3B82F6','#10B981','#F59E0B','#EF4444','#EC4899','#ffffff','#000000'];
+
+// ─── DataChannel receive handler (called by tasky-voice.js) ───
+window._wbDCReceive = function(peerUid, data) {
+    try { var p = JSON.parse(data); } catch(e) { return; }
+    _wbProcessPayload(p);
+};
 
 function openWhiteboard(fromRemote) {
     var overlay = document.getElementById('wb-overlay');
@@ -27,6 +35,7 @@ function openWhiteboard(fromRemote) {
     _wbOpen = true;
     overlay.classList.add('visible');
     _wbStartFBSync();
+    _wbLoadArchive();
     setTimeout(function() { _wbResize(); _wbRenderAll(); }, 50);
     if (!fromRemote) {
         var ref = _wbDocRef();
@@ -38,7 +47,97 @@ function closeWhiteboard() {
     var overlay = document.getElementById('wb-overlay');
     if (overlay) overlay.classList.remove('visible');
     _wbOpen = false;
-    // Listener stays alive for auto-open detection. No Firestore write — per-user close.
+}
+
+// ─── Firestore archive load (late-joiner catch-up) ───
+function _wbLoadArchive() {
+    var ref = _wbDocRef();
+    if (!ref) return;
+    ref.get().then(function(snap) {
+        if (!snap.exists) return;
+        var data = snap.data();
+        var strokes = data.strokes || [];
+        strokes.forEach(function(p) { _wbProcessPayload(p); });
+        _wbProcessedCount = strokes.length;
+        if (_wbOpen && _wbCtx) _wbRenderAll();
+    }).catch(function(e) {
+        console.warn('[WB] archive load error:', e);
+    });
+}
+
+// ─── Primary send: DC when call active, Firestore fallback ───
+function _wbSend(payload, opts) {
+    opts = opts || {};
+    payload.uid = typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : 'anon';
+    var dcs = window._wbDCs || {};
+    var hasDC = false;
+    for (var k in dcs) { if (dcs[k].readyState === 'open') { hasDC = true; break; } }
+
+    if (hasDC) {
+        var msg = JSON.stringify(payload);
+        for (var uid in dcs) {
+            try { if (dcs[uid].readyState === 'open') dcs[uid].send(msg); } catch(e) {}
+        }
+        if (payload.type !== 'cursor') {
+            if (opts.immediate) {
+                _wbSendFB(payload);
+            } else {
+                _wbEnqueueBatch(payload);
+            }
+        }
+    } else {
+        _wbSendFB(payload);
+    }
+}
+
+// ─── Debounced Firestore archive batch ───
+function _wbEnqueueBatch(payload) {
+    _wbPendingBatch.push(payload);
+    if (!_wbBatchTimer) _wbBatchTimer = setTimeout(_wbFlushBatch, 3000);
+}
+
+function _wbFlushBatch() {
+    _wbBatchTimer = null;
+    if (_wbPendingBatch.length === 0) return;
+    var batch = _wbPendingBatch;
+    _wbPendingBatch = [];
+    var ref = _wbDocRef();
+    if (!ref) return;
+    var union = firebase.firestore.FieldValue.arrayUnion;
+    ref.update({
+        strokes: union.apply(null, batch),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(function() {
+        ref.set({
+            strokes: batch,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(function() {});
+    });
+}
+
+// ─── Process incoming payload (stroke/cursor/clear) ───
+function _wbProcessPayload(p) {
+    var myUid = typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : null;
+    if (p.uid === myUid) return;
+    if (p.type === 'stroke') {
+        if (_wbStrokes.some(function(s) { return s._ts === p.ts && s._handle === p.handle; })) return;
+        var s = p.stroke;
+        s._ts = p.ts;
+        s._handle = p.handle;
+        _wbStrokes.push(s);
+        _wbUndoStack.push(_wbStrokes.length - 1);
+        if (_wbOpen && _wbCtx) _wbRenderStroke(s);
+    } else if (p.type === 'cursor') {
+        if (!_wbCursorRenderThrottle) {
+            _wbCursorRenderThrottle = true;
+            _wbUpdateRemoteCursor(p.handle, p.x, p.y, p.color);
+            setTimeout(function() { _wbCursorRenderThrottle = false; }, 50);
+        }
+    } else if (p.type === 'clear') {
+        _wbStrokes = []; _wbUndoStack = []; _wbRedoStack = [];
+        if (_wbOpen && _wbCtx) _wbRenderAll();
+    }
 }
 
 function _wbBuild() {
@@ -49,11 +148,9 @@ function _wbBuild() {
     var panel = document.createElement('div');
     panel.id = 'wb-panel';
 
-    // Toolbar
     var bar = document.createElement('div');
     bar.className = 'wb-bar';
     bar.innerHTML = '<span class="wb-bar-title">🎨 Whiteboard</span>';
-    // Drawing tools
     var tools = ['pen','rect','circle','line','eraser'];
     var toolIcons = { pen: '✏️', rect: '▭', circle: '○', line: '╱', eraser: '🧹' };
     tools.forEach(function(t) {
@@ -65,12 +162,10 @@ function _wbBuild() {
         bar.appendChild(btn);
     });
 
-    // Separator
     var sep = document.createElement('span');
     sep.style.cssText = 'width:1px;height:20px;background:rgba(255,255,255,0.06);margin:0 4px;';
     bar.appendChild(sep);
 
-    // Color pickers
     WB_COLORS.forEach(function(c) {
         var btn = document.createElement('button');
         btn.className = 'wb-color-btn' + (c === _wbColor ? ' active' : '');
@@ -82,7 +177,6 @@ function _wbBuild() {
         bar.appendChild(btn);
     });
 
-    // Width slider
     var widthLabel = document.createElement('span');
     widthLabel.style.cssText = 'font-size:11px;color:rgba(255,255,255,0.3);margin-left:4px;';
     widthLabel.textContent = 'Size';
@@ -96,14 +190,12 @@ function _wbBuild() {
     widthSlider.addEventListener('input', function() { _wbWidth = parseInt(this.value); });
     bar.appendChild(widthSlider);
 
-    // Controls
     var controls = document.createElement('div');
     controls.className = 'wb-controls';
     controls.innerHTML = '<button class="wb-ctrl" id="wb-undo" title="Undo">↩ Undo</button><button class="wb-ctrl" id="wb-redo" title="Redo">↪ Redo</button><button class="wb-ctrl wb-ctrl--danger" id="wb-clear" title="Clear all">🗑 Clear</button><button class="wb-ctrl" id="wb-close" title="Close">✕</button>';
     bar.appendChild(controls);
     panel.appendChild(bar);
 
-    // Canvas
     var wrap = document.createElement('div');
     wrap.id = 'wb-canvas-wrap';
     var canvas = document.createElement('canvas');
@@ -116,19 +208,16 @@ function _wbBuild() {
     _wbCanvas = canvas;
     _wbCtx = canvas.getContext('2d');
 
-    // Canvas pointer events
     canvas.addEventListener('pointerdown', _wbPointerDown);
     canvas.addEventListener('pointermove', _wbPointerMove);
     canvas.addEventListener('pointerup', _wbPointerUp);
     canvas.addEventListener('pointerleave', _wbPointerUp);
 
-    // Button handlers
     document.getElementById('wb-undo').addEventListener('click', _wbUndo);
     document.getElementById('wb-redo').addEventListener('click', _wbRedo);
     document.getElementById('wb-clear').addEventListener('click', _wbClearAll);
     document.getElementById('wb-close').addEventListener('click', closeWhiteboard);
 
-    // Resize
     window.addEventListener('resize', _wbResize);
 }
 
@@ -270,6 +359,7 @@ function _wbRenderStroke(s) {
     }
 }
 
+// ─── Broadcast ───
 function _wbBroadcastCursor(e) {
     if (_wbCursorThrottle) return;
     _wbCursorThrottle = true;
@@ -277,16 +367,16 @@ function _wbBroadcastCursor(e) {
     var pos = _wbGetPos(e);
     var me = typeof currentHandle !== 'undefined' && currentHandle ? currentHandle : 'Me';
     var payload = { type: 'cursor', handle: me, x: pos.x, y: pos.y, color: _wbColor };
-    _wbSendFB(payload);
+    _wbSend(payload);
 }
 
 function _wbBroadcastStroke(stroke) {
     var me = typeof currentHandle !== 'undefined' && currentHandle ? currentHandle : 'Me';
     var payload = { type: 'stroke', handle: me, stroke: JSON.parse(JSON.stringify(stroke)), ts: Date.now() };
-    _wbSendFB(payload);
+    _wbSend(payload);
 }
 
-// ─── Firestore Sync ───
+// ─── Firestore ───
 function _wbDocRef() {
     if (typeof currentGroup === 'undefined' || !currentGroup || typeof db === 'undefined' || !db) return null;
     return db.collection('groups').doc(currentGroup.code).collection('whiteboard').doc('wb_' + currentGroup.code);
@@ -295,7 +385,6 @@ function _wbDocRef() {
 function _wbSendFB(payload) {
     var ref = _wbDocRef();
     if (!ref) return;
-    payload.uid = typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : 'anon';
     ref.update({
         strokes: firebase.firestore.FieldValue.arrayUnion(payload),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -310,7 +399,7 @@ function _wbSendFB(payload) {
 
 function _wbStartFBSync(retries) {
     retries = retries || 0;
-    if (_wbFBUnsub) return; // already listening
+    if (_wbFBUnsub) return;
     if (typeof currentGroup === 'undefined' || !currentGroup || typeof db === 'undefined' || !db) {
         if (retries < 10) { setTimeout(function() { _wbStartFBSync(retries + 1); }, 500); }
         else { console.warn('[WB] db/group not ready after 10 retries'); }
@@ -328,36 +417,25 @@ function _wbStartFBSync(retries) {
         var data = snap.data();
         var myUid = typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : null;
 
-        console.log('[WB] snapshot active=' + data.active + ' strokes=' + (data.strokes||[]).length + ' open=' + _wbOpen);
+        // Auto-open detection (always via Firestore)
+        if (data.active && !_wbOpen) { console.log('[WB] auto-open triggered'); openWhiteboard(true); return; }
 
-        // Auto-open if another participant opened the whiteboard
-        if (data.active && !_wbOpen) { console.log('[WB] auto-open triggered'); openWhiteboard(true); }
+        // Check if DataChannels are active — if so, strokes come via DC, skip Firestore iteration
+        var dcs = window._wbDCs || {};
+        var hasDC = false;
+        for (var k in dcs) { if (dcs[k].readyState === 'open') { hasDC = true; break; } }
 
-        var remoteStrokes = data.strokes || [];
-        // Skip items already processed in previous snapshots
-        var startIdx = Math.min(_wbProcessedCount, remoteStrokes.length);
-        for (var i = startIdx; i < remoteStrokes.length; i++) {
-            var p = remoteStrokes[i];
-            if (p.uid === myUid) continue;
-            if (p.type === 'stroke') {
-                if (_wbStrokes.some(function(s) { return s._ts === p.ts && s._handle === p.handle; })) continue;
-                var s = p.stroke;
-                s._ts = p.ts;
-                s._handle = p.handle;
-                _wbStrokes.push(s);
-                _wbUndoStack.push(_wbStrokes.length - 1);
-                if (_wbOpen && _wbCtx) _wbRenderStroke(s);
-            } else if (p.type === 'cursor') {
-                if (!_wbCursorRenderThrottle) {
-                    _wbCursorRenderThrottle = true;
-                    _wbUpdateRemoteCursor(p.handle, p.x, p.y, p.color);
-                    setTimeout(function() { _wbCursorRenderThrottle = false; }, 50);
-                }
-            } else if (p.type === 'clear') {
-                if (p.uid !== myUid) { _wbStrokes = []; _wbUndoStack = []; _wbRedoStack = []; if (_wbOpen && _wbCtx) _wbRenderAll(); }
+        if (!hasDC) {
+            var remoteStrokes = data.strokes || [];
+            var startIdx = Math.min(_wbProcessedCount, remoteStrokes.length);
+            for (var i = startIdx; i < remoteStrokes.length; i++) {
+                _wbProcessPayload(remoteStrokes[i]);
             }
+            _wbProcessedCount = remoteStrokes.length;
+        } else {
+            // DC active — just track array length so archive read stays in sync
+            _wbProcessedCount = (data.strokes || []).length;
         }
-        _wbProcessedCount = remoteStrokes.length;
     }, function(err) { console.warn('[WB] snapshot error:', err); });
 }
 
@@ -395,29 +473,29 @@ function _wbUndo() {
 function _wbRedo() {
     if (_wbRedoStack.length === 0) return;
     var idx = _wbRedoStack.pop();
-    _wbUndoStack.push(idx);
-    // Re-fetch from original data? Simplified: just re-add from saved
-    // For now, redo is a no-op in this simplified version
+    _wbRedoStack.push(idx);
 }
 
 function _wbClearAll() {
     if (_wbStrokes.length === 0) return;
-    if (typeof showConfirm === 'function') {
-        showConfirm('Clear whiteboard?', 'This clears the canvas for everyone.', 'Clear').then(function(ok) {
-            if (!ok) return;
-            _wbStrokes = [];
-            _wbUndoStack = [];
-            _wbRedoStack = [];
-            _wbRenderAll();
-            var me = typeof currentHandle !== 'undefined' && currentHandle ? currentHandle : 'Me';
-            var myUid = typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : null;
-            _wbSendFB({ type: 'clear', uid: myUid, handle: me });
-        });
-    } else {
+    function doClear() {
+        // Flush pending batch before clearing so archive order is correct
+        if (_wbBatchTimer) { clearTimeout(_wbBatchTimer); _wbBatchTimer = null; _wbFlushBatch(); }
         _wbStrokes = [];
         _wbUndoStack = [];
         _wbRedoStack = [];
         _wbRenderAll();
+        var me = typeof currentHandle !== 'undefined' && currentHandle ? currentHandle : 'Me';
+        var myUid = typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : null;
+        _wbSend({ type: 'clear', uid: myUid, handle: me }, { immediate: true });
+    }
+    if (typeof showConfirm === 'function') {
+        showConfirm('Clear whiteboard?', 'This clears the canvas for everyone.', 'Clear').then(function(ok) {
+            if (!ok) return;
+            doClear();
+        });
+    } else {
+        doClear();
     }
 }
 
@@ -441,7 +519,6 @@ function _wbClearAll() {
             wbBtn.textContent = '🎨';
             wbBtn.addEventListener('click', function() { openWhiteboard(false); });
             controls.insertBefore(wbBtn, camBtn.nextSibling);
-            // Start persistent listener for auto-open detection
             _wbStartFBSync();
         }
     }, 1000);

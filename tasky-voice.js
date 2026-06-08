@@ -356,6 +356,16 @@ function _vcCreatePC(peerUid) {
         }).catch(() => {});
     };
 
+    pc.ondatachannel = (e) => {
+        var dc = e.channel;
+        window._wbDCs = window._wbDCs || {};
+        dc.onopen = function() { window._wbDCs[peerUid] = dc; };
+        dc.onclose = function() { delete window._wbDCs[peerUid]; };
+        dc.onmessage = function(ev) {
+            if (typeof window._wbDCReceive === 'function') window._wbDCReceive(peerUid, ev.data);
+        };
+    };
+
     pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
             setTimeout(() => {
@@ -372,6 +382,16 @@ function _vcCreatePC(peerUid) {
 
 async function _vcOffer(peerUid) {
     const pc = _vcCreatePC(peerUid);
+    // Create DataChannel for whiteboard P2P sync
+    try {
+        var wbDC = pc.createDataChannel('wb');
+        window._wbDCs = window._wbDCs || {};
+        wbDC.onopen = function() { window._wbDCs[peerUid] = wbDC; };
+        wbDC.onclose = function() { delete window._wbDCs[peerUid]; };
+        wbDC.onmessage = function(e) {
+            if (typeof window._wbDCReceive === 'function') window._wbDCReceive(peerUid, e.data);
+        };
+    } catch(e) { /* DataChannel not supported */ }
     try {
         const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
         await pc.setLocalDescription(offer);
@@ -579,6 +599,7 @@ async function vcLeave() {
         }
     } catch(_) {}
 
+    window._wbDCs = {};
     for (const uid of Object.keys(vcPeers)) _vcRemovePeer(uid);
     vcPeers = {}; vcParticipants = {};
 
