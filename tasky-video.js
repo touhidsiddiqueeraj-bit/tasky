@@ -716,6 +716,13 @@ async function vvToggleRecording() {
 }
 
 async function _vvStartRecording() {
+    // Warn if no video source is active — recording will be audio-only
+    const hasCam   = vvCameraOn && vvCameraStream;
+    const hasShare = vvScreenOn && vvScreenStream;
+    if (!hasCam && !hasShare) {
+        _vvToast('⚠️ No video source — share screen or turn on camera for video recording');
+    }
+
     // Build a composite stream: local audio + local video (if any) + remote audio
     const tracks = [];
 
@@ -724,12 +731,15 @@ async function _vvStartRecording() {
     if (ls) ls.getAudioTracks().forEach(t => tracks.push(t.clone()));
 
     // Local video — clone for the same reason
-    const vid = vvCameraOn ? vvCameraStream : (vvScreenOn ? vvScreenStream : null);
+    const vid = hasCam ? vvCameraStream : (hasShare ? vvScreenStream : null);
     if (vid) vid.getVideoTracks().forEach(t => tracks.push(t.clone()));
 
     // Remote audio elements — capture via Web Audio + MediaStreamDestination
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     try { await ctx.resume(); } catch(e) {}
+    if (ctx.state !== 'running') {
+        _vvToast('⚠️ Audio context blocked by browser — recording may have no audio');
+    }
     const dest = ctx.createMediaStreamDestination();
     document.querySelectorAll('[id^="vc-audio-"]').forEach(el => {
         if (el.srcObject) {
@@ -755,7 +765,11 @@ async function _vvStartRecording() {
             : 'audio/webm';
 
     try {
-        vvMediaRecorder = new MediaRecorder(composite, { mimeType, videoBitsPerSecond: VV_QUALITY[vvQuality].bitrate });
+        // If no video track, don't pass videoBitsPerSecond (some browsers reject it for audio-only)
+        const opts = hasVideo
+            ? { mimeType, videoBitsPerSecond: VV_QUALITY[vvQuality].bitrate }
+            : { mimeType };
+        vvMediaRecorder = new MediaRecorder(composite, opts);
     } catch(e) {
         try {
             vvMediaRecorder = new MediaRecorder(composite);
@@ -777,7 +791,9 @@ async function _vvStartRecording() {
         _vvSaveRecording(ctx);
     };
 
-    vvMediaRecorder.start(100); // 100ms timeslice so short recordings still produce data
+    // Start without timeslice — onstop fires once with a complete WebM,
+    // avoiding chunk concatenation issues that produce unplayable files.
+    vvMediaRecorder.start();
     vvRecordInterval = setInterval(_vvUpdateRecordTimer, 1000);
 
     _vvUpdateVideoControls();
@@ -799,6 +815,15 @@ async function _vvSaveRecording(ctx) {
     if (ctx) ctx.close().catch(() => {});
     const blob = new Blob(vvRecordChunks, { type: vvRecordMimeType || 'video/webm' });
     vvRecordChunks = [];
+
+    // Sanity check — warn if blob is too small to contain useful media
+    if (blob.size < 50000) {
+        console.warn('[VV] recording blob very small (%d bytes) — likely empty', blob.size);
+        _vvToast('⚠️ Recording appears empty (no audio/video captured)');
+        // Still download so user can inspect, but don't upload to storage
+        _vvDownloadBlob(blob, 'tasky-call-recording.webm');
+        return;
+    }
 
     // Try Firebase Storage first
     const storageRef = _vvStorageRef();
