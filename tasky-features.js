@@ -447,9 +447,7 @@ window._enableMentionNotifications = async function() {
 };
 
 // Sync mention notif button state on settings open
-const _origOpenSettings = window.openSettings;
 window.openSettings = function() {
-    if (_origOpenSettings) _origOpenSettings();
     setTimeout(() => {
         const btn = document.getElementById('st-mention-notif-btn');
         if (btn) {
@@ -664,9 +662,7 @@ function closeRecurringManager() {
 }
 window.closeRecurringManager = closeRecurringManager;
 
-function _escHtmlCal(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
-}
+function _escHtmlCal(s) { return escHtml(s); }
 
 function _renderRecurManager() {
     const body = document.getElementById('recur-manager-body');

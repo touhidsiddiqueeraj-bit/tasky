@@ -1,3 +1,8 @@
+// ─── Debug logging ─────────────────────────────────────────────────────────
+// Set window.DEBUG = true in console to enable verbose logging
+var _log = (typeof window !== 'undefined' && window.DEBUG) ? console.log.bind(console) : function(){};
+var _catch = function(e) { console.warn('[tasky] unhandled error:', e); };
+
 // ─── State ────────────────────────────────────────────────────────────────
         let workspaces = [];
         let activeWorkspaceId = 1;
@@ -1869,6 +1874,13 @@
             // ── Touch drag ────────────────────────────────────────────────────────
             setupTouchDrag(card, task.id, column);
 
+            // Run registered card modifiers (subtask, timer, collab, etc.)
+            if (window._cardModifiers) {
+                for (var i = 0; i < window._cardModifiers.length; i++) {
+                    window._cardModifiers[i](card, task, column);
+                }
+            }
+
             return card;
         }
 
@@ -1935,11 +1947,11 @@
             });
         }
 
-        function escapeHtml(str) {
-            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
-        }
+// escHtml is defined in index.html
+// Card modifier hook — modules register callbacks that run after createTaskCard
+if (!window._cardModifiers) window._cardModifiers = [];
 
-        // ─── Date picker ──────────────────────────────────────────────────────────
+// ─── Date picker ──────────────────────────────────────────────────────────
         function openDatePicker(taskId) {
             const picker = document.getElementById(`date-picker-${taskId}`);
             if (!picker) return;

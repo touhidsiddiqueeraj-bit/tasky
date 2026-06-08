@@ -25,9 +25,7 @@ let _dragCol    = null;
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS_S = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-function _esc(s) {
-  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+function _esc(s) { return escHtml(s); }
 function _today() { return new Date().toISOString().split('T')[0]; }
 function _dateStr(y,m,d) {
   return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;

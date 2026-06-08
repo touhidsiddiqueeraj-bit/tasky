@@ -411,14 +411,14 @@ function _wbStartFBSync(retries) {
         else { console.warn('[WB] doc ref null after 10 retries'); }
         return;
     }
-    console.log('[WB] listener starting');
+    _log('[WB] listener starting');
     _wbFBUnsub = ref.onSnapshot(function(snap) {
-        if (!snap.exists) { console.log('[WB] doc not exists'); return; }
+        if (!snap.exists) { _log('[WB] doc not exists'); return; }
         var data = snap.data();
         var myUid = typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : null;
 
         // Auto-open detection (always via Firestore)
-        if (data.active && !_wbOpen) { console.log('[WB] auto-open triggered'); openWhiteboard(true); return; }
+        if (data.active && !_wbOpen) { _log('[WB] auto-open triggered'); openWhiteboard(true); return; }
 
         // Check if DataChannels are active — if so, strokes come via DC, skip Firestore iteration
         var dcs = window._wbDCs || {};

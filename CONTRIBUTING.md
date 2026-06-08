@@ -14,16 +14,35 @@ Thanks for your interest! Tasky is a single-page vanilla JS app with no build st
 
 ## Code Style
 
-- **No build tools, no bundlers, no npm.** Everything lives in three files:
-  - `index.html` — HTML structure + inline `<style>` and some inline `<script>` for boot logic.
-  - `tasky.css` — all styles.
-  - `tasky.js` — all application logic.
+- **No build tools, no bundlers, no npm.** All source files live in the project root and are loaded via `<script defer>` in `index.html`.
 - **Vanilla JS only.** No frameworks, no imports, no modules. Everything is in the global scope.
 - **Firebase 10.12.0 compat** — loaded from CDN in `index.html`. Use `firebase.xxx()` compat API.
 - **`let` over `var`** for state variables. Use `var` only in the inline `<script>` block.
 - **No comments in code** unless the logic is genuinely non-obvious.
 - **Single quotes** for strings.
 - **4-space indentation** (JS, CSS, HTML). The existing code uses mixed indentation — keep your additions consistent with the surrounding code.
+- **Debug logging**: use `_log(...)` instead of `console.log(...)`. Set `window.DEBUG = true` in the console to enable verbose logging.
+
+## Source Files
+
+| File | Role |
+|---|---|
+| `index.html` | HTML structure + inline boot scripts |
+| `tasky.css` | Core styles |
+| `tasky.js` | Core app logic: workspaces, tasks, drag-drop, keyboard, auth, encryption |
+| `tasky-collab.js` | Team collaboration: groups, supervisors, members, message board, notifications |
+| `tasky-features.js` | Feature flags, settings panel, calendar wiring |
+| `tasky-calendar.js` + `.css` | Calendar view |
+| `tasky-voice.js` + `.css` | WebRTC voice calls, signaling, ring, mute/deafen |
+| `tasky-video.js` + `.css` | Video calls, screen share, recording, PiP, video grid |
+| `tasky-whiteboard.js` + `.css` | Shared canvas with RTC DataChannel + Firestore sync |
+| `tasky-palette.js` | Command palette (Ctrl+K) |
+| `tasky-bulk.js` | Bulk task operations |
+| `tasky-activity.js` | Activity feed |
+| `tasky-subtask.js` | Subtask support |
+| `tasky-timer.js` + `.css` | Pomodoro / stopwatch timers |
+| `tasky-deps-search.js` | Global search, task dependencies, Markdown renderer |
+| `sw.js` | Service worker for PWA offline support |
 
 ## Pull Request Process
 
@@ -46,6 +65,7 @@ Thanks for your interest! Tasky is a single-page vanilla JS app with no build st
 - **Keyboard** has two layers: an input `keydown` listener (for the floating input) and a document `keydown` listener (for global shortcuts). The Task Groups suggestion handler runs in the capture phase on `document` so it fires before `setupKeyboard`.
 - **Firebase** uses the compat SDK (`firebase.xxx()`). Auth and Firestore are set up lazily — if the user never signs in, no network requests are made.
 - **Custom background** is stored as a data URL in `localStorage` under `customBg`. The image is rendered in a fixed layer (`z-index: -1`) with a semi-transparent overlay on top.
+- **Module loading order** is critical — scripts are loaded via `<script defer>` in this sequence: tasky.js → tasky-collab.js → tasky-features.js → tasky-calendar.js → ... → tasky-voice.js → tasky-video.js → tasky-whiteboard.js → ... Each file assumes previous ones have run.
 
 ## Questions?
 

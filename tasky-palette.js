@@ -1,44 +1,4 @@
-(function() {
-var style = document.createElement('style');
-style.textContent = `
-#kp-overlay { position:fixed;inset:0;z-index:10500;display:none;align-items:flex-start;justify-content:center;padding-top:clamp(50px,8vh,100px);background:rgba(6,5,10,0.7);backdrop-filter:blur(10px); }
-#kp-overlay.visible { display:flex;animation:kp-fade .15s ease; }
-@keyframes kp-fade { from{opacity:0} to{opacity:1} }
-#kp-box { width:min(580px,92vw);background:rgba(20,18,34,0.96);border:1px solid rgba(255,255,255,0.08);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden; }
-#kp-input-row { display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.06); }
-#kp-input-row span { font-size:16px;color:rgba(255,255,255,0.3); }
-#kp-input { flex:1;background:none;border:none;color:#fff;font-size:16px;outline:none; }
-#kp-input::placeholder { color:rgba(255,255,255,0.2); }
-#kp-results { max-height:420px;overflow-y:auto;padding:6px 0; }
-.kp-section-hdr { font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,0.25);padding:8px 18px 4px; }
-.kp-item { display:flex;align-items:center;gap:10px;padding:8px 18px;cursor:pointer;transition:background .08s; }
-.kp-item:hover,.kp-item.kp-focused { background:rgba(139,92,246,0.12); }
-.kp-item-icon { width:24px;text-align:center;font-size:14px;flex-shrink:0; }
-.kp-item-text { flex:1;font-size:13px;color:rgba(255,255,255,0.85); }
-.kp-item-text em { color:#a78bfa;font-style:normal; }
-.kp-item-col { font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.3);flex-shrink:0; }
-.kp-item-kbd { font-size:10px;padding:2px 5px;border-radius:4px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.25);font-family:inherit;flex-shrink:0; }
-.kp-footer { display:flex;gap:14px;padding:8px 18px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:rgba(255,255,255,0.2); }
-.kp-footer kbd { background:rgba(255,255,255,0.06);border-radius:3px;padding:1px 5px;font-family:inherit;color:rgba(255,255,255,0.3); }
-
-body.light-mode #kp-box { background:rgba(255,255,255,0.96);border-color:rgba(0,0,0,0.08); }
-body.light-mode #kp-input-row { border-bottom-color:rgba(0,0,0,0.06); }
-body.light-mode #kp-input-row span { color:rgba(0,0,0,0.2); }
-body.light-mode #kp-input { color:#111; }
-body.light-mode #kp-input::placeholder { color:rgba(0,0,0,0.2); }
-body.light-mode .kp-section-hdr { color:rgba(0,0,0,0.3); }
-body.light-mode .kp-item:hover,.kp-item.kp-focused { background:rgba(139,92,246,0.06); }
-body.light-mode .kp-item-text { color:rgba(0,0,0,0.75); }
-body.light-mode .kp-item-text em { color:#7C3AED; }
-body.light-mode .kp-item-col { background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.3); }
-body.light-mode .kp-item-kbd { background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.25); }
-body.light-mode .kp-footer { border-top-color:rgba(0,0,0,0.06);color:rgba(0,0,0,0.2); }
-body.light-mode .kp-footer kbd { background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.25); }
-`;
-document.head.appendChild(style);
-})();
-
-console.log('tasky-palette.js loaded');
+// CSS moved to tasky.css
 var _kpOpen = false;
 var _kpFocus = -1;
 var _kpItems = [];
@@ -46,7 +6,7 @@ var _kpItems = [];
 var KP_ACTIONS = [
     { id: 'new-task', icon: '➕', label: 'New Task', action: function() { _kpClose(); setTimeout(function() { var fi = document.getElementById('floating-input'); if (fi) fi.focus(); }, 80); } },
     { id: 'search', icon: '🔍', label: 'Global Search', action: function() { _kpClose(); setTimeout(function() { if (typeof openGlobalSearch === 'function') openGlobalSearch(); }, 80); } },
-    { id: 'calendar', icon: '📅', label: 'Open Calendar', action: function() { _kpClose(); setTimeout(function() { if (typeof toggleCalendar === 'function') toggleCalendar(); }, 80); } },
+    { id: 'calendar', icon: '📅', label: 'Open Calendar', action: function() { _kpClose(); setTimeout(function() { if (typeof openCalendarView === 'function') openCalendarView(); }, 80); } },
     { id: 'settings', icon: '⚙️', label: 'Open Settings', action: function() { _kpClose(); setTimeout(function() { if (typeof openSettings === 'function') openSettings(); }, 80); } },
     { id: 'darkmode', icon: '🌓', label: 'Toggle Dark Mode', action: function() { _kpClose(); setTimeout(function() { if (typeof toggleTheme === 'function') toggleTheme(); }, 80); } },
     { id: 'timer-view', icon: '⏱', label: 'Show Running Timers', action: function() { _kpClose(); setTimeout(function() { _kpShowRunningTimers(); }, 80); } },
@@ -68,10 +28,10 @@ var KP_TASK_ACTIONS = [
 ];
 
 function openPalette() {
-    console.log('openPalette called');
-    console.log('tasks at palette scope:', typeof tasks, tasks === undefined ? 'UNDEFINED!' : 'defined', tasks === null ? 'NULL!' : 'not null');
+    _log('openPalette called');
+    _log('tasks at palette scope:', typeof tasks, tasks === undefined ? 'UNDEFINED!' : 'defined', tasks === null ? 'NULL!' : 'not null');
     if (typeof tasks !== 'undefined' && tasks) {
-        console.log('tasks keys:', Object.keys(tasks), 'todo:', tasks.todo?.length, 'working:', tasks.working?.length, 'done:', tasks.done?.length);
+        _log('tasks keys:', Object.keys(tasks), 'todo:', tasks.todo?.length, 'working:', tasks.working?.length, 'done:', tasks.done?.length);
     }
     var overlay = document.getElementById('kp-overlay');
     if (!overlay) _kpBuild();
@@ -103,14 +63,14 @@ function _kpBuild() {
 }
 
 function _kpGetAllTasks() {
-    console.log('tasks exists:', typeof tasks, 'isUndefined:', tasks === undefined);
+    _log('tasks exists:', typeof tasks, 'isUndefined:', tasks === undefined);
     var all = [];
     ['todo','working','done'].forEach(function(col) {
         try {
             var arr = tasks[col] || [];
-            console.log('col ' + col + ' length:', arr.length);
+            _log('col ' + col + ' length:', arr.length);
             arr.forEach(function(t) {
-                console.log('palette task:', t);
+                _log('palette task:', t);
                 var label = '#' + (t.number || '?') + ' ' + (t.text != null && t.text !== 'undefined' && t.text !== 'null' ? t.text : '(untitled)');
                 all.push({ task: t, column: col, label: label, searchText: label.toLowerCase() });
             });

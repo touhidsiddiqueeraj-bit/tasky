@@ -2264,10 +2264,9 @@ async function handleJoinGroup() {
 }
 
 // ─── Task card: show assignment badge ────────────────────────────────────
-// Monkey-patch createTaskCard to show assignedTo/assignedBy info
-const _origCreateTaskCard = createTaskCard;
-createTaskCard = function(task, column) {
-    const card = _origCreateTaskCard(task, column);
+// Uses _cardModifiers hook registered by tasky.js
+if (!window._cardModifiers) window._cardModifiers = [];
+window._cardModifiers.push(function(card, task, column) {
     if (task.assignedTo || task.assignedBy) {
         const badge = document.createElement('div');
         badge.className = 'task-assign-badge';
@@ -2280,14 +2279,9 @@ createTaskCard = function(task, column) {
         const meta = card.querySelector('.task-meta');
         if (meta) meta.appendChild(badge);
     }
-    return card;
-}
+});
 
-// ─── Helper (HTML escape for collab modal; tasky.js uses escapeHtml) ──────
-function escHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// escHtml is defined in index.html — do not redefine here
 
 // ─── Hook into Firebase auth flow ─────────────────────────────────────────
 // We piggyback on tasky.js's updateAuthUI (which fires AFTER currentUser is
@@ -2321,7 +2315,7 @@ async function _handleAuthChange() {
                     avatarListener = window.db.collection('users').doc(user.uid)
                         .onSnapshot(snap => {
                             const url = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
-                            console.log('[Avatar] onSnapshot', url ? 'url=' + url.slice(0,40) + '…' : 'no url');
+                            _log('[Avatar] onSnapshot', url ? 'url=' + url.slice(0,40) + '…' : 'no url');
                             if (url) {
                                 localStorage.setItem('tasky_avatar', url);
                                 if (!window._vcAvatarCache) window._vcAvatarCache = {};

@@ -479,17 +479,16 @@ function _patchCommentPanel() {
             const item = document.createElement('div');
             item.className = `tcp-entry tcp-${entry.type}${isOwn ? ' tcp-own' : ''}`;
 
-            const escHtmlFn = typeof escHtml === 'function' ? escHtml : (s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
             const fmtTs = typeof fmtCommentTs === 'function' ? fmtCommentTs : (iso => new Date(iso).toLocaleTimeString());
 
             const authorLine = entry.type === 'comment'
-                ? `<span class="tcp-author">@${escHtmlFn(entry.authorHandle || 'unknown')}</span>`
+                ? `<span class="tcp-author">@${escHtml(entry.authorHandle || 'unknown')}</span>`
                 : '';
 
             // For comments: render markdown; for activity: plain text
             const textHtml = entry.type === 'comment'
                 ? `<div class="rt-body tcp-entry-text">${renderMarkdown(entry.text)}</div>`
-                : `<span class="tcp-entry-text">⚡ ${escHtmlFn(entry.text)}</span>`;
+                : `<span class="tcp-entry-text">⚡ ${escHtml(entry.text)}</span>`;
 
             item.innerHTML = `
               <div class="tcp-entry-body">

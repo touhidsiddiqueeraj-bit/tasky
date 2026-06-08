@@ -52,7 +52,7 @@ function _vcHnd()        { return window.currentHandle || (typeof currentHandle 
 function _vcGroup()      { return window.currentGroup  || (typeof currentGroup  !== 'undefined' ? currentGroup  : null); }
 function _vcIsSup()      { return window.isSupervisor  != null ? window.isSupervisor : (typeof isSupervisor !== 'undefined' ? isSupervisor : false); }
 function _vcDb()         { return window.db || (typeof db !== 'undefined' ? db : null); }
-function _vcEsc(s)       { return typeof escHtml === 'function' ? escHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _vcEsc(s)       { return escHtml(s); }
 
 
 // ─── Avatar helper ────────────────────────────────────────────────────────

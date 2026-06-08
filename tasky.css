@@ -3284,3 +3284,126 @@ body.light-mode .mb-notif-text { color: rgba(0,0,0,0.7); }
         max-width: none;
     }
 }
+
+/* ─── Command Palette (moved from tasky-palette.js) ─── */
+#kp-overlay { position:fixed;inset:0;z-index:10500;display:none;align-items:flex-start;justify-content:center;padding-top:clamp(50px,8vh,100px);background:rgba(6,5,10,0.7);backdrop-filter:blur(10px); }
+#kp-overlay.visible { display:flex;animation:kp-fade .15s ease; }
+@keyframes kp-fade { from{opacity:0} to{opacity:1} }
+#kp-box { width:min(580px,92vw);background:rgba(20,18,34,0.96);border:1px solid rgba(255,255,255,0.08);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden; }
+#kp-input-row { display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.06); }
+#kp-input-row span { font-size:16px;color:rgba(255,255,255,0.3); }
+#kp-input { flex:1;background:none;border:none;color:#fff;font-size:16px;outline:none; }
+#kp-input::placeholder { color:rgba(255,255,255,0.2); }
+#kp-results { max-height:420px;overflow-y:auto;padding:6px 0; }
+.kp-section-hdr { font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,0.25);padding:8px 18px 4px; }
+.kp-item { display:flex;align-items:center;gap:10px;padding:8px 18px;cursor:pointer;transition:background .08s; }
+.kp-item:hover,.kp-item.kp-focused { background:rgba(139,92,246,0.12); }
+.kp-item-icon { width:24px;text-align:center;font-size:14px;flex-shrink:0; }
+.kp-item-text { flex:1;font-size:13px;color:rgba(255,255,255,0.85); }
+.kp-item-text em { color:#a78bfa;font-style:normal; }
+.kp-item-col { font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.3);flex-shrink:0; }
+.kp-item-kbd { font-size:10px;padding:2px 5px;border-radius:4px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.25);font-family:inherit;flex-shrink:0; }
+.kp-footer { display:flex;gap:14px;padding:8px 18px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:rgba(255,255,255,0.2); }
+.kp-footer kbd { background:rgba(255,255,255,0.06);border-radius:3px;padding:1px 5px;font-family:inherit;color:rgba(255,255,255,0.3); }
+body.light-mode #kp-box { background:rgba(255,255,255,0.96);border-color:rgba(0,0,0,0.08); }
+body.light-mode #kp-input-row { border-bottom-color:rgba(0,0,0,0.06); }
+body.light-mode #kp-input-row span { color:rgba(0,0,0,0.2); }
+body.light-mode #kp-input { color:#111; }
+body.light-mode #kp-input::placeholder { color:rgba(0,0,0,0.2); }
+body.light-mode .kp-section-hdr { color:rgba(0,0,0,0.3); }
+body.light-mode .kp-item:hover,.kp-item.kp-focused { background:rgba(139,92,246,0.06); }
+body.light-mode .kp-item-text { color:rgba(0,0,0,0.75); }
+body.light-mode .kp-item-text em { color:#7C3AED; }
+body.light-mode .kp-item-col { background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.3); }
+body.light-mode .kp-item-kbd { background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.25); }
+body.light-mode .kp-footer { border-top-color:rgba(0,0,0,0.06);color:rgba(0,0,0,0.2); }
+body.light-mode .kp-footer kbd { background:rgba(0,0,0,0.04);color:rgba(0,0,0,0.25); }
+
+/* ─── Bulk Select (moved from tasky-bulk.js) ─── */
+.task-card.bulk-selected { outline:2px solid #8B5CF6;outline-offset:1px;border-radius:12px; }
+#bulk-bar { position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9000;background:rgba(20,20,40,0.92);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:8px 16px;display:none;align-items:center;gap:10px;box-shadow:0 8px 32px rgba(0,0,0,.4); }
+.bulk-count { font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);padding-right:8px;border-right:1px solid rgba(255,255,255,0.1);white-space:nowrap; }
+.bulk-act { background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.2);border-radius:8px;color:#a78bfa;font-size:12px;font-weight:500;padding:5px 12px;cursor:pointer;white-space:nowrap; }
+.bulk-act:hover { background:rgba(139,92,246,0.2); }
+.bulk-act--danger { border-color:rgba(239,68,68,0.3);color:#ef4444;background:rgba(239,68,68,0.08); }
+.bulk-act--danger:hover { background:rgba(239,68,68,0.15); }
+.bulk-act--clear { background:none;border-color:transparent;color:rgba(255,255,255,0.3); }
+.bulk-act--clear:hover { color:rgba(255,255,255,0.6); }
+body.light-mode .task-card.bulk-selected { outline-color:#7C3AED; }
+body.light-mode #bulk-bar { background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.1); }
+body.light-mode .bulk-count { color:rgba(0,0,0,0.6);border-right-color:rgba(0,0,0,0.1); }
+body.light-mode .bulk-act { background:rgba(139,92,246,0.06);border-color:rgba(139,92,246,0.15);color:#7C3AED; }
+body.light-mode .bulk-act--danger { border-color:rgba(239,68,68,0.2);color:#dc2626;background:rgba(239,68,68,0.04); }
+body.light-mode .bulk-act--clear { color:rgba(0,0,0,0.2); }
+
+/* ─── Activity Feed (moved from tasky-activity.js) ─── */
+#act-overlay { position:fixed;inset:0;z-index:9500;display:none;background:rgba(6,5,10,0.5);backdrop-filter:blur(4px); }
+#act-overlay.visible { display:block; }
+#act-panel { position:fixed;top:0;right:0;bottom:0;width:380px;max-width:100vw;z-index:9501;background:rgba(16,14,28,0.96);backdrop-filter:blur(20px);border-left:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease; }
+#act-panel.open { transform:translateX(0); }
+.act-header { display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0; }
+.act-header h3 { margin:0;font-size:15px;font-weight:700;color:rgba(255,255,255,0.9); }
+.act-close { background:none;border:none;color:rgba(255,255,255,0.4);font-size:18px;cursor:pointer;padding:4px; }
+.act-close:hover { color:#fff; }
+.act-body { flex:1;overflow-y:auto;padding:8px 0; }
+.act-empty { text-align:center;padding:40px 20px;color:rgba(255,255,255,0.3);font-size:13px; }
+.act-item { display:flex;gap:10px;padding:8px 18px;align-items:flex-start;transition:background .12s; }
+.act-item:hover { background:rgba(255,255,255,0.03); }
+.act-icon { width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0; }
+.act-icon--move { background:rgba(59,130,246,0.15); }
+.act-icon--delete { background:rgba(239,68,68,0.12); }
+.act-icon--create { background:rgba(16,185,129,0.12); }
+.act-icon--priority { background:rgba(245,158,11,0.12); }
+.act-icon--comment { background:rgba(139,92,246,0.12); }
+.act-icon--assign { background:rgba(236,72,153,0.12); }
+.act-icon--timer { background:rgba(16,185,129,0.12); }
+.act-detail { flex:1;min-width:0; }
+.act-text { font-size:12px;color:rgba(255,255,255,0.8);line-height:1.4; }
+.act-time { font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px; }
+.act-filter-bar { display:flex;gap:4px;padding:8px 18px;border-bottom:1px solid rgba(255,255,255,0.06);flex-wrap:wrap;flex-shrink:0; }
+.act-filter { background:rgba(255,255,255,0.05);border:none;border-radius:6px;color:rgba(255,255,255,0.4);font-size:11px;padding:3px 8px;cursor:pointer; }
+.act-filter.active { background:rgba(139,92,246,0.15);color:#a78bfa; }
+body.light-mode #act-panel { background:rgba(255,255,255,0.96);border-left-color:rgba(0,0,0,0.08); }
+body.light-mode .act-header { border-bottom-color:rgba(0,0,0,0.06); }
+body.light-mode .act-header h3 { color:rgba(0,0,0,0.8); }
+body.light-mode .act-close { color:rgba(0,0,0,0.3); }
+body.light-mode .act-empty { color:rgba(0,0,0,0.2); }
+body.light-mode .act-item:hover { background:rgba(0,0,0,0.02); }
+body.light-mode .act-text { color:rgba(0,0,0,0.7); }
+body.light-mode .act-time { color:rgba(0,0,0,0.2); }
+body.light-mode .act-filter { color:rgba(0,0,0,0.3);background:rgba(0,0,0,0.03); }
+body.light-mode .act-filter.active { background:rgba(139,92,246,0.08);color:#7C3AED; }
+body.light-mode #act-toggle-btn { color:rgba(0,0,0,0.3);border-color:rgba(0,0,0,0.08); }
+body.light-mode #act-toggle-btn:hover { border-color:rgba(139,92,246,0.3);color:#7C3AED; }
+
+/* ─── Subtask (moved from tasky-subtask.js) ─── */
+.subtask-container { padding:4px 10px 8px 28px;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px; }
+.subtask-row { display:flex;align-items:center;gap:6px;padding:2px 0;cursor:default; }
+.subtask-row.done .subtask-text { text-decoration:line-through;opacity:0.4; }
+.subtask-row.dragging { opacity:0.4; }
+.subtask-row.drag-over-target { border-top:2px solid #8B5CF6; }
+.subtask-row input[type=checkbox] { accent-color:#8B5CF6;cursor:pointer; }
+.subtask-text { font-size:12px;color:rgba(255,255,255,0.8);flex:1;cursor:text; }
+.subtask-text-edit { background:rgba(255,255,255,0.1);border:1px solid #8B5CF6;border-radius:4px;color:#fff;font-size:12px;padding:1px 6px;width:100%;outline:none;font-family:inherit; }
+.subtask-del { background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;font-size:12px;padding:0 4px;line-height:1; }
+.subtask-del:hover { color:#ef4444; }
+.subtask-drag-handle { color:rgba(255,255,255,0.15);cursor:grab;font-size:12px;padding:0 2px;user-select:none;line-height:1; }
+.subtask-drag-handle:hover { color:rgba(255,255,255,0.4); }
+.subtask-drag-handle:active { cursor:grabbing; }
+.subtask-add-row { padding:4px 0 0 20px; }
+.subtask-input { background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.8);font-size:12px;padding:4px 8px;width:100%;outline:none;box-sizing:border-box; }
+.subtask-input:focus { border-color:#8B5CF6; }
+.subtask-input::placeholder { color:rgba(255,255,255,0.25); }
+.subtask-badge-group { display:inline-flex;align-items:center;gap:6px;margin-left:6px;cursor:pointer; }
+.subtask-badge { font-size:11px;color:rgba(255,255,255,0.4);white-space:nowrap; }
+.subtask-badge:hover { color:#a78bfa; }
+.subtask-progress { width:44px;height:4px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;flex-shrink:0; }
+.subtask-progress-fill { height:100%;background:#8B5CF6;border-radius:3px;transition:width .25s ease; }
+body.light-mode .subtask-container { border-top-color:rgba(0,0,0,0.08); }
+body.light-mode .subtask-text { color:rgba(0,0,0,0.7); }
+body.light-mode .subtask-text-edit { background:rgba(0,0,0,0.06);border-color:#8B5CF6;color:#000; }
+body.light-mode .subtask-input { background:rgba(0,0,0,0.04);border-color:rgba(0,0,0,0.12);color:rgba(0,0,0,0.8); }
+body.light-mode .subtask-badge { color:rgba(0,0,0,0.3); }
+body.light-mode .subtask-drag-handle { color:rgba(0,0,0,0.12); }
+body.light-mode .subtask-progress { background:rgba(0,0,0,0.08); }
+body.light-mode .subtask-row.drag-over-target { border-top-color:#8B5CF6; }

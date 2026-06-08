@@ -48,7 +48,7 @@ const VV_QUALITY = {
 function _vvUser()      { return window.currentUser || null; }
 function _vvMe()        { const u = _vvUser(); return u ? u.uid : null; }
 function _vvGroup()     { return window.currentGroup || null; }
-function _vvEsc(s)      { return typeof escHtml === 'function' ? escHtml(s) : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _vvEsc(s)      { return escHtml(s); }
 
 // ─── Avatar helper for video tiles ───────────────────────────────────────
 function _vvAvatarContent(uid, handle) {
@@ -285,7 +285,7 @@ function _vvLivePCs() {
 async function _vvAddVideoTrackToPeers(track) {
     const stream = vvCameraOn ? vvCameraStream : vvScreenStream;
     const livePCs = _vvLivePCs();
-    console.log('[VV:addTrack] livePCs=%d track.kind=%s track.id=%s', livePCs.length, track.kind, track.id);
+    _log('[VV:addTrack] livePCs=%d track.kind=%s track.id=%s', livePCs.length, track.kind, track.id);
     const promises = livePCs.map(async pc => {
         const senders = pc.getSenders();
         const liveVideoSender   = senders.find(s => s.track?.kind === 'video');
@@ -293,23 +293,23 @@ async function _vvAddVideoTrackToPeers(track) {
             ? senders.find(s => s.track === null && /^m=video/m.test(pc.localDescription?.sdp || ''))
             : null;
         const videoSender = liveVideoSender || blankedVideoSender;
-        console.log('[VV:addTrack] pc sigState=%s senders=%d liveVideoSender=%s blankedSender=%s',
+        _log('[VV:addTrack] pc sigState=%s senders=%d liveVideoSender=%s blankedSender=%s',
             pc.signalingState, senders.length, !!liveVideoSender, !!blankedVideoSender);
 
         if (videoSender) {
-            console.log('[VV:addTrack] replaceTrack path, blanked=%s', !!blankedVideoSender);
+            _log('[VV:addTrack] replaceTrack path, blanked=%s', !!blankedVideoSender);
             await videoSender.replaceTrack(track).catch(e => console.warn('[VV] replaceTrack', e));
             await _vvSetSenderBitrate(videoSender);
             // Log encoding state post-replaceTrack for diagnosis
             const p = videoSender.getParameters();
-            console.log('[VV:addTrack] post-replaceTrack encoding active=%s maxBitrate=%s',
+            _log('[VV:addTrack] post-replaceTrack encoding active=%s maxBitrate=%s',
                 p?.encodings?.[0]?.active, p?.encodings?.[0]?.maxBitrate);
             if (blankedVideoSender) {
-                console.log('[VV:addTrack] blanked sender — forcing renegotiation');
+                _log('[VV:addTrack] blanked sender — forcing renegotiation');
                 await _vvRenegotiate(pc);
             }
         } else {
-            console.log('[VV:addTrack] addTrack + renegotiate path');
+            _log('[VV:addTrack] addTrack + renegotiate path');
             try { pc.addTrack(track, stream); } catch(e) { console.error('[VV:addTrack] addTrack threw', e); return; }
             await _vvRenegotiate(pc);
         }
@@ -323,7 +323,7 @@ async function _vvAddVideoTrackToPeers(track) {
 async function _vvRenegotiate(pc) {
     try {
         const uid = _vvUidForPC(pc);
-        console.log('[VV:renegotiate] uid=%s signalingState=%s', uid, pc.signalingState);
+        _log('[VV:renegotiate] uid=%s signalingState=%s', uid, pc.signalingState);
         if (!uid) { console.error('[VV:renegotiate] ABORT — no uid for PC'); return; }
         const db    = (typeof _vcDb === 'function' ? _vcDb() : null) || window.db || null; if (!db) { console.error('[VV:renegotiate] ABORT — no db'); return; }
         const group = _vvGroup(); if (!group) { console.error('[VV:renegotiate] ABORT — no group'); return; }
@@ -339,13 +339,13 @@ async function _vvRenegotiate(pc) {
             if (tc.stopped) return;
             if (tc.direction === 'inactive' || tc.direction === 'recvonly') {
                 tc.direction = 'sendrecv';
-                console.log('[VV:renegotiate] corrected transceiver to sendrecv, mid=%s', tc.mid);
+                _log('[VV:renegotiate] corrected transceiver to sendrecv, mid=%s', tc.mid);
             }
         });
 
         const offer = await pc.createOffer();
         const videoDir = offer.sdp.match(/m=video[\s\S]*?a=(sendrecv|sendonly|recvonly|inactive)/)?.[1] || 'not found';
-        console.log('[VV:renegotiate] offer created, direction=%s', videoDir);
+        _log('[VV:renegotiate] offer created, direction=%s', videoDir);
         await pc.setLocalDescription(offer);
 
         await gRef.collection('signals').add({
@@ -355,7 +355,7 @@ async function _vvRenegotiate(pc) {
             sdp:  offer.sdp,
             ts:   firebase.firestore.FieldValue.serverTimestamp()
         });
-        console.log('[VV:renegotiate] offer sent to Firestore for uid=%s', uid);
+        _log('[VV:renegotiate] offer sent to Firestore for uid=%s', uid);
     } catch(e) { console.error('[VV:renegotiate] ERROR', e); }
 }
 
@@ -392,12 +392,12 @@ async function _vvSetSenderBitrate(sender) {
     await new Promise(resolve => setTimeout(resolve, 0));
     try {
         const params = sender.getParameters();
-        console.log('[VV:setBitrate] encodings count=%d', params?.encodings?.length);
+        _log('[VV:setBitrate] encodings count=%d', params?.encodings?.length);
         if (!params.encodings || !params.encodings.length) params.encodings = [{}];
         params.encodings[0].maxBitrate = VV_QUALITY[vvQuality].bitrate;
         params.encodings[0].active = true;
         await sender.setParameters(params);
-        console.log('[VV:setBitrate] OK active=true maxBitrate=%d', VV_QUALITY[vvQuality].bitrate);
+        _log('[VV:setBitrate] OK active=true maxBitrate=%d', VV_QUALITY[vvQuality].bitrate);
     } catch(e) { console.warn('[VV] setParameters failed', e); }
 }
 
@@ -425,8 +425,8 @@ function _vvHandleRemoteVideoLost(uid) {
 
 
 function _vvAttachRemoteVideo(peerUid, stream) {
-    console.log('[VV:attach] uid=%s streamId=%s tracks=%d', peerUid, stream.id, stream.getTracks().length);
-    stream.getTracks().forEach(t => console.log('[VV:attach]   track kind=%s readyState=%s muted=%s id=%s', t.kind, t.readyState, t.muted, t.id));
+    _log('[VV:attach] uid=%s streamId=%s tracks=%d', peerUid, stream.id, stream.getTracks().length);
+    stream.getTracks().forEach(t => _log('[VV:attach]   track kind=%s readyState=%s muted=%s id=%s', t.kind, t.readyState, t.muted, t.id));
 
     _vvRemoteStreams.set(peerUid, stream);
 
@@ -436,24 +436,24 @@ function _vvAttachRemoteVideo(peerUid, stream) {
     // Wire listeners so avatar overlay shows immediately when remote camera/screen goes off
     stream.getVideoTracks().forEach(track => {
         track.addEventListener('ended', () => {
-            console.log('[VV] remote video track ended uid=%s', peerUid);
+            _log('[VV] remote video track ended uid=%s', peerUid);
             _vvHandleRemoteVideoLost(peerUid);
         });
         track.addEventListener('mute', () => {
-            console.log('[VV] remote video track muted uid=%s', peerUid);
+            _log('[VV] remote video track muted uid=%s', peerUid);
             // Small delay — mute fires for brief interruptions; only hide if still muted
             setTimeout(() => { if (!_vvRemoteHasLiveVideo(peerUid)) _vvHandleRemoteVideoLost(peerUid); }, 400);
         });
         track.addEventListener('unmute', () => {
-            console.log('[VV] remote video track unmuted uid=%s', peerUid);
+            _log('[VV] remote video track unmuted uid=%s', peerUid);
             _vvRenderVideoGrid();
         });
     });
 
     const existingEl = document.getElementById('vv-video-' + peerUid);
-    console.log('[VV:attach] existingEl=%s isConnected=%s', !!existingEl, existingEl?.isConnected);
+    _log('[VV:attach] existingEl=%s isConnected=%s', !!existingEl, existingEl?.isConnected);
     if (existingEl && existingEl.isConnected) {
-        console.log('[VV:attach] calling _vvApplyStreamToEl directly');
+        _log('[VV:attach] calling _vvApplyStreamToEl directly');
         _vvApplyStreamToEl(existingEl, stream);
     }
 
@@ -465,7 +465,7 @@ function _vvAttachRemoteVideo(peerUid, stream) {
 // Apply a stream to an already-in-DOM video element and force play().
 function _vvApplyStreamToEl(el, stream) {
     const streamChanged = el.srcObject !== stream;
-    console.log('[VV:apply] el.id=%s isConnected=%s streamChanged=%s paused=%s tracks=%d',
+    _log('[VV:apply] el.id=%s isConnected=%s streamChanged=%s paused=%s tracks=%d',
         el.id, el.isConnected, streamChanged, el.paused, stream.getTracks().length);
     if (streamChanged) {
         // Abort any in-flight play() before changing srcObject.
@@ -475,14 +475,14 @@ function _vvApplyStreamToEl(el, stream) {
     }
     el.style.display = 'block';
     if (streamChanged || el.paused) {
-        console.log('[VV:apply] calling play()');
+        _log('[VV:apply] calling play()');
         el.play().then(() => {
-            console.log('[VV:apply] play() resolved OK for', el.id);
+            _log('[VV:apply] play() resolved OK for', el.id);
         }).catch(err => {
             console.warn('[VV:apply] play() rejected:', err.name, err.message, 'el.id=', el.id);
         });
     } else {
-        console.log('[VV:apply] skipping play() — same stream, not paused');
+        _log('[VV:apply] skipping play() — same stream, not paused');
     }
 }
 
@@ -509,45 +509,45 @@ function _vvWatchPeers() {
     const OrigPC = window.RTCPeerConnection;
     window.RTCPeerConnection = function(...args) {
         const pc = new OrigPC(...args);
-        console.log('[VV:shim] new RTCPeerConnection created, total tracked=%d', (window._vvAllPCs?.size || 0) + 1);
+        _log('[VV:shim] new RTCPeerConnection created, total tracked=%d', (window._vvAllPCs?.size || 0) + 1);
 
         // Use addEventListener('track') — more reliable than shimming the ontrack
         // IDL property setter. Browsers dispatch track events via EventTarget
         // regardless of how ontrack is assigned, and renegotiation-added tracks
         // always arrive here even when the property shim is bypassed internally.
         pc.addEventListener('track', function(e) {
-            console.log('[VV:track] kind=%s readyState=%s muted=%s streams=%d pcInMap=%s',
+            _log('[VV:track] kind=%s readyState=%s muted=%s streams=%d pcInMap=%s',
                 e.track?.kind, e.track?.readyState, e.track?.muted,
                 e.streams?.length, pcMap.has(pc));
             if (e.streams?.[0]) {
-                console.log('[VV:track] e.streams[0] id=%s tracks=%d',
+                _log('[VV:track] e.streams[0] id=%s tracks=%d',
                     e.streams[0].id, e.streams[0].getTracks().length);
             }
             if (!e.track || e.track.kind !== 'video') return;
 
             const stream = new MediaStream([e.track]);
-            console.log('[VV:track] VIDEO track received, built stream id=%s', stream.id);
+            _log('[VV:track] VIDEO track received, built stream id=%s', stream.id);
 
             const doAttach = (uid) => {
-                console.log('[VV:doAttach] uid=%s track.readyState=%s track.muted=%s', uid, e.track.readyState, e.track.muted);
+                _log('[VV:doAttach] uid=%s track.readyState=%s track.muted=%s', uid, e.track.readyState, e.track.muted);
                 _vvAttachRemoteVideo(uid, stream);
             };
 
             const attachWhenReady = (uid) => {
                 if (!uid) return;
-                console.log('[VV:attachWhenReady] uid=%s readyState=%s muted=%s', uid, e.track.readyState, e.track.muted);
+                _log('[VV:attachWhenReady] uid=%s readyState=%s muted=%s', uid, e.track.readyState, e.track.muted);
                 doAttach(uid);
                 if (e.track.muted) {
-                    console.log('[VV:attachWhenReady] track muted — waiting for unmute event');
+                    _log('[VV:attachWhenReady] track muted — waiting for unmute event');
                     e.track.addEventListener('unmute', () => {
-                        console.log('[VV:unmute] fired for uid=%s', uid);
+                        _log('[VV:unmute] fired for uid=%s', uid);
                         doAttach(uid);
                     }, { once: true });
                 }
             };
 
             const uid = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
-            console.log('[VV:track] resolved uid=%s', uid);
+            _log('[VV:track] resolved uid=%s', uid);
             if (uid) {
                 attachWhenReady(uid);
             } else {
@@ -555,7 +555,7 @@ function _vvWatchPeers() {
                 let retries = 0;
                 const retry = () => {
                     const u = pcMap.get(pc) || _vvResolveUID(pc, pcMap);
-                    console.log('[VV:retry] attempt=%d uid=%s', retries, u);
+                    _log('[VV:retry] attempt=%d uid=%s', retries, u);
                     if (u) { attachWhenReady(u); return; }
                     if (++retries < 20) setTimeout(retry, 250);
                     else console.error('[VV] ontrack: FAILED to resolve uid after 20 retries');
@@ -590,7 +590,7 @@ function _vvWatchPeers() {
                 const track = receiver.track;
                 if (!track || track.kind !== 'video') return;
 
-                console.log('[VV:sigstate→stable] receiver video track readyState=%s muted=%s uid=%s', track.readyState, track.muted, uid);
+                _log('[VV:sigstate→stable] receiver video track readyState=%s muted=%s uid=%s', track.readyState, track.muted, uid);
 
                 // Reuse existing stream if this track is already registered —
                 // avoids creating a new MediaStream object on every renegotiation
@@ -599,7 +599,7 @@ function _vvWatchPeers() {
                 const existingStream = _vvRemoteStreams.get(uid);
                 const trackAlreadyRegistered = existingStream?.getTracks().includes(track);
                 if (trackAlreadyRegistered && !track.muted) {
-                    console.log('[VV:sigstate→stable] track already registered and unmuted — skipping');
+                    _log('[VV:sigstate→stable] track already registered and unmuted — skipping');
                     return;
                 }
 
@@ -608,14 +608,14 @@ function _vvWatchPeers() {
                     : new MediaStream([track]);
 
                 const doAttach = () => {
-                    console.log('[VV:sigstate→stable] attaching uid=%s muted=%s', uid, track.muted);
+                    _log('[VV:sigstate→stable] attaching uid=%s muted=%s', uid, track.muted);
                     _vvAttachRemoteVideo(uid, stream);
                 };
 
                 doAttach();
                 if (track.muted) {
                     track.addEventListener('unmute', () => {
-                        console.log('[VV:sigstate→stable:unmute] uid=%s', uid);
+                        _log('[VV:sigstate→stable:unmute] uid=%s', uid);
                         doAttach();
                     }, { once: true });
                 }
@@ -1190,9 +1190,9 @@ function _vvUpdateTile(tileEl, uid, isLocal, p, isFeatured) {
         // For remote: wire stream if it arrived after the tile was first created
         const vid = document.getElementById('vv-video-' + uid);
         const stream = _vvRemoteStreams.get(uid);
-        console.log('[VV:updateTile] uid=%s vid=%s stream=%s srcObjectSame=%s', uid, !!vid, !!stream, vid?.srcObject === stream);
+        _log('[VV:updateTile] uid=%s vid=%s stream=%s srcObjectSame=%s', uid, !!vid, !!stream, vid?.srcObject === stream);
         if (vid && stream && vid.srcObject !== stream) {
-            console.log('[VV:updateTile] applying stream to existing element');
+            _log('[VV:updateTile] applying stream to existing element');
             _vvApplyStreamToEl(vid, stream);
         }
     }
@@ -1220,10 +1220,10 @@ function _vvMakeTile(uid, isLocal, p, isFeatured) {
     // ran before this microtask drained.
     if (!isLocal) {
         const stream = _vvRemoteStreams.get(uid);
-        console.log('[VV:makeTile] uid=%s hasStream=%s videoElConnected=%s', uid, !!stream, videoEl.isConnected);
+        _log('[VV:makeTile] uid=%s hasStream=%s videoElConnected=%s', uid, !!stream, videoEl.isConnected);
         if (stream) {
             Promise.resolve().then(() => {
-                console.log('[VV:makeTile:microtask] uid=%s isConnected=%s srcObjectSame=%s', uid, videoEl.isConnected, videoEl.srcObject === stream);
+                _log('[VV:makeTile:microtask] uid=%s isConnected=%s srcObjectSame=%s', uid, videoEl.isConnected, videoEl.srcObject === stream);
                 if (videoEl.isConnected && videoEl.srcObject !== stream) {
                     _vvApplyStreamToEl(videoEl, stream);
                 }
@@ -1490,7 +1490,7 @@ function _vvPatchVcLeave() {
     if (origAnswer) {
         window._vcAnswer = async function(peerUid, sdp) {
             const videoDir = sdp.match(/m=video[\s\S]*?a=(sendrecv|sendonly|recvonly|inactive)/)?.[1] || 'no-video-mline';
-            console.log('[VV:_vcAnswer] from=%s videoDir=%s', peerUid, videoDir);
+            _log('[VV:_vcAnswer] from=%s videoDir=%s', peerUid, videoDir);
             return origAnswer.apply(this, arguments);
         };
     }

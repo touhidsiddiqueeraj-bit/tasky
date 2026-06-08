@@ -2,9 +2,8 @@ var _tmrInterval = null;
 var _tmrActiveTaskId = null;
 var _tmrActiveCol = null;
 
-var _origTMRCreateTaskCard = createTaskCard;
-createTaskCard = function(task, column) {
-    var card = _origTMRCreateTaskCard(task, column);
+if (!window._cardModifiers) window._cardModifiers = [];
+window._cardModifiers.push(function(card, task, column) {
     var timer = task.timer || {};
     var running = timer.startedAt && !timer.pausedAt;
 
@@ -26,7 +25,7 @@ createTaskCard = function(task, column) {
     card.appendChild(container);
 
     return card;
-};
+});
 
 function _tmrRenderContainer(container, task, column) {
     var timer = task.timer || {};

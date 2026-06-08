@@ -1505,7 +1505,7 @@ function hideTgError() {
 }
 
 function escHtml(str) {
-  return String(str)
+  return (str == null ? '' : String(str))
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
@@ -2333,8 +2333,8 @@ function stClearAvatar() {
 function _stLoadSavedAvatar(retries) {
     retries = retries || 0;
     const user = window.currentUser;
-    if (!user || user.isAnonymous) { console.log('[Avatar] no user, skipping'); return; }
-    console.log('[Avatar] loading for', user.uid, 'retry', retries);
+    if (!user || user.isAnonymous) { _log('[Avatar] no user, skipping'); return; }
+    _log('[Avatar] loading for', user.uid, 'retry', retries);
     const initial = document.getElementById('st-avatar-initial');
     if (initial) initial.textContent = (user.email||'?')[0].toUpperCase();
     const saved = localStorage.getItem('tasky_avatar');
@@ -2345,9 +2345,9 @@ function _stLoadSavedAvatar(retries) {
         return;
     }
     window.db.collection('users').doc(user.uid).get().then(snap => {
-        if (!snap.exists) { console.log('[Avatar] doc not found'); return; }
+        if (!snap.exists) { _log('[Avatar] doc not found'); return; }
         const url = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
-        console.log('[Avatar] fetch result:', url ? 'found' : 'none');
+        _log('[Avatar] fetch result:', url ? 'found' : 'none');
         if (url && url !== saved) { _stApplyAvatar(url); localStorage.setItem('tasky_avatar', url); }
     }).catch(e => { console.warn('[Avatar] fetch error:', e); });
 }

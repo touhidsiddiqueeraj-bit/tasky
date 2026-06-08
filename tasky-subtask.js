@@ -1,44 +1,7 @@
-(function() {
-var style = document.createElement('style');
-style.textContent = `
-.subtask-container { padding:4px 10px 8px 28px;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px; }
-.subtask-row { display:flex;align-items:center;gap:6px;padding:2px 0;cursor:default; }
-.subtask-row.done .subtask-text { text-decoration:line-through;opacity:0.4; }
-.subtask-row.dragging { opacity:0.4; }
-.subtask-row.drag-over-target { border-top:2px solid #8B5CF6; }
-.subtask-row input[type=checkbox] { accent-color:#8B5CF6;cursor:pointer; }
-.subtask-text { font-size:12px;color:rgba(255,255,255,0.8);flex:1;cursor:text; }
-.subtask-text-edit { background:rgba(255,255,255,0.1);border:1px solid #8B5CF6;border-radius:4px;color:#fff;font-size:12px;padding:1px 6px;width:100%;outline:none;font-family:inherit; }
-.subtask-del { background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;font-size:12px;padding:0 4px;line-height:1; }
-.subtask-del:hover { color:#ef4444; }
-.subtask-drag-handle { color:rgba(255,255,255,0.15);cursor:grab;font-size:12px;padding:0 2px;user-select:none;line-height:1; }
-.subtask-drag-handle:hover { color:rgba(255,255,255,0.4); }
-.subtask-drag-handle:active { cursor:grabbing; }
-.subtask-add-row { padding:4px 0 0 20px; }
-.subtask-input { background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.8);font-size:12px;padding:4px 8px;width:100%;outline:none;box-sizing:border-box; }
-.subtask-input:focus { border-color:#8B5CF6; }
-.subtask-input::placeholder { color:rgba(255,255,255,0.25); }
-.subtask-badge-group { display:inline-flex;align-items:center;gap:6px;margin-left:6px;cursor:pointer; }
-.subtask-badge { font-size:11px;color:rgba(255,255,255,0.4);white-space:nowrap; }
-.subtask-badge:hover { color:#a78bfa; }
-.subtask-progress { width:44px;height:4px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;flex-shrink:0; }
-.subtask-progress-fill { height:100%;background:#8B5CF6;border-radius:3px;transition:width .25s ease; }
+// CSS moved to tasky.css
 
-body.light-mode .subtask-container { border-top-color:rgba(0,0,0,0.08); }
-body.light-mode .subtask-text { color:rgba(0,0,0,0.7); }
-body.light-mode .subtask-text-edit { background:rgba(0,0,0,0.06);border-color:#8B5CF6;color:#000; }
-body.light-mode .subtask-input { background:rgba(0,0,0,0.04);border-color:rgba(0,0,0,0.12);color:rgba(0,0,0,0.8); }
-body.light-mode .subtask-badge { color:rgba(0,0,0,0.3); }
-body.light-mode .subtask-drag-handle { color:rgba(0,0,0,0.12); }
-body.light-mode .subtask-progress { background:rgba(0,0,0,0.08); }
-body.light-mode .subtask-row.drag-over-target { border-top-color:#8B5CF6; }
-`;
-document.head.appendChild(style);
-})();
-
-var _origSTCreateTaskCard = createTaskCard;
-createTaskCard = function(task, column) {
-    var card = _origSTCreateTaskCard(task, column);
+if (!window._cardModifiers) window._cardModifiers = [];
+window._cardModifiers.push(function(card, task, column) {
     var subtasks = task.subtasks || [];
     var doneCount = subtasks.filter(function(s) { return s.done; }).length;
 
@@ -81,7 +44,7 @@ createTaskCard = function(task, column) {
     card.appendChild(container);
 
     return card;
-};
+});
 
 function _stRenderContainer(container, task, column) {
     var subtasks = task.subtasks || [];
