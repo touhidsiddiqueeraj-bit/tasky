@@ -92,6 +92,7 @@ tasky/
 ├── tasky-video.js          — Video calls: camera, screen share, recording, PiP, grid/speaker view
 ├── tasky-video.css         — Video call UI styles
 ├── tasky-deps-search.js    — Global search (Alt+R), task dependencies, Markdown renderer
+├── ARCHITECTURE.md
 ├── README.md
 └── LICENSE
 ```
@@ -100,7 +101,7 @@ tasky/
 
 ## Architecture & Loading Order
 
-Zero build step, vanilla JS only. Files load via `<script defer>` in a strict order because they share globals and monkey-patch each other:
+Zero build step, vanilla JS only. Files load via `<script defer>` in a strict order because they share globals and extend each other through hooks (`_cardModifiers`) and `window.*` exports. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for details.
 
 1. **`index.html`** — HTML shell + inline `<style>` for onboarding
 2. **`tasky.js`** — core engine; defines `renderAllColumns`, `createTaskCard`, keyboard, drag-drop, Firebase CRUD
@@ -109,12 +110,12 @@ Zero build step, vanilla JS only. Files load via `<script defer>` in a strict or
 5. **`tasky-voice.js`** — WebRTC voice layer; attaches to `window.*` globals
 6. **`tasky-video.js`** — extends voice layer with video; wraps `vcJoin`/`vcLeave`
 7. **`tasky-calendar.js`** — replaces the `_renderCalendar` stub left in features.js
-8. **`tasky-subtask.js`** / **`tasky-timer.js`** / **`tasky-bulk.js`** — subtasks, timers, bulk actions (each wraps `createTaskCard`)
+8. **`tasky-subtask.js`** / **`tasky-timer.js`** / **`tasky-bulk.js`** — subtasks, timers, bulk actions (register `_cardModifiers`)
 9. **`tasky-activity.js`** — activity feed panel
 10. **`tasky-whiteboard.js`** — shared canvas whiteboard
 11. **`tasky-deps-search.js`** — global search overlay, task dependencies
 12. **`tasky-features.js`** — recurring tasks, CSV import, @mentions, supervisor locks
-13. **`tasky-collab.js`** — replaces `createTaskCard` by wrapping the original; adds group/team logic
+13. **`tasky-collab.js`** — group/team logic, supervisor panel, message board (registers `_cardModifier` for assignment badges)
 14. **`tasky-palette.js`** — command palette (`Ctrl+K`); loads last so all functions are available
 
 Inline `<script>` blocks (after deferred scripts) handle onboarding, PWA registration, and the custom confirm dialog.
@@ -219,4 +220,10 @@ Change these to retheme column rings, orbs, and accents in one go. Most visual s
 
 ## License
 
-MIT — © Hussain Touhid Siddiqee 2026
+Source Available Non-Commercial — see [LICENSE](./LICENSE).
+
+You may view, fork, and run this software for personal/educational use.
+Selling, monetizing, or hosting it as a paid service is strictly
+prohibited without written permission.
+
+For commercial licensing: touhidsiddiqueeraj@gmail.com
