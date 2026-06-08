@@ -2330,19 +2330,26 @@ function stClearAvatar() {
     }
     showTaskyToast('🗑️ Profile picture removed');
 }
-function _stLoadSavedAvatar() {
+function _stLoadSavedAvatar(retries) {
+    retries = retries || 0;
     const user = window.currentUser;
+    if (!user || user.isAnonymous) { console.log('[Avatar] no user, skipping'); return; }
+    console.log('[Avatar] loading for', user.uid, 'retry', retries);
     const initial = document.getElementById('st-avatar-initial');
-    if (initial) initial.textContent = user && !user.isAnonymous ? (user.email||'?')[0].toUpperCase() : '?';
-    // Fast paint from cache — but always hit Firestore afterward for cross-device sync
+    if (initial) initial.textContent = (user.email||'?')[0].toUpperCase();
     const saved = localStorage.getItem('tasky_avatar');
     if (saved) _stApplyAvatar(saved);
-    if (user && !user.isAnonymous && window.db) {
-        window.db.collection('users').doc(user.uid).get().then(snap => {
-            const url = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
-            if (url && url !== saved) { _stApplyAvatar(url); localStorage.setItem('tasky_avatar', url); }
-        }).catch(() => {});
+    if (!window.db) {
+        if (retries < 5) { setTimeout(function(){ _stLoadSavedAvatar(retries + 1); }, 500 * (retries + 1)); }
+        else { console.warn('[Avatar] db not available after 5 retries'); }
+        return;
     }
+    window.db.collection('users').doc(user.uid).get().then(snap => {
+        if (!snap.exists) { console.log('[Avatar] doc not found'); return; }
+        const url = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
+        console.log('[Avatar] fetch result:', url ? 'found' : 'none');
+        if (url && url !== saved) { _stApplyAvatar(url); localStorage.setItem('tasky_avatar', url); }
+    }).catch(e => { console.warn('[Avatar] fetch error:', e); });
 }
 
 // ── Settings panel ────────────────────────────────────────────────────────

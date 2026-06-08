@@ -1,4 +1,4 @@
-var CACHE = 'tasky-v3';
+var CACHE = 'tasky-v4';
 
 var STATIC_ASSETS = [
   './',

@@ -67,6 +67,25 @@ function _vcAvatarHtml(uid, handle, extraClass) {
     if (url) {
         return `<img src="${url.replace(/"/g,'&quot;')}" alt="${init}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">`;
     }
+    // Cache miss — fire one-shot Firestore read as fallback
+    if (uid && !(window._vcAvatarFetching || {})[uid]) {
+        if (!window._vcAvatarFetching) window._vcAvatarFetching = {};
+        window._vcAvatarFetching[uid] = true;
+        const _db = _vcDb();
+        if (_db) {
+            _db.collection('users').doc(uid).get().then(snap => {
+                window._vcAvatarFetching[uid] = false;
+                const u = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
+                if (u) {
+                    if (!window._vcAvatarCache) window._vcAvatarCache = {};
+                    window._vcAvatarCache[uid] = u;
+                    if (typeof _vcRenderParticipants === 'function') _vcRenderParticipants();
+                }
+            }).catch(() => { window._vcAvatarFetching[uid] = false; });
+        } else {
+            window._vcAvatarFetching[uid] = false;
+        }
+    }
     return init;
 }
 
@@ -75,8 +94,10 @@ async function _vcPrefetchAvatars(uids) {
     if (!window._vcAvatarCache) window._vcAvatarCache = {};
     const db = _vcDb();
     if (!db) return;
-    const toFetch = uids.filter(uid => !(uid in window._vcAvatarCache));
+    const toFetch = uids.filter(uid => !(uid in window._vcAvatarCache) && !(window._vcAvatarFetching || {})[uid]);
     if (!toFetch.length) return;
+    if (!window._vcAvatarFetching) window._vcAvatarFetching = {};
+    toFetch.forEach(uid => window._vcAvatarFetching[uid] = true);
     await Promise.all(toFetch.map(async uid => {
         try {
             const snap = await db.collection('users').doc(uid).get();
@@ -84,6 +105,13 @@ async function _vcPrefetchAvatars(uids) {
             window._vcAvatarCache[uid] = data.avatarDataUrl || data.avatarUrl || null;
         } catch(e) { window._vcAvatarCache[uid] = null; }
     }));
+    toFetch.forEach(uid => window._vcAvatarFetching[uid] = false);
+    // Re-render if any avatar was found
+    const hasNew = toFetch.some(uid => !!(window._vcAvatarCache[uid]));
+    if (hasNew) {
+        if (typeof window._vcRenderParticipants === 'function') window._vcRenderParticipants();
+        toFetch.forEach(uid => { if (typeof window._vvRefreshTileAvatar === 'function') window._vvRefreshTileAvatar(uid); });
+    }
 }
 
 function _vcGroupRef() {
@@ -889,7 +917,8 @@ window.vcDeclineCall  = vcDeclineCall;
 window.vcToggleMute   = vcToggleMute;
 window.vcToggleDeafen = vcToggleDeafen;
 window.vcKickFromCall = vcKickFromCall;
-window._vcAnswer      = _vcAnswer;
+window._vcAnswer             = _vcAnswer;
+window._vcRenderParticipants = _vcRenderParticipants;
 
 // Expose live references so tasky-video.js can read them without closures.
 // These are read-only getters — tasky-video must never reassign them.

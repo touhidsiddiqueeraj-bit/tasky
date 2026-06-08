@@ -56,6 +56,25 @@ function _vvAvatarContent(uid, handle) {
     const url   = cache[uid];
     const init  = (handle || uid || 'U')[0].toUpperCase();
     if (url) return `<img src="${url.replace(/"/g,'&quot;')}" alt="${init}" style="width:100%;height:100%;object-fit:cover;display:block;">`;
+    // Cache miss — fire one-shot Firestore read as fallback
+    if (uid && !(window._vcAvatarFetching || {})[uid]) {
+        if (!window._vcAvatarFetching) window._vcAvatarFetching = {};
+        window._vcAvatarFetching[uid] = true;
+        const _db = window.db || (typeof db !== 'undefined' ? db : null);
+        if (_db) {
+            _db.collection('users').doc(uid).get().then(snap => {
+                window._vcAvatarFetching[uid] = false;
+                const u = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
+                if (u) {
+                    if (!window._vcAvatarCache) window._vcAvatarCache = {};
+                    window._vcAvatarCache[uid] = u;
+                    _vvRefreshTileAvatar(uid);
+                }
+            }).catch(() => { window._vcAvatarFetching[uid] = false; });
+        } else {
+            window._vcAvatarFetching[uid] = false;
+        }
+    }
     return init;
 }
 
@@ -1484,6 +1503,7 @@ window.addEventListener('load', function _vvInit() {
 
 // ─── Exports ──────────────────────────────────────────────────────────────
 window._vvUpdateVideoControls = _vvUpdateVideoControls;
+window._vvRefreshTileAvatar   = _vvRefreshTileAvatar;
 window.vvToggleCamera    = vvToggleCamera;
 window.vvToggleScreen    = vvToggleScreen;
 window.vvToggleRecording = vvToggleRecording;

@@ -2318,16 +2318,21 @@ async function _handleAuthChange() {
         if (avatarListener) { avatarListener(); avatarListener = null; }
         if (window.db) {
             try {
-                avatarListener = window.db.collection('users').doc(user.uid)
-                    .onSnapshot(snap => {
-                        const url = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
-                        if (url) {
-                            localStorage.setItem('tasky_avatar', url);
-                            if (!window._vcAvatarCache) window._vcAvatarCache = {};
-                            window._vcAvatarCache[user.uid] = url;
-                            if (typeof _stApplyAvatar === 'function') _stApplyAvatar(url);
-                        }
-                    }, () => {});
+                    avatarListener = window.db.collection('users').doc(user.uid)
+                        .onSnapshot(snap => {
+                            const url = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
+                            console.log('[Avatar] onSnapshot', url ? 'url=' + url.slice(0,40) + '…' : 'no url');
+                            if (url) {
+                                localStorage.setItem('tasky_avatar', url);
+                                if (!window._vcAvatarCache) window._vcAvatarCache = {};
+                                window._vcAvatarCache[user.uid] = url;
+                                if (typeof _stApplyAvatar === 'function') _stApplyAvatar(url);
+                                // Refresh video tile if video call is active
+                                if (typeof window._vvRefreshTileAvatar === 'function') window._vvRefreshTileAvatar(user.uid);
+                                // Re-render voice panel avatar
+                                if (typeof window._vcRenderParticipants === 'function') window._vcRenderParticipants();
+                            }
+                        }, function(err) { console.warn('[Avatar] onSnapshot error:', err); });
             } catch(e) { avatarListener = null; }
         }
         await loadActiveGroup();
