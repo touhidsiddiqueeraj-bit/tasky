@@ -21,6 +21,7 @@ function _syncCollabState() {
 let groupListener     = null;   // Firestore onSnapshot unsubscribe
 let tasksListener     = null;   // Firestore onSnapshot for tasks subcollection (supervisor)
 let teamPanelMember   = null;   // handle being inspected in team panel
+let avatarListener    = null;   // Firestore onSnapshot for user avatar changes
 
 // Collab lock: only show collab features when the current workspace's collabCode
 // matches the active group's code. This prevents cross-collab leaks and race
@@ -2311,6 +2312,24 @@ async function _handleAuthChange() {
     if (user && !user.isAnonymous) {
         // ── Real user — always run full setup so the dropdown renders on every load
         await ensureHandle();
+        // Load profile picture from Firestore (fixes boot timing race)
+        if (typeof _stLoadSavedAvatar === 'function') _stLoadSavedAvatar();
+        // Start real-time avatar listener for cross-device sync
+        if (avatarListener) { avatarListener(); avatarListener = null; }
+        if (window.db) {
+            try {
+                avatarListener = window.db.collection('users').doc(user.uid)
+                    .onSnapshot(snap => {
+                        const url = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
+                        if (url) {
+                            localStorage.setItem('tasky_avatar', url);
+                            if (!window._vcAvatarCache) window._vcAvatarCache = {};
+                            window._vcAvatarCache[user.uid] = url;
+                            if (typeof _stApplyAvatar === 'function') _stApplyAvatar(url);
+                        }
+                    }, () => {});
+            } catch(e) { avatarListener = null; }
+        }
         await loadActiveGroup();
         startNotifListener();
         await writeGroupTasks();
@@ -2318,6 +2337,7 @@ async function _handleAuthChange() {
         renderGroupUI();
     } else {
         // ── Signed out — tear down collab state
+        if (avatarListener) { avatarListener(); avatarListener = null; }
         stopGroupListener();
         stopNotifListener();
         stopTasksListener();

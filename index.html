@@ -2334,12 +2334,13 @@ function _stLoadSavedAvatar() {
     const user = window.currentUser;
     const initial = document.getElementById('st-avatar-initial');
     if (initial) initial.textContent = user && !user.isAnonymous ? (user.email||'?')[0].toUpperCase() : '?';
+    // Fast paint from cache — but always hit Firestore afterward for cross-device sync
     const saved = localStorage.getItem('tasky_avatar');
-    if (saved) { _stApplyAvatar(saved); return; }
+    if (saved) _stApplyAvatar(saved);
     if (user && !user.isAnonymous && window.db) {
         window.db.collection('users').doc(user.uid).get().then(snap => {
             const url = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
-            if (url) { _stApplyAvatar(url); localStorage.setItem('tasky_avatar', url); }
+            if (url && url !== saved) { _stApplyAvatar(url); localStorage.setItem('tasky_avatar', url); }
         }).catch(() => {});
     }
 }

@@ -749,7 +749,18 @@
                 if (authBtn)    authBtn.style.display    = 'none';
                 if (signoutBtn) signoutBtn.style.display = 'flex';
                 if (userInfo)   userInfo.style.display   = 'flex';
-                if (avatar)     avatar.textContent = currentUser.email ? currentUser.email[0].toUpperCase() : '?';
+                if (avatar) {
+                    const cachedUrl = (window._vcAvatarCache || {})[currentUser.uid];
+                    if (cachedUrl) {
+                        while (avatar.firstChild) avatar.removeChild(avatar.firstChild);
+                        const aimg = document.createElement('img');
+                        aimg.src = cachedUrl;
+                        aimg.style.cssText = 'width:18px;height:18px;border-radius:50%;object-fit:cover;';
+                        avatar.appendChild(aimg);
+                    } else {
+                        avatar.textContent = currentUser.email ? currentUser.email[0].toUpperCase() : '?';
+                    }
+                }
                 if (email)      email.textContent  = currentUser.email || '';
                 setSyncStatus('synced');
             } else if (currentUser && currentUser.isAnonymous) {
