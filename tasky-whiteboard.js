@@ -14,25 +14,28 @@ var _wbPoints = [];
 var _wbRemoteCursors = {};
 var _wbFBListener = null;
 var _wbFBUnsub = null;
-var _wbSessionId = null;
 
 var WB_COLORS = ['#8B5CF6','#3B82F6','#10B981','#F59E0B','#EF4444','#EC4899','#ffffff','#000000'];
 
-function openWhiteboard() {
+function openWhiteboard(fromRemote) {
     var overlay = document.getElementById('wb-overlay');
     if (!overlay) _wbBuild();
     overlay = document.getElementById('wb-overlay');
     _wbOpen = true;
     overlay.classList.add('visible');
-    setTimeout(function() { _wbResize(); _wbRenderAll(); }, 50);
     _wbStartFBSync();
+    setTimeout(function() { _wbResize(); _wbRenderAll(); }, 50);
+    if (!fromRemote) {
+        var ref = _wbDocRef();
+        if (ref) ref.set({ active: true }, { merge: true }).catch(function() {});
+    }
 }
 
 function closeWhiteboard() {
     var overlay = document.getElementById('wb-overlay');
     if (overlay) overlay.classList.remove('visible');
     _wbOpen = false;
-    _wbStopFBSync();
+    // Listener stays alive for auto-open detection. No Firestore write — per-user close.
 }
 
 function _wbBuild() {
@@ -278,21 +281,19 @@ function _wbBroadcastStroke(stroke) {
 }
 
 // ─── Firestore Sync ───
-function _wbFbRef() {
+function _wbDocRef() {
     if (typeof currentGroup === 'undefined' || !currentGroup || typeof db === 'undefined' || !db) return null;
-    var sessionId = _wbSessionId || (_wbSessionId = 'wb_' + currentGroup.code + '_' + Date.now());
-    return db.collection('groups').doc(currentGroup.code).collection('whiteboard').doc(sessionId);
+    return db.collection('groups').doc(currentGroup.code).collection('whiteboard').doc('wb_' + currentGroup.code);
 }
 
 function _wbSendFB(payload) {
-    var ref = _wbFbRef();
+    var ref = _wbDocRef();
     if (!ref) return;
     payload.uid = typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : 'anon';
     ref.update({
         strokes: firebase.firestore.FieldValue.arrayUnion(payload),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }).catch(function() {
-        // First write — create doc
         ref.set({
             strokes: [payload],
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -302,38 +303,36 @@ function _wbSendFB(payload) {
 }
 
 function _wbStartFBSync() {
-    _wbStopFBSync();
+    if (_wbFBUnsub) return; // already listening
     if (typeof currentGroup === 'undefined' || !currentGroup || typeof db === 'undefined' || !db) return;
-    // Listen for updates on all whiteboard sessions for this group
-    _wbFBUnsub = db.collection('groups').doc(currentGroup.code)
-        .collection('whiteboard').orderBy('createdAt', 'desc').limit(1)
-        .onSnapshot(function(snap) {
-            snap.docChanges().forEach(function(change) {
-                if (change.type === 'added' || change.type === 'modified') {
-                    var data = change.doc.data();
-                    var remoteStrokes = data.strokes || [];
-                    var myUid = typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : null;
-                    var myHandle = typeof currentHandle !== 'undefined' && currentHandle ? currentHandle : 'Me';
-                    remoteStrokes.forEach(function(p) {
-                        if (p.uid === myUid) return; // skip own strokes
-                        if (p.type === 'stroke') {
-                            // Check if we already have this stroke
-                            if (_wbStrokes.some(function(s) { return s._ts === p.ts && s._handle === p.handle; })) return;
-                            var s = p.stroke;
-                            s._ts = p.ts;
-                            s._handle = p.handle;
-                            _wbStrokes.push(s);
-                            _wbUndoStack.push(_wbStrokes.length - 1);
-                            _wbRenderStroke(s);
-                        } else if (p.type === 'cursor') {
-                            _wbUpdateRemoteCursor(p.handle, p.x, p.y, p.color);
-                        } else if (p.type === 'clear') {
-                            if (p.uid !== myUid) { _wbStrokes = []; _wbUndoStack = []; _wbRedoStack = []; _wbRenderAll(); }
-                        }
-                    });
-                }
-            });
-        }, function() {});
+    var ref = _wbDocRef();
+    if (!ref) return;
+    _wbFBUnsub = ref.onSnapshot(function(snap) {
+        if (!snap.exists) return;
+        var data = snap.data();
+        var myUid = typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : null;
+
+        // Auto-open if another participant opened the whiteboard
+        if (data.active && !_wbOpen) openWhiteboard(true);
+
+        var remoteStrokes = data.strokes || [];
+        remoteStrokes.forEach(function(p) {
+            if (p.uid === myUid) return;
+            if (p.type === 'stroke') {
+                if (_wbStrokes.some(function(s) { return s._ts === p.ts && s._handle === p.handle; })) return;
+                var s = p.stroke;
+                s._ts = p.ts;
+                s._handle = p.handle;
+                _wbStrokes.push(s);
+                _wbUndoStack.push(_wbStrokes.length - 1);
+                if (_wbOpen && _wbCtx) _wbRenderStroke(s);
+            } else if (p.type === 'cursor') {
+                _wbUpdateRemoteCursor(p.handle, p.x, p.y, p.color);
+            } else if (p.type === 'clear') {
+                if (p.uid !== myUid) { _wbStrokes = []; _wbUndoStack = []; _wbRedoStack = []; if (_wbOpen && _wbCtx) _wbRenderAll(); }
+            }
+        });
+    }, function() {});
 }
 
 function _wbStopFBSync() {
@@ -412,8 +411,10 @@ function _wbClearAll() {
             wbBtn.id = 'vv-btn-whiteboard';
             wbBtn.title = 'Whiteboard';
             wbBtn.textContent = '🎨';
-            wbBtn.addEventListener('click', openWhiteboard);
+            wbBtn.addEventListener('click', function() { openWhiteboard(false); });
             controls.insertBefore(wbBtn, controls.lastElementChild);
+            // Start persistent listener for auto-open detection
+            _wbStartFBSync();
         }
     }, 1000);
 })();
