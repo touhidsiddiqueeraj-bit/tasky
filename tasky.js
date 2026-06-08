@@ -585,6 +585,7 @@
                     appId: "1:285483279389:web:383a6cb7683e6e4e1d12f4"
                 });
                 db = firebase.firestore(app);
+                window.db = db;
 
                 renderAllColumns();
                 renderWorkspaceSwitcher();
