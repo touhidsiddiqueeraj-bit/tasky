@@ -14,6 +14,9 @@ var _wbPoints = [];
 var _wbRemoteCursors = {};
 var _wbFBListener = null;
 var _wbFBUnsub = null;
+var _wbCursorThrottle = false;
+var _wbCursorRenderThrottle = false;
+var _wbProcessedCount = 0;
 
 var WB_COLORS = ['#8B5CF6','#3B82F6','#10B981','#F59E0B','#EF4444','#EC4899','#ffffff','#000000'];
 
@@ -268,6 +271,9 @@ function _wbRenderStroke(s) {
 }
 
 function _wbBroadcastCursor(e) {
+    if (_wbCursorThrottle) return;
+    _wbCursorThrottle = true;
+    setTimeout(function() { _wbCursorThrottle = false; }, 50);
     var pos = _wbGetPos(e);
     var me = typeof currentHandle !== 'undefined' && currentHandle ? currentHandle : 'Me';
     var payload = { type: 'cursor', handle: me, x: pos.x, y: pos.y, color: _wbColor };
@@ -328,10 +334,13 @@ function _wbStartFBSync(retries) {
         if (data.active && !_wbOpen) { console.log('[WB] auto-open triggered'); openWhiteboard(true); }
 
         var remoteStrokes = data.strokes || [];
-        remoteStrokes.forEach(function(p) {
-            if (p.uid === myUid) return;
+        // Skip items already processed in previous snapshots
+        var startIdx = Math.min(_wbProcessedCount, remoteStrokes.length);
+        for (var i = startIdx; i < remoteStrokes.length; i++) {
+            var p = remoteStrokes[i];
+            if (p.uid === myUid) continue;
             if (p.type === 'stroke') {
-                if (_wbStrokes.some(function(s) { return s._ts === p.ts && s._handle === p.handle; })) return;
+                if (_wbStrokes.some(function(s) { return s._ts === p.ts && s._handle === p.handle; })) continue;
                 var s = p.stroke;
                 s._ts = p.ts;
                 s._handle = p.handle;
@@ -339,11 +348,16 @@ function _wbStartFBSync(retries) {
                 _wbUndoStack.push(_wbStrokes.length - 1);
                 if (_wbOpen && _wbCtx) _wbRenderStroke(s);
             } else if (p.type === 'cursor') {
-                _wbUpdateRemoteCursor(p.handle, p.x, p.y, p.color);
+                if (!_wbCursorRenderThrottle) {
+                    _wbCursorRenderThrottle = true;
+                    _wbUpdateRemoteCursor(p.handle, p.x, p.y, p.color);
+                    setTimeout(function() { _wbCursorRenderThrottle = false; }, 50);
+                }
             } else if (p.type === 'clear') {
                 if (p.uid !== myUid) { _wbStrokes = []; _wbUndoStack = []; _wbRedoStack = []; if (_wbOpen && _wbCtx) _wbRenderAll(); }
             }
-        });
+        }
+        _wbProcessedCount = remoteStrokes.length;
     }, function(err) { console.warn('[WB] snapshot error:', err); });
 }
 
