@@ -302,18 +302,30 @@ function _wbSendFB(payload) {
     });
 }
 
-function _wbStartFBSync() {
+function _wbStartFBSync(retries) {
+    retries = retries || 0;
     if (_wbFBUnsub) return; // already listening
-    if (typeof currentGroup === 'undefined' || !currentGroup || typeof db === 'undefined' || !db) return;
+    if (typeof currentGroup === 'undefined' || !currentGroup || typeof db === 'undefined' || !db) {
+        if (retries < 10) { setTimeout(function() { _wbStartFBSync(retries + 1); }, 500); }
+        else { console.warn('[WB] db/group not ready after 10 retries'); }
+        return;
+    }
     var ref = _wbDocRef();
-    if (!ref) return;
+    if (!ref) {
+        if (retries < 10) { setTimeout(function() { _wbStartFBSync(retries + 1); }, 500); }
+        else { console.warn('[WB] doc ref null after 10 retries'); }
+        return;
+    }
+    console.log('[WB] listener starting');
     _wbFBUnsub = ref.onSnapshot(function(snap) {
-        if (!snap.exists) return;
+        if (!snap.exists) { console.log('[WB] doc not exists'); return; }
         var data = snap.data();
         var myUid = typeof currentUser !== 'undefined' && currentUser ? currentUser.uid : null;
 
+        console.log('[WB] snapshot active=' + data.active + ' strokes=' + (data.strokes||[]).length + ' open=' + _wbOpen);
+
         // Auto-open if another participant opened the whiteboard
-        if (data.active && !_wbOpen) openWhiteboard(true);
+        if (data.active && !_wbOpen) { console.log('[WB] auto-open triggered'); openWhiteboard(true); }
 
         var remoteStrokes = data.strokes || [];
         remoteStrokes.forEach(function(p) {
@@ -332,7 +344,7 @@ function _wbStartFBSync() {
                 if (p.uid !== myUid) { _wbStrokes = []; _wbUndoStack = []; _wbRedoStack = []; if (_wbOpen && _wbCtx) _wbRenderAll(); }
             }
         });
-    }, function() {});
+    }, function(err) { console.warn('[WB] snapshot error:', err); });
 }
 
 function _wbStopFBSync() {
