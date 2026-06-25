@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tasky — WebRTC ICE diagnostics</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 20px; color: #2d3748; background: #f8f7ff; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  h2 { font-size: 15px; margin: 24px 0 8px; color: #6d28d9; }
+  p  { font-size: 14px; line-height: 1.55; color: #4a5568; }
+  button { background: #6d28d9; color: #fff; border: none; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button:hover { background: #7c3aed; }
+  pre { background: #1a1828; color: #e8e3f8; padding: 14px; border-radius: 8px; font-size: 12px; overflow-x: auto; max-height: 320px; }
+  .ok  { color: #047857; font-weight: 600; }
+  .warn{ color: #b45309; font-weight: 600; }
+  .bad { color: #dc2626; font-weight: 600; }
+  .note { background: #ede9fe; border-left: 3px solid #8b5cf6; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin: 12px 0; }
+</style>
+</head>
+<body>
+  <h1>Tasky — WebRTC ICE diagnostics</h1>
+  <p>This page gathers ICE candidates from your network using the same STUN servers
+  that Tasky uses.  Run it on each device / network you want to test calls between.</p>
+
+  <button id="run">Run ICE gathering test</button>
+
+  <h2>Result</h2>
+  <pre id="out">Click the button to start.</pre>
+
+  <div class="note">
+    <strong>What to look for:</strong><br>
+    • <code>host</code> candidates = your local IP (only useful on same LAN)<br>
+    • <code>srflx</code> candidates = STUN-discovered public IP (needed for cross-network P2P)<br>
+    • <code>relay</code> candidates = TURN relay (none — pure P2P)<br><br>
+    If you see <span class="ok">srflx</span> candidates on both peers, cross-network P2P should work.
+    If you only see <code>host</code> candidates, STUN is blocked on your network
+    (firewall, captive portal, strict NAT) — that's why calls fail across networks.
+  </div>
+
+  <h2>How to interpret</h2>
+  <p>
+    Calls between two peers on the <strong>same LAN</strong> only need <code>host</code> candidates.<br>
+    Calls across <strong>different networks</strong> need at least one <code>srflx</code> candidate on
+    each side, AND the NAT on both sides must allow inbound UDP on the discovered port
+    (this is true for "full-cone" NAT, but NOT for "symmetric NAT").<br>
+    If either peer is behind symmetric NAT, pure P2P without TURN will not work —
+    this is a fundamental WebRTC limitation, not a bug in Tasky.
+  </p>
+
+<script>
+const STUN = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' }
+];
+
+const out = document.getElementById('out');
+function log(line) {
+  out.textContent += line + '\n';
+  out.scrollTop = out.scrollHeight;
+}
+
+document.getElementById('run').addEventListener('click', async () => {
+  out.textContent = '';
+  log('Creating RTCPeerConnection with STUN servers...');
+  const pc = new RTCPeerConnection({ iceServers: STUN, iceTransportPolicy: 'all' });
+
+  // Add a dummy audio track so the PC has something to negotiate
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => pc.addTrack(t, stream));
+    log('✓ Microphone access granted');
+  } catch (e) {
+    log('⚠ Could not access microphone: ' + e.message + ' — continuing without audio track');
+  }
+
+  const tally = { host: 0, srflx: 0, relay: 0 };
+  pc.onicecandidate = (e) => {
+    if (!e.candidate) return;
+    const c = e.candidate.candidate;
+    let type = 'unknown';
+    if (/typ host/i.test(c))      { type = 'host';  tally.host++; }
+    else if (/typ srflx/i.test(c)){ type = 'srflx'; tally.srflx++; }
+    else if (/typ relay/i.test(c)){ type = 'relay'; tally.relay++; }
+    log('  candidate: ' + type + ' — ' + c.split(' ').slice(0, 5).join(' '));
+  };
+
+  try {
+    const offer = await pc.createOffer({ offerToReceiveAudio: true });
+    await pc.setLocalDescription(offer);
+    log('Local description set, waiting for ICE gathering to complete (max 5s)...');
+
+    await new Promise(resolve => {
+      if (pc.iceGatheringState === 'complete') return resolve();
+      const check = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', check); resolve(); } };
+      pc.addEventListener('icegatheringstatechange', check);
+      setTimeout(resolve, 5000);
+    });
+
+    log('');
+    log('=== SUMMARY ===');
+    log('host  candidates: ' + tally.host  + (tally.host  ? '  ✓' : ''));
+    log('srflx candidates: ' + tally.srflx + (tally.srflx ? '  ✓ — cross-network P2P possible' : '  ✗ — STUN failed, only same-LAN calls will work'));
+    log('relay candidates: ' + tally.relay + '  (none expected — pure P2P)');
+    log('');
+    if (tally.srflx > 0) {
+      log('RESULT: ✓ STUN is working. Cross-network P2P should succeed IF');
+      log('the other peer also sees srflx candidates and neither side is');
+      log('behind symmetric NAT.');
+    } else if (tally.host > 0) {
+      log('RESULT: ✗ STUN returned no srflx candidates. Your network is');
+      log('blocking outbound STUN (UDP to port 19302). Cross-network calls');
+      log('will fail without TURN. Check your firewall / captive portal.');
+    } else {
+      log('RESULT: ✗ No candidates at all. Something is wrong with the PC.');
+    }
+
+    pc.close();
+    if (window.streamToStop) window.streamToStop.getTracks().forEach(t => t.stop());
+  } catch (e) {
+    log('ERROR: ' + e.message);
+  }
+});
+</script>
+</body>
+</html>

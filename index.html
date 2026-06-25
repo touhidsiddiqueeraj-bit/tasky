@@ -1,0 +1,3651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Tasky — Keyboard-first Task Tracker</title>
+<meta name="description" content="A fast, keyboard-first three-column task board. Zero friction, offline-first, cloud sync optional.">
+<meta name="theme-color" content="#0a0a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tasky">
+<meta name="mobile-web-app-capable" content="yes">
+<meta property="og:title" content="Tasky — Keyboard-first Task Tracker">
+<meta property="og:description" content="Three columns. Zero friction. Keyboard shortcuts, voice input, drag-and-drop, cloud sync.">
+<meta property="og:type" content="website">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a0a1a'/><rect x='4' y='5' width='24' height='6' rx='3' fill='%238B5CF6'/><rect x='4' y='13' width='17' height='6' rx='3' fill='%23F59E0B'/><rect x='4' y='21' width='12' height='6' rx='3' fill='%2310B981'/><path d='M7 8 L9.2 10.2 L12.5 6.5' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%230a0a1a'/><rect x='24' y='28' width='144' height='38' rx='12' fill='%238B5CF6'/><rect x='24' y='78' width='102' height='38' rx='12' fill='%23F59E0B'/><rect x='24' y='128' width='72' height='38' rx='12' fill='%2310B981'/><path d='M42 47 L54 59 L75 37' stroke='white' stroke-width='8' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="tasky.css">
+<link rel="stylesheet" href="tasky-voice.css">
+<link rel="stylesheet" href="tasky-video.css">
+<link rel="stylesheet" href="tasky-calendar.css">
+<link rel="stylesheet" href="tasky-timer.css">
+<link rel="stylesheet" href="tasky-whiteboard.css">
+<style>
+/* ═══════════════════════════════════════════════════════════
+   ONBOARDING — GLASSMORPHISM
+   ═══════════════════════════════════════════════════════════ */
+.onboarding-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(6,5,10,0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.onboarding-overlay.visible { display: flex; animation: ob-fade-in 0.4s ease; }
+@keyframes ob-fade-in { from{opacity:0} to{opacity:1} }
+.onboarding-overlay.hidden {
+  animation: ob-fade-out 0.35s ease forwards;
+  pointer-events: none;
+}
+@keyframes ob-fade-out { to{opacity:0} }
+
+/* ── Shared card (desktop modal + mobile sheet) ── */
+.ob-card {
+  background: rgba(20,20,40,0.88);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 24px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(139,92,246,0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+body.light-mode .ob-card {
+  background: rgba(255,255,255,0.9);
+  border-color: rgba(0,0,0,0.1);
+  box-shadow: 0 32px 80px rgba(0,0,0,0.15), 0 0 0 1px rgba(139,92,246,0.1);
+}
+
+/* ── Desktop overlay ── */
+.ob-desktop .ob-card {
+  width: min(640px,94vw);
+  max-height: 90vh;
+}
+
+/* ── Mobile overlay ── */
+.ob-mobile {
+  flex-direction: column; align-items: stretch;
+  justify-content: flex-end; padding: 0;
+}
+.ob-mobile .ob-card {
+  border-radius: 28px 28px 0 0;
+  border-bottom: none;
+  max-height: 92vh;
+  width: 100%;
+  box-shadow: 0 -20px 60px rgba(0,0,0,0.7);
+}
+body.light-mode .ob-mobile .ob-card {
+  box-shadow: 0 -20px 60px rgba(0,0,0,0.15);
+}
+.ob-m-pill {
+  width: 40px; height: 4px; background: rgba(255,255,255,0.18);
+  border-radius: 2px; margin: 14px auto 0; flex-shrink: 0;
+}
+
+/* ── Slide area ── */
+.ob-slide-area { overflow: hidden; flex: 1; position: relative; }
+.ob-track {
+  display: flex; height: 100%;
+  transition: transform 0.38s cubic-bezier(0.4,0,0.2,1);
+}
+.ob-slide {
+  min-width: 100%; padding: 32px 36px 16px;
+  display: flex; flex-direction: column;
+  align-items: center; text-align: center;
+  gap: 14px; box-sizing: border-box;
+}
+@media (max-width: 700px) {
+  .ob-slide { padding: 28px 28px 12px; }
+}
+
+/* ── Illustration ── */
+.ob-illus {
+  width: 88px; height: 88px; border-radius: 28px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 38px; flex-shrink: 0;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.ob-illus.purple { background: linear-gradient(135deg,#7c3aed,#4c1d95); }
+.ob-illus.amber  { background: linear-gradient(135deg,#d97706,#92400e); }
+.ob-illus.green  { background: linear-gradient(135deg,#059669,#064e3b); }
+.ob-illus.blue   { background: linear-gradient(135deg,#0284c7,#0c4a6e); }
+.ob-illus.rose   { background: linear-gradient(135deg,#e11d48,#881337); }
+.ob-illus.violet { background: linear-gradient(135deg,#7c3aed,#2e1065); }
+
+/* ── Slide text ── */
+.ob-slide h2 {
+  font-size: 22px; font-weight: 800; color: #ede9fe;
+  margin: 0; line-height: 1.25;
+}
+body.light-mode .ob-slide h2 { color: #1a1040; }
+@media (max-width: 700px) { .ob-slide h2 { font-size: 20px; } }
+.ob-slide p {
+  font-size: 14.5px; color: rgba(255,255,255,0.55);
+  line-height: 1.6; margin: 0; max-width: 420px;
+}
+body.light-mode .ob-slide p { color: rgba(0,0,0,0.55); }
+@media (max-width: 700px) { .ob-slide p { font-size: 14px; } }
+.ob-slide strong { color: #c4b5fd; }
+body.light-mode .ob-slide strong { color: #7c3aed; }
+
+/* ── Tip card ── */
+.ob-tip {
+  background: rgba(139,92,246,0.15);
+  border: 1px solid rgba(139,92,246,0.3);
+  border-radius: 12px; padding: 12px 16px;
+  font-size: 13px; color: #c4b5fd;
+  line-height: 1.55; width: 100%;
+  max-width: 420px; box-sizing: border-box; text-align: left;
+}
+body.light-mode .ob-tip {
+  background: rgba(139,92,246,0.08);
+  border-color: rgba(139,92,246,0.2);
+  color: #6d28d9;
+}
+.ob-tip-label {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .1em;
+  color: #a78bfa; margin-bottom: 4px;
+}
+body.light-mode .ob-tip-label { color: #7c3aed; }
+.ob-slide kbd {
+  display: inline-block; background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 5px; padding: 1px 6px;
+  font-size: 11px; font-family: monospace;
+  color: #c4b5fd; margin: 0 1px;
+}
+body.light-mode .ob-slide kbd {
+  background: rgba(0,0,0,0.06);
+  border-color: rgba(0,0,0,0.15);
+  color: #6d28d9;
+}
+
+/* ── Navigation ── */
+.ob-nav {
+  display: flex; align-items: center;
+  justify-content: center; gap: 16px;
+  padding: 16px 36px 20px; flex-shrink: 0;
+}
+@media (max-width: 700px) { .ob-nav { padding: 14px 24px 24px; } }
+.ob-dots { display: flex; gap: 7px; justify-content: center; }
+.ob-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  transition: background .3s, width .3s; cursor: pointer;
+}
+body.light-mode .ob-dot { background: rgba(0,0,0,0.15); }
+.ob-dot.active { background: #8B5CF6; width: 22px; border-radius: 4px; }
+body.light-mode .ob-dot.active { background: #7c3aed; }
+
+.ob-btn {
+  border: none; border-radius: 12px;
+  padding: 12px 24px; font-size: 14px; font-weight: 700;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s, filter .15s, background .2s;
+  letter-spacing: .02em; white-space: nowrap;
+}
+.ob-btn:active { transform: scale(0.97); }
+.ob-btn-primary {
+  background: linear-gradient(135deg, #8B5CF6, #6d28d9);
+  color: #fff; box-shadow: 0 4px 18px rgba(139,92,246,0.4);
+}
+.ob-btn-primary:hover { filter: brightness(1.1); }
+.ob-btn-secondary {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6);
+}
+body.light-mode .ob-btn-secondary {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.1);
+  color: rgba(0,0,0,0.5);
+}
+.ob-btn-secondary:hover {
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.8);
+}
+body.light-mode .ob-btn-secondary:hover {
+  background: rgba(0,0,0,0.08);
+  color: rgba(0,0,0,0.7);
+}
+.ob-nav-back { opacity: 0; pointer-events: none; }
+.ob-nav-back.visible { opacity: 1; pointer-events: all; }
+
+.ob-skip {
+  background: none; border: none;
+  color: rgba(255,255,255,0.3); font-size: 12px;
+  cursor: pointer; padding: 0 36px 20px;
+  text-align: center; flex-shrink: 0;
+  transition: color .2s;
+}
+body.light-mode .ob-skip { color: rgba(0,0,0,0.3); }
+.ob-skip:hover { color: rgba(255,255,255,0.6); }
+body.light-mode .ob-skip:hover { color: rgba(0,0,0,0.5); }
+@media (max-width: 700px) { .ob-skip { padding: 0 24px 18px; } }
+
+/* ============================================================
+   TASK GROUPS MODAL
+   ============================================================ */
+.tg-overlay {
+  position:fixed;inset:0;z-index:8000;
+  background:rgba(6,5,10,0.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  display:none;align-items:center;justify-content:center;
+}
+.tg-overlay.visible {
+  display:flex;
+  animation:ob-fade-in .3s ease;
+}
+.tg-overlay.hidden { animation:ob-fade-out .25s ease forwards;pointer-events:none; }
+
+.tg-modal {
+  width:min(780px,95vw);max-height:90vh;
+  background:linear-gradient(150deg,#15121f 0%,#0d0b16 100%);
+  border:1px solid rgba(255,255,255,0.09);border-radius:22px;
+  box-shadow:0 28px 70px rgba(0,0,0,0.7),0 0 0 1px rgba(139,92,246,0.12);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+
+.tg-header {
+  padding:24px 28px 0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.tg-header-title {
+  display:flex;align-items:center;gap:10px;
+  font-size:18px;font-weight:800;color:#e2d9ff;
+}
+.tg-header-title span.tg-badge {
+  background:rgba(139,92,246,0.2);border:1px solid rgba(139,92,246,0.35);
+  border-radius:8px;padding:3px 9px;font-size:11px;font-weight:700;
+  color:#a78bfa;letter-spacing:.06em;text-transform:uppercase;
+}
+.tg-close-btn {
+  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.5);border-radius:10px;width:34px;height:34px;
+  font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:background .2s,color .2s;
+}
+.tg-close-btn:hover { background:rgba(239,68,68,0.15);color:#f87171;border-color:rgba(239,68,68,0.3); }
+
+.tg-tabs {
+  display:flex;gap:4px;padding:16px 28px 0;flex-shrink:0;
+  border-bottom:1px solid rgba(255,255,255,0.07);
+}
+.tg-tab {
+  padding:9px 18px;border-radius:10px 10px 0 0;font-size:13px;font-weight:600;
+  cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,0.4);
+  transition:color .2s,background .2s;
+  border-bottom:2px solid transparent;
+  margin-bottom:-1px;
+}
+.tg-tab:hover { color:rgba(255,255,255,0.7); }
+.tg-tab.active { color:#a78bfa;border-bottom-color:#8B5CF6; }
+
+.tg-body { flex:1;overflow:hidden;display:flex;flex-direction:column; }
+.tg-pane { display:none;flex:1;overflow-y:auto;padding:24px 28px 28px; }
+.tg-pane.active { display:flex;flex-direction:column;gap:16px; }
+
+.tg-empty-state {
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;color:rgba(255,255,255,0.25);padding:40px 0;
+}
+.tg-empty-icon { font-size:48px; }
+.tg-empty-text { font-size:14px;text-align:center;line-height:1.6; }
+
+.tg-group-card {
+  background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;padding:16px 18px;display:flex;align-items:flex-start;
+  gap:14px;transition:border-color .2s,background .2s;
+}
+.tg-group-card:hover { background:rgba(139,92,246,0.06);border-color:rgba(139,92,246,0.2); }
+.tg-group-card-main { flex:1;min-width:0; }
+.tg-group-name {
+  font-size:15px;font-weight:700;color:#e2d9ff;margin-bottom:5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tg-group-meta { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.tg-group-col-badge {
+  font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;
+}
+.tg-group-col-badge.todo    { background:rgba(139,92,246,0.2);color:#a78bfa; }
+.tg-group-col-badge.working { background:rgba(245,158,11,0.2);color:#fbbf24; }
+.tg-group-task-count { font-size:11px;color:rgba(255,255,255,0.35); }
+.tg-group-tasks-preview { margin-top:8px;display:flex;flex-wrap:wrap;gap:5px; }
+.tg-task-chip {
+  font-size:11px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
+  border-radius:6px;padding:2px 8px;color:rgba(255,255,255,0.5);
+  white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;
+}
+.tg-task-chip.priority-high   { border-color:rgba(239,68,68,0.3);color:#fca5a5; }
+.tg-task-chip.priority-medium { border-color:rgba(245,158,11,0.3);color:#fcd34d; }
+.tg-task-chip.priority-low    { border-color:rgba(16,185,129,0.3);color:#6ee7b7; }
+
+.tg-group-actions { display:flex;gap:6px;flex-shrink:0;align-items:flex-start; }
+.tg-icon-btn {
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+  border-radius:9px;padding:7px 10px;font-size:14px;cursor:pointer;
+  transition:background .2s,border-color .2s;color:rgba(255,255,255,0.6);
+  display:flex;align-items:center;gap:5px;font-size:12px;
+}
+.tg-icon-btn:hover { background:rgba(139,92,246,0.15);border-color:rgba(139,92,246,0.3);color:#a78bfa; }
+.tg-icon-btn.danger:hover { background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.3);color:#f87171; }
+
+.tg-danger-row {
+  margin-top:auto;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);
+  display:flex;justify-content:flex-end;
+}
+.tg-danger-btn {
+  background:transparent;border:1px solid rgba(239,68,68,0.25);color:rgba(239,68,68,0.6);
+  border-radius:10px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;
+  transition:background .2s,color .2s,border-color .2s;
+}
+.tg-danger-btn:hover { background:rgba(239,68,68,0.1);color:#f87171;border-color:rgba(239,68,68,0.5); }
+
+.tg-field-label {
+  font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:rgba(255,255,255,0.4);margin-bottom:8px;
+}
+.tg-input {
+  width:100%;box-sizing:border-box;background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.12);border-radius:12px;
+  padding:12px 16px;font-size:14px;color:#e2d9ff;outline:none;
+  transition:border-color .2s,background .2s;
+}
+.tg-input::placeholder { color:rgba(255,255,255,0.25); }
+.tg-input:focus { border-color:rgba(139,92,246,0.5);background:rgba(139,92,246,0.06); }
+
+.tg-col-toggle {
+  display:flex;gap:0;border:1px solid rgba(255,255,255,0.12);border-radius:12px;overflow:hidden;width:fit-content;
+}
+.tg-col-toggle button {
+  padding:10px 22px;font-size:13px;font-weight:600;cursor:pointer;border:none;
+  background:transparent;color:rgba(255,255,255,0.4);transition:background .2s,color .2s;
+}
+.tg-col-toggle button.selected-todo    { background:rgba(139,92,246,0.25);color:#a78bfa; }
+.tg-col-toggle button.selected-working { background:rgba(245,158,11,0.2);color:#fbbf24; }
+
+.tg-subtasks-list { display:flex;flex-direction:column;gap:8px; }
+.tg-subtask-row {
+  display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+  border-radius:11px;padding:8px 10px;
+}
+.tg-subtask-row input.tg-input {
+  flex:1;padding:8px 12px;font-size:13px;border:none;background:transparent;
+}
+.tg-subtask-row input.tg-input:focus { border:none;background:transparent; }
+.tg-priority-select {
+  background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);
+  border-radius:8px;padding:6px 10px;font-size:12px;color:rgba(255,255,255,0.6);
+  cursor:pointer;outline:none;
+}
+.tg-priority-select option { background:#1a1528; }
+.tg-remove-task-btn {
+  background:transparent;border:none;color:rgba(255,255,255,0.25);
+  font-size:16px;cursor:pointer;padding:2px 4px;border-radius:6px;
+  transition:color .2s,background .2s;line-height:1;flex-shrink:0;
+}
+.tg-remove-task-btn:hover { color:#f87171;background:rgba(239,68,68,0.1); }
+.tg-add-subtask-btn {
+  background:rgba(255,255,255,0.04);border:1px dashed rgba(255,255,255,0.15);
+  border-radius:11px;padding:10px;font-size:13px;color:rgba(255,255,255,0.35);
+  cursor:pointer;text-align:center;transition:background .2s,border-color .2s,color .2s;
+}
+.tg-add-subtask-btn:hover {
+  background:rgba(139,92,246,0.08);border-color:rgba(139,92,246,0.3);color:#a78bfa;
+}
+
+.tg-save-btn {
+  background:linear-gradient(135deg, var(--accent,#8B5CF6), var(--accent-dark,#6d28d9));
+  color:#fff;border:none;
+  border-radius:13px;padding:14px 32px;font-size:14px;font-weight:700;cursor:pointer;
+  box-shadow:0 4px 20px var(--accent-glow,rgba(139,92,246,0.35));transition:filter .15s,transform .15s;
+  letter-spacing:.03em;align-self:flex-start;margin-top:4px;
+}
+.tg-save-btn:hover { filter:brightness(1.1);transform:translateY(-1px); }
+.tg-save-btn:active { transform:translateY(0); }
+
+/* ============================================================
+   GROUP SUGGESTION DROPDOWN
+   ============================================================ */
+.tg-suggestion-box {
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(480px,90vw);
+  background:linear-gradient(145deg,#18142a,#12101c);
+  border:1px solid rgba(139,92,246,0.3);
+  border-radius:16px;
+  box-shadow:0 -4px 30px rgba(139,92,246,0.2),0 8px 40px rgba(0,0,0,0.6);
+  z-index:7000;
+  overflow:hidden;
+  display:none;
+  flex-direction:column;
+}
+.tg-suggestion-box.visible { display:flex; }
+.tg-suggestion-header {
+  padding:9px 14px 7px;
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
+  color:rgba(139,92,246,0.7);border-bottom:1px solid rgba(255,255,255,0.06);
+  display:flex;align-items:center;gap:6px;
+}
+.tg-suggestion-item {
+  padding:11px 14px;display:flex;align-items:center;gap:10px;
+  cursor:pointer;transition:background .15s;
+}
+.tg-suggestion-item:hover,
+.tg-suggestion-item.focused { background:rgba(139,92,246,0.14); }
+.tg-suggestion-glyph {
+  width:30px;height:30px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,#7c3aed,#4c1d95);
+  display:flex;align-items:center;justify-content:center;font-size:15px;
+}
+.tg-suggestion-name { flex:1;font-size:13.5px;font-weight:600;color:#e2d9ff; }
+.tg-suggestion-meta { font-size:11px;color:rgba(255,255,255,0.35); }
+.tg-suggestion-badge {
+  font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 7px;border-radius:5px;background:rgba(139,92,246,0.2);
+  border:1px solid rgba(139,92,246,0.3);color:#a78bfa;flex-shrink:0;
+}
+
+/* ── Light mode: Task Groups ── */
+body.light-mode .tg-overlay { background: rgba(255,255,255,0.6); }
+body.light-mode .tg-modal { background: #ffffff; border-color: rgba(0,0,0,0.1); box-shadow: 0 28px 70px rgba(0,0,0,0.12); }
+body.light-mode .tg-header-title { color: #1e1b4b; }
+body.light-mode .tg-header-title span.tg-badge { background: rgba(139,92,246,0.08); border-color: rgba(139,92,246,0.2); color: #6d28d9; }
+body.light-mode .tg-close-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.4); }
+body.light-mode .tg-close-btn:hover { background: rgba(239,68,68,0.08); color: #dc2626; border-color: rgba(239,68,68,0.2); }
+body.light-mode .tg-tabs { border-bottom-color: rgba(0,0,0,0.07); }
+body.light-mode .tg-tab { color: rgba(0,0,0,0.4); }
+body.light-mode .tg-tab:hover { color: rgba(0,0,0,0.7); }
+body.light-mode .tg-tab.active { color: #6d28d9; border-bottom-color: #6d28d9; }
+body.light-mode .tg-empty-state { color: rgba(0,0,0,0.25); }
+body.light-mode .tg-group-card { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); }
+body.light-mode .tg-group-card:hover { background: rgba(139,92,246,0.04); border-color: rgba(139,92,246,0.15); }
+body.light-mode .tg-group-name { color: #2d3748; }
+body.light-mode .tg-group-col-badge.todo { background: rgba(139,92,246,0.08); color: #6d28d9; }
+body.light-mode .tg-group-col-badge.working { background: rgba(245,158,11,0.08); color: #b45309; }
+body.light-mode .tg-group-task-count { color: rgba(0,0,0,0.3); }
+body.light-mode .tg-task-chip { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.5); }
+body.light-mode .tg-task-chip.priority-high { border-color: rgba(239,68,68,0.25); color: #dc2626; }
+body.light-mode .tg-task-chip.priority-medium { border-color: rgba(245,158,11,0.25); color: #d97706; }
+body.light-mode .tg-task-chip.priority-low { border-color: rgba(16,185,129,0.25); color: #047857; }
+body.light-mode .tg-icon-btn { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.08); color: rgba(0,0,0,0.5); }
+body.light-mode .tg-icon-btn:hover { background: rgba(139,92,246,0.06); border-color: rgba(139,92,246,0.2); color: #6d28d9; }
+body.light-mode .tg-icon-btn.danger:hover { background: rgba(239,68,68,0.06); border-color: rgba(239,68,68,0.2); color: #dc2626; }
+body.light-mode .tg-danger-row { border-top-color: rgba(0,0,0,0.07); }
+body.light-mode .tg-danger-btn { border-color: rgba(239,68,68,0.2); color: rgba(239,68,68,0.6); }
+body.light-mode .tg-danger-btn:hover { background: rgba(239,68,68,0.06); color: #dc2626; border-color: rgba(239,68,68,0.35); }
+body.light-mode .tg-field-label { color: rgba(0,0,0,0.4); }
+body.light-mode .tg-input { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.12); color: #1e1b4b; }
+body.light-mode .tg-input::placeholder { color: rgba(0,0,0,0.25); }
+body.light-mode .tg-input:focus { border-color: rgba(109,40,217,0.4); background: rgba(109,40,217,0.04); }
+body.light-mode .tg-col-toggle { border-color: rgba(0,0,0,0.12); }
+body.light-mode .tg-col-toggle button { color: rgba(0,0,0,0.4); }
+body.light-mode .tg-col-toggle button.selected-todo { background: rgba(139,92,246,0.1); color: #6d28d9; }
+body.light-mode .tg-col-toggle button.selected-working { background: rgba(245,158,11,0.1); color: #b45309; }
+body.light-mode .tg-subtask-row { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.08); }
+body.light-mode .tg-priority-select { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.6); }
+body.light-mode .tg-priority-select option { background: #fff; color: #000; }
+body.light-mode .tg-remove-task-btn { color: rgba(0,0,0,0.2); }
+body.light-mode .tg-add-subtask-btn { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.3); }
+body.light-mode .tg-add-subtask-btn:hover { background: rgba(139,92,246,0.04); border-color: rgba(139,92,246,0.2); color: #6d28d9; }
+body.light-mode .tg-suggestion-box { background: #ffffff; border-color: rgba(109,40,217,0.2); box-shadow: 0 -4px 30px rgba(0,0,0,0.1), 0 8px 40px rgba(0,0,0,0.12); }
+body.light-mode .tg-suggestion-header { color: rgba(109,40,217,0.6); border-bottom-color: rgba(0,0,0,0.06); }
+body.light-mode .tg-suggestion-item:hover,
+body.light-mode .tg-suggestion-item.focused { background: rgba(139,92,246,0.06); }
+body.light-mode .tg-suggestion-name { color: #2d3748; }
+body.light-mode .tg-suggestion-meta { color: rgba(0,0,0,0.35); }
+body.light-mode .tg-suggestion-badge { background: rgba(139,92,246,0.08); border-color: rgba(139,92,246,0.2); color: #6d28d9; }
+
+/* ── Confirm dialog (light-mode-aware inline-styled elements) ───────────── */
+.confirm-title    { color: var(--text-primary, #fff); }
+.confirm-body     { color: rgba(255,255,255,0.6); }
+.confirm-cancel-btn {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.75);
+  padding: 9px 20px; border-radius: 10px;
+  cursor: pointer; font-size: 14px; font-weight: 600;
+}
+.confirm-ok-btn {
+  background: #ef4444; border: none; color: #fff;
+  padding: 9px 20px; border-radius: 10px;
+  cursor: pointer; font-size: 14px; font-weight: 600;
+}
+body.light-mode .confirm-title { color: #1e1b4b; }
+body.light-mode .confirm-body  { color: rgba(0,0,0,0.6); }
+body.light-mode .confirm-cancel-btn {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.1);
+  color: rgba(0,0,0,0.7);
+}
+body.light-mode .confirm-cancel-btn:hover {
+  background: rgba(0,0,0,0.08);
+}
+body.light-mode .confirm-ok-btn { background: #dc2626; }
+
+/* ── Hint tooltips (global) ─────────────────────────────────────────────── */
+[title]:not(input):not(select):not(textarea) { position: relative; }
+/* Native title tooltips are enough; we add a styled one for .tasky-hint-tip */
+.tasky-hint-tip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px; height: 15px;
+    border-radius: 50%;
+    background: rgba(139,92,246,0.15);
+    border: 1px solid rgba(139,92,246,0.28);
+    color: rgba(196,181,253,0.72);
+    font-size: 9.5px; font-weight: 700;
+    cursor: help;
+    margin-left: 5px;
+    vertical-align: middle;
+    flex-shrink: 0;
+    transition: background 0.13s;
+}
+.tasky-hint-tip:hover { background: rgba(139,92,246,0.28); color: #e2d9ff; }
+body.light-mode .tasky-hint-tip {
+  background: rgba(139,92,246,0.10);
+  border-color: rgba(139,92,246,0.22);
+  color: #6d28d9;
+}
+body.light-mode .tasky-hint-tip:hover {
+  background: rgba(139,92,246,0.22);
+  color: #4c1d95;
+}
+
+/* Hint banner that can be inserted anywhere */
+.tasky-inline-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    padding: 8px 11px;
+    border-radius: 8px;
+    background: rgba(139,92,246,0.05);
+    border: 1px solid rgba(139,92,246,0.12);
+    font-size: 12px;
+    color: rgba(180,170,220,0.7);
+    line-height: 1.45;
+    margin: 6px 0;
+}
+.tasky-inline-hint strong { color: rgba(220,210,255,0.9); font-weight: 600; }
+body.light-mode .tasky-inline-hint {
+    background: rgba(109,40,217,0.04);
+    border-color: rgba(109,40,217,0.10);
+    color: rgba(79,60,153,0.65);
+}
+body.light-mode .tasky-inline-hint strong { color: #4c1d95; }
+</style>
+<style>
+/* ── Assign modal: group selection ── */
+.assign-group-option {
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.assign-group-option.selected {
+  background: rgba(139,92,246,0.15) !important;
+  border-color: rgba(139,92,246,0.45) !important;
+}
+.assign-group-option.selected > div:last-child { color: #a78bfa !important; }
+.assign-textarea {
+  resize: vertical;
+  min-height: 72px;
+  font-family: inherit;
+}
+.assign-select {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* ── To Do empty state ── */
+.todo-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 36px 16px;
+  pointer-events: none;
+  user-select: none;
+  opacity: 1;
+  transition: opacity 0.25s ease;
+}
+.todo-empty-state.hidden { opacity: 0; }
+.todo-empty-icon {
+  font-size: 32px;
+  opacity: 0.35;
+}
+.todo-empty-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.25);
+  text-align: center;
+  line-height: 1.5;
+}
+body.light-mode .todo-empty-text { color: rgba(0,0,0,0.25); }
+
+/* ── Simplified floating hint bar ── */
+.floating-input-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 6px 0 2px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.35);
+}
+.floating-input-hint span { white-space: nowrap; }
+
+</style>
+<style>
+/* ── Dropdown: prevent clipping when logged in (extra items make it tall) ── */
+.dropdown-menu {
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  /* Desktop: grow upward from bottom-left button */
+  top: auto;
+  bottom: 100%;
+}
+/* On mobile the button is at bottom-left — keep opening upward */
+@media (max-width: 768px) {
+  .dropdown-menu {
+    top: auto;
+    bottom: 100%;
+    left: 0;
+    right: auto;
+    margin-top: 0;
+    margin-bottom: 8px;
+  }
+}
+</style>
+</head>
+<body>
+<div id="loading-splash" class="loading-splash">
+  <div class="loading-spinner"></div>
+</div>
+<style>
+.loading-splash { position:fixed;inset:0;z-index:9998;background:#0a0a1a;display:flex;align-items:center;justify-content:center; }
+.loading-spinner { width:36px;height:36px;border:3px solid rgba(139,92,246,0.2);border-top-color:#8B5CF6;border-radius:50%;animation:ls-spin .8s linear infinite; }
+@keyframes ls-spin{to{transform:rotate(360deg)}}
+body.light-mode .loading-splash { background:#f5f0ff; }
+body.light-mode .loading-spinner { border-color:rgba(109,40,217,0.2);border-top-color:#7c3aed; }
+</style>
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<div class="custom-bg" id="custom-bg" style="display:none;">
+  <img id="custom-bg-img" alt="">
+  <div class="custom-bg-overlay"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     DESKTOP ONBOARDING
+     ═══════════════════════════════════════════════ -->
+<div class="onboarding-overlay ob-desktop" id="onboarding-desktop">
+  <div class="ob-card">
+    <div class="ob-slide-area">
+      <div class="ob-track" id="desk-track">
+
+        <div class="ob-slide">
+          <div class="ob-illus purple">✅</div>
+          <h2>Welcome to Tasky</h2>
+          <p>A three-column board — <strong>To Do</strong> · <strong>Working On</strong> · <strong>Done</strong> — built for speed. No sign-up needed, your data lives on your device. Every action has a keyboard shortcut.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">⌨️ Quick start</div>
+            Press any key to open the task input. Type and hit <kbd>Enter</kbd> to save.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus amber">⌨️</div>
+          <h2>Adding Tasks</h2>
+          <p>Press any letter or number to open the floating input. Type your task and hit <kbd>Enter</kbd> to save. Press <kbd>Esc</kbd> to cancel. Tasks always land in <strong>To Do</strong> first.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🎙️ Voice input</div>
+            Hold <kbd>Space</kbd> to dictate — release to save. Works in Chrome, Edge &amp; Brave.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus green">🎯</div>
+          <h2>Move &amp; Prioritize</h2>
+          <p>Click a task to select it, then press <kbd>←</kbd> <kbd>→</kbd> to move between columns. You can also drag and drop. Press <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> for <strong>High</strong> / <strong>Medium</strong> / <strong>Low</strong> priority.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">💡 Pro tip</div>
+            On mobile, swipe tasks left/right to move them. Click the priority badge to cycle levels.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus rose">☁️</div>
+          <h2>Cloud Sync</h2>
+          <p>Sign in with Google via <strong>Tasky ▼ → ☁️ Sign in</strong> to sync tasks across all your devices. Works fully offline — changes queue locally and sync when you're back online.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🛡️ Your data</div>
+            No account needed to start. Sign in only when you want sync. Your tasks stay on-device otherwise.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus blue">📋</div>
+          <h2>Workspaces</h2>
+          <p>Keep different projects separate with <strong>Workspaces</strong>. Switch between them using the pill bar at the top. Each workspace has its own tasks, settings, and optional collaboration.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">➕ New workspace</div>
+            Click <strong>＋ New Workspace</strong> in the top bar to get started. The first workspace is always "Personal".
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus violet">👥</div>
+          <h2>Collaboration &amp; Voice</h2>
+          <p>Share a board with teammates via a <strong>6-character code</strong>. Assign tasks, chat on the message board, and hop into <strong>voice calls</strong> — all in real-time with live sync.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🔗 Get started</div>
+            Sign in with Google, then open <strong>Tasky ▼ → 👥 Create Collaboration</strong> to generate a code and invite your team.
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="ob-nav">
+      <button class="ob-btn ob-btn-secondary ob-nav-back" id="desk-back-btn" onclick="deskPrev()">← Back</button>
+      <div class="ob-dots" id="desk-dots">
+        <div class="ob-dot active" onclick="deskGoToSlide(0)"></div>
+        <div class="ob-dot" onclick="deskGoToSlide(1)"></div>
+        <div class="ob-dot" onclick="deskGoToSlide(2)"></div>
+        <div class="ob-dot" onclick="deskGoToSlide(3)"></div>
+        <div class="ob-dot" onclick="deskGoToSlide(4)"></div>
+        <div class="ob-dot" onclick="deskGoToSlide(5)"></div>
+      </div>
+      <button class="ob-btn ob-btn-primary" id="desk-next-btn" onclick="deskNext()">Next →</button>
+    </div>
+    <button class="ob-skip" onclick="dismissOnboarding()">Skip tour</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MOBILE ONBOARDING
+     ═══════════════════════════════════════════════ -->
+<div class="onboarding-overlay ob-mobile" id="onboarding-mobile">
+  <div class="ob-card">
+    <div class="ob-m-pill"></div>
+    <div class="ob-slide-area">
+      <div class="ob-track" id="mob-track">
+
+        <div class="ob-slide">
+          <div class="ob-illus purple">✅</div>
+          <h2>Welcome to Tasky</h2>
+          <p>A three-column board — <strong>To Do</strong> · <strong>Working On</strong> · <strong>Done</strong> — built for speed. No sign-up needed, your data stays on your device.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">📱 Quick start</div>
+            Tap <strong>＋</strong> to add a task, type it, then tap <strong>Enter</strong> on your keyboard to save.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus amber">⌨️</div>
+          <h2>Adding Tasks</h2>
+          <p>Tap the <strong>＋</strong> button to open the input. Type your task and hit <kbd>Enter</kbd> to save. Tasks land in <strong>To Do</strong> first.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🎙️ Voice input</div>
+            Tap the mic button to dictate tasks hands-free.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus green">🎯</div>
+          <h2>Move &amp; Prioritize</h2>
+          <p>Swipe a task <strong>left</strong> to move to <strong>Working On</strong> or <strong>Done</strong>. Swipe <strong>right</strong> to move back. Tap the priority badge to cycle <strong>High</strong> / <strong>Medium</strong> / <strong>Low</strong>.</p>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus rose">☁️</div>
+          <h2>Cloud Sync</h2>
+          <p>Sign in with Google via <strong>Tasky ▼ → ☁️ Sign in</strong> to sync tasks across all your devices. Works offline — changes queue and sync when you're back online.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🛡️ Your data</div>
+            No account needed to start. Sign in only when you want sync.
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus blue">📋</div>
+          <h2>Workspaces</h2>
+          <p>Keep different projects separate with <strong>Workspaces</strong>. Switch between them using the pill bar at the top. Each workspace has its own tasks and settings.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">➕ New workspace</div>
+            Tap <strong>＋ New Workspace</strong> in the top bar. The first workspace is "Personal".
+          </div>
+        </div>
+
+        <div class="ob-slide">
+          <div class="ob-illus violet">👥</div>
+          <h2>Collaboration &amp; Voice</h2>
+          <p>Share a board with teammates via a <strong>6-character code</strong>. Assign tasks, chat, and make voice calls in real-time.</p>
+          <div class="ob-tip">
+            <div class="ob-tip-label">🔗 Get started</div>
+            Tap <strong>Tasky ▼ → 👥 Create Collaboration</strong> to generate a code and invite your team.
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="ob-nav">
+      <button class="ob-btn ob-btn-secondary ob-nav-back" id="mob-back-btn" onclick="mobPrev()">← Back</button>
+      <div class="ob-dots" id="mob-dots">
+        <div class="ob-dot active" onclick="mobGoToSlide(0)"></div>
+        <div class="ob-dot" onclick="mobGoToSlide(1)"></div>
+        <div class="ob-dot" onclick="mobGoToSlide(2)"></div>
+        <div class="ob-dot" onclick="mobGoToSlide(3)"></div>
+        <div class="ob-dot" onclick="mobGoToSlide(4)"></div>
+        <div class="ob-dot" onclick="mobGoToSlide(5)"></div>
+      </div>
+      <button class="ob-btn ob-btn-primary" id="mob-next-btn" onclick="mobNext()">Next →</button>
+    </div>
+    <button class="ob-skip" onclick="dismissOnboarding()">Skip tour</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TASK GROUPS MODAL
+     ═══════════════════════════════════════════════ -->
+<div class="tg-overlay hidden" id="tg-modal-overlay" onclick="tgOverlayClick(event)">
+  <div class="tg-modal" id="tg-modal">
+
+    <div class="tg-header">
+      <div class="tg-header-title">
+        <span>⊞</span> Task Groups
+        <span class="tg-badge">Templates</span>
+      </div>
+      <button class="tg-close-btn" onclick="closeTgModal()" title="Close">✕</button>
+    </div>
+
+    <div class="tg-tabs">
+      <button class="tg-tab active" id="tg-tab-list"   onclick="switchTgTab('list')">My Groups</button>
+      <button class="tg-tab"        id="tg-tab-create" onclick="switchTgTab('create')">＋ New Group</button>
+    </div>
+
+    <div class="tg-body">
+
+      <div class="tg-pane active" id="tg-pane-list">
+        <div id="tg-groups-list-inner"></div>
+        <div class="tg-danger-row">
+          <button class="tg-danger-btn" onclick="tgDeleteAllGroups()">🗑 Delete All Groups</button>
+        </div>
+      </div>
+
+      <div class="tg-pane" id="tg-pane-create">
+
+        <div>
+          <div class="tg-field-label">Group Name</div>
+          <input class="tg-input" id="tg-group-name-input" type="text"
+            placeholder='e.g. "Sprint Setup", "Morning Routine"' maxlength="60">
+        </div>
+
+        <div>
+          <div class="tg-field-label">Tasks land in</div>
+          <div class="tg-col-toggle" id="tg-col-toggle">
+            <button id="tg-btn-todo"    class="selected-todo"    onclick="tgSetColumn('todo')">📝 To Do</button>
+            <button id="tg-btn-working"                          onclick="tgSetColumn('working')">⚡ Working On</button>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;min-height:0;">
+          <div class="tg-field-label">Tasks in this group</div>
+          <div class="tg-subtasks-list" id="tg-subtasks-list"></div>
+          <button class="tg-add-subtask-btn" onclick="tgAddSubtaskRow()">＋ Add task to group</button>
+        </div>
+
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button class="tg-save-btn" onclick="tgSaveGroup()" id="tg-save-btn">Save Group</button>
+          <button onclick="tgCancelEdit()" style="background:transparent;border:none;color:rgba(255,255,255,0.35);cursor:pointer;font-size:13px;padding:4px 8px;">Cancel</button>
+          <span id="tg-save-error" style="font-size:12px;color:#f87171;display:none;"></span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CUSTOM CONFIRM DIALOG
+     ═══════════════════════════════════════════════ -->
+<div class="tg-overlay hidden" id="confirm-overlay" onclick="if(event.target===this)confirmDialogResolve(false)">
+  <div class="tg-modal" id="confirm-modal" style="width:min(380px,92vw);padding:0;">
+    <div style="padding:28px 28px 0;">
+      <div id="confirm-title" class="confirm-title" style="font-size:17px;font-weight:700;margin-bottom:10px;"></div>
+      <div id="confirm-body" class="confirm-body" style="font-size:14px;line-height:1.5;"></div>
+    </div>
+    <div style="display:flex;gap:10px;padding:22px 28px 24px;justify-content:flex-end;">
+      <button id="confirm-cancel-btn" type="button" class="confirm-cancel-btn"
+        onclick="confirmDialogResolve(false)">Cancel</button>
+      <button id="confirm-ok-btn" type="button" class="confirm-ok-btn"
+        onclick="confirmDialogResolve(true)">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     BACKGROUND SETTINGS MODAL
+     ═══════════════════════════════════════════════ -->
+<div class="tg-overlay hidden" id="bg-modal-overlay" onclick="bgOverlayClick(event)">
+  <div class="tg-modal" id="bg-modal" style="width:min(440px,95vw);">
+    <div class="tg-header">
+      <div class="tg-header-title">
+        <span>🖼️</span> Background Settings
+      </div>
+      <button class="tg-close-btn" onclick="closeBgModal()" title="Close">✕</button>
+    </div>
+    <div class="tg-body" style="padding:24px 28px;gap:20px;overflow-y:auto;">
+      <div>
+        <div class="tg-field-label">Background Image</div>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+          <button class="tg-save-btn" onclick="triggerBgUpload()" style="flex:1;justify-content:center;">Choose Image</button>
+          <button class="tg-danger-btn" id="bg-remove-inline-btn" onclick="removeCustomBg()" style="display:none;">Remove</button>
+        </div>
+        <div id="bg-status-label" style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:8px;display:none;">✓ Background set</div>
+      </div>
+      <div>
+        <div class="tg-field-label">Task Card Opacity</div>
+        <input type="range" id="card-opacity-slider" class="opacity-slider" min="40" max="100" value="100">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">
+          <span>Less visible</span>
+          <span id="card-opacity-value">100%</span>
+          <span>Fully opaque</span>
+        </div>
+      <button class="tg-save-btn" onclick="closeBgModal()" style="width:100%;justify-content:center;align-self:stretch;margin-top:4px;">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     GROUP SUGGESTION DROPDOWN
+     ═══════════════════════════════════════════════ -->
+<div class="tg-suggestion-box" id="tg-suggestion-box">
+  <div class="tg-suggestion-header">⊞ Task Groups — press ↑↓ to navigate, Enter to expand</div>
+  <div id="tg-suggestion-list"></div>
+</div>
+
+
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ═══════════════════════════════════════════════
+     MOBILE BOTTOM BAR
+     ═══════════════════════════════════════════════ -->
+<div id="mobile-bottom-bar">
+
+  <div class="bottom-bar-cell">
+    <button class="mobile-add-btn" id="mobile-add-btn" onclick="mobileFabTap()">
+      <span class="fab-icon">＋</span>
+    </button>
+  </div>
+
+  <div class="bottom-bar-cell">
+    <button class="mobile-mic-btn" id="mobile-mic-btn">🎙️</button>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TOP MENU
+     ═══════════════════════════════════════════════ -->
+<div class="top-menu">
+  <button class="brand-btn" onclick="toggleMenu()">
+    <svg class="tasky-logo" width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="1" y="2" width="20" height="5" rx="2.5" fill="url(#lg-todo)" opacity="0.95"/>
+      <rect x="1" y="8.5" width="14" height="5" rx="2.5" fill="url(#lg-working)" opacity="0.95"/>
+      <rect x="1" y="15" width="10" height="5" rx="2.5" fill="url(#lg-done)" opacity="0.95"/>
+      <path d="M4.5 4.5 L6.2 6.1 L8.8 3.2" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      <defs>
+        <linearGradient id="lg-todo" x1="1" y1="2" x2="21" y2="7" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#8B5CF6"/>
+          <stop offset="100%" stop-color="#6d28d9"/>
+        </linearGradient>
+        <linearGradient id="lg-working" x1="1" y1="8.5" x2="15" y2="13.5" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#F59E0B"/>
+          <stop offset="100%" stop-color="#d97706"/>
+        </linearGradient>
+        <linearGradient id="lg-done" x1="1" y1="15" x2="11" y2="20" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#10B981"/>
+          <stop offset="100%" stop-color="#059669"/>
+        </linearGradient>
+      </defs>
+    </svg>
+        <span class="brand-text">Tasky</span>
+        <span class="brand-chevron">▼</span>
+  </button>
+  <div class="dropdown-menu" id="dropdown">
+    <button class="dropdown-item collab-dd-item" id="collab-create-dd-btn" onclick="openCollabModal('create')" title="Create a shared board — invite teammates with a link">
+      <span>👥</span>
+      <span>Create Collaboration</span>
+    </button>
+    <button class="dropdown-item collab-dd-item" id="collab-join-dd-btn" onclick="openCollabModal('join')" title="Join a teammate's board using an invite code or link">
+      <span>🔗</span>
+      <span>Join Collaboration</span>
+    </button>
+    <button class="dropdown-item collab-dd-item" id="collab-info-dd-btn" style="display:none;" onclick="openCollabModal('info')">
+      <span>👥</span>
+      <span id="collab-info-dd-text">My Collaboration</span>
+    </button>
+    <button class="dropdown-item collab-dd-item" id="collab-leave-dd-btn" style="display:none;color:#ef4444;" onclick="leaveGroup()">
+      <span>🚪</span>
+      <span>Leave Collaboration</span>
+    </button>
+    <div class="dropdown-divider collab-dd-item" id="collab-dd-divider"></div>
+    <button class="dropdown-item" onclick="openTgModal()">
+      <span>⊞</span>
+      <span>Task Groups</span>
+    </button>
+    <div class="dropdown-divider"></div>
+    <button class="dropdown-item" onclick="openHowToUse()">
+      <span>❓</span>
+      <span>How to Use</span>
+    </button>
+    <button class="dropdown-item" onclick="openSettings()">
+      <span>⚙️</span>
+      <span>Settings</span>
+    </button>
+    <div class="dropdown-divider"></div>
+    <button class="dropdown-item" onclick="signInWithGoogle()" id="auth-btn">
+      <span>☁️</span>
+      <span id="auth-text">Sign in with Google</span>
+    </button>
+    <button class="dropdown-item" onclick="signOut()" id="signout-btn" style="display:none;">
+      <span>🚪</span>
+      <span>Sign Out</span>
+    </button>
+    <div class="dropdown-item" id="user-info"
+      style="display:none;cursor:default;opacity:0.6;font-size:12px;padding:6px 16px;"
+      onclick="return false;">
+      <span id="user-avatar" style="width:18px;height:18px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:14px;"></span>
+      <span id="user-email"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     WORKSPACE SWITCHER
+     ═══════════════════════════════════════════════ -->
+<div id="workspace-switcher"></div>
+
+<!-- ═══════════════════════════════════════════════
+     BOARD
+     ═══════════════════════════════════════════════ -->
+<div class="container">
+  <div class="board">
+    <div class="column-wrapper">
+      <div class="column-ring"></div><div class="column-ring-inner"></div>
+      <div class="column">
+        <div class="column-header">
+          <div class="column-header-left">
+            <h2 class="column-title">📝 To Do</h2>
+            <div class="filter-dots">
+              <span class="filter-dot high"   onclick="toggleFilter('todo','high',this)"   title="Filter: show only High priority tasks"></span>
+              <span class="filter-dot medium" onclick="toggleFilter('todo','medium',this)" title="Filter: show only Medium priority tasks"></span>
+              <span class="filter-dot low"    onclick="toggleFilter('todo','low',this)"    title="Filter: show only Low priority tasks"></span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button id="cal-mini-btn" onclick="openCalendarView()" title="Calendar view — see tasks with due dates on a monthly calendar"
+              style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:8px;
+                     padding:3px 8px;font-size:13px;cursor:pointer;color:rgba(255,255,255,0.55);
+                     display:flex;align-items:center;gap:4px;transition:background .15s,border-color .15s,color .15s;
+                     white-space:nowrap;line-height:1;">
+              📅
+            </button>
+            <span class="task-count" id="todo-count">0</span>
+          </div>
+        </div>
+        <div class="task-list" id="todo-list" ondrop="drop(event)" ondragover="allowDrop(event)">
+          <div class="todo-empty-state" id="todo-empty-state">
+            <div class="todo-empty-icon">✏️</div>
+            <div class="todo-empty-text">Press any key or <strong>click anywhere</strong> to add your first task</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="column-wrapper">
+      <div class="column-ring"></div><div class="column-ring-inner"></div>
+      <div class="column">
+        <div class="column-header">
+          <div class="column-header-left">
+            <h2 class="column-title">⚡ Working On</h2>
+            <div class="filter-dots">
+              <span class="filter-dot high"   onclick="toggleFilter('working','high',this)"   title="Filter: show only High priority tasks"></span>
+              <span class="filter-dot medium" onclick="toggleFilter('working','medium',this)" title="Filter: show only Medium priority tasks"></span>
+              <span class="filter-dot low"    onclick="toggleFilter('working','low',this)"    title="Filter: show only Low priority tasks"></span>
+            </div>
+          </div>
+          <span class="task-count" id="working-count">0</span>
+        </div>
+        <div class="task-list" id="working-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+      </div>
+    </div>
+
+    <div class="column-wrapper">
+      <div class="column-ring"></div><div class="column-ring-inner"></div>
+      <div class="column">
+        <div class="column-header">
+          <div class="column-header-left"><h2 class="column-title">✅ Done</h2></div>
+          <div class="column-header-right">
+            <span class="daily-summary" id="daily-summary"></span>
+            <span class="task-count" id="done-count">0</span>
+          </div>
+        </div>
+        <div class="task-list" id="done-list" ondrop="drop(event)" ondragover="allowDrop(event)"></div>
+        <button class="clear-done-btn" onclick="clearDoneTasks()" title="Permanently remove all completed tasks (cannot be undone)">Clear All Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Floating input -->
+<div class="floating-input-container" id="floating-container">
+  <input type="text" class="floating-input" id="floating-input"
+    placeholder="Type to add task or group name…" maxlength="120">
+  <div class="floating-input-hint">
+    <span><kbd>Enter</kbd> add &nbsp;·&nbsp; <kbd>Esc</kbd> cancel</span>
+    <span title="Try: high, medium, or low priority — or due dates like 20may">Add <code>!high</code> or <code>!low</code> to set priority</span>
+    <span id="floating-group-hint" style="display:none;color:#a78bfa;">⊞ group match — <kbd>↑</kbd><kbd>↓</kbd> navigate, <kbd>Enter</kbd> expand</span>
+    <span id="floating-assign-hint" style="display:none;color:#67e8f9;">👥 assign: <code>task text to::handle priority::high date::20may</code></span>
+  </div>
+</div>
+
+<!-- Floating toolbox -->
+<div class="toolbox" id="toolbox"></div>
+
+<!-- Task selector pill -->
+<div class="task-selector" id="task-selector">
+  <span class="task-selector-icon">🔍</span>
+  Go to task #<span id="task-selector-buffer"></span>
+  <span class="task-selector-cursor">|</span>
+</div>
+
+<div class="sync-status" id="sync-status"></div>
+<span class="enc-indicator" id="enc-indicator"></span>
+
+<div class="shortcuts-hint">
+  <span>Task selected: <kbd>←</kbd><kbd>→</kbd> move column · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> priority · <kbd>E</kbd> edit · <kbd>Del</kbd> delete · <kbd>Esc</kbd> deselect · Hold <kbd>Space</kbd> voice input</span>
+</div>
+
+<!-- Voice overlay -->
+<div class="voice-overlay" id="voice-overlay">
+  <div class="voice-orb">
+    <div class="voice-ring"></div><div class="voice-ring"></div><div class="voice-ring"></div>
+    <div class="voice-mic">🎙️</div>
+  </div>
+  <div class="voice-label">Listening…</div>
+  <div class="voice-transcript" id="voice-transcript"></div>
+  <div class="voice-hint" id="voice-hint">Release <kbd style="background:rgba(255,255,255,0.15);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,255,255,0.3)">Space</kbd> to confirm</div>
+</div>
+
+<input type="file" id="bg-upload-input" accept="image/*" style="display:none;">
+
+<!-- ▼▼▼  FIXED: v10 compat CDN (v11 removed the compat layer) ▼▼▼ -->
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script defer src="tasky.js"></script>
+<script defer src="tasky-collab.js"></script>
+<script defer src="tasky-photos.js"></script>
+<script defer src="tasky-features.js"></script>
+<script defer src="tasky-calendar.js"></script>
+<script defer src="tasky-subtask.js"></script>
+<script defer src="tasky-timer.js"></script>
+<script defer src="tasky-bulk.js"></script>
+<script defer src="tasky-activity.js"></script>
+<script defer src="tasky-voice.js"></script>
+<script defer src="tasky-video.js"></script>
+<script defer src="tasky-whiteboard.js"></script>
+<script defer src="tasky-deps-search.js"></script>
+<script defer src="tasky-palette.js"></script>
+
+<script>
+/* ============================================================
+   ONBOARDING
+   ============================================================ */
+const STORAGE_KEY = 'tasky_onboarding_seen_v4';
+// Migration: users who dismissed on v3 should not see onboarding again
+(function _migrateOnboardingKey() {
+  if (!localStorage.getItem(STORAGE_KEY) && localStorage.getItem('tasky_onboarding_seen_v3')) {
+    localStorage.setItem(STORAGE_KEY, '1');
+  }
+})();
+
+function isMobile() { return window.matchMedia('(max-width:700px)').matches; }
+
+/* ── Desktop slides ── */
+var deskSlide = 0;
+var DESK_TOTAL = 6;
+
+function deskGoToSlide(n) {
+  deskSlide = Math.max(0, Math.min(n, DESK_TOTAL - 1));
+  var track = document.getElementById('desk-track');
+  if (track) track.style.transform = 'translateX(-' + (deskSlide * 100) + '%)';
+  updateDeskNav();
+}
+
+function updateDeskNav() {
+  var dots = document.querySelectorAll('#desk-dots .ob-dot');
+  dots.forEach(function(d, i) { d.classList.toggle('active', i === deskSlide); });
+  var back = document.getElementById('desk-back-btn');
+  if (back) back.classList.toggle('visible', deskSlide > 0);
+  var next = document.getElementById('desk-next-btn');
+  if (next) next.textContent = deskSlide === DESK_TOTAL - 1 ? "Let's Go! 🚀" : 'Next →';
+}
+
+function deskNext() {
+  if (deskSlide < DESK_TOTAL - 1) { deskGoToSlide(deskSlide + 1); }
+  else { dismissOnboarding(); }
+}
+
+function deskPrev() {
+  deskGoToSlide(Math.max(0, deskSlide - 1));
+}
+
+/* ── Mobile slides ── */
+var mobSlide = 0;
+var MOB_TOTAL = 6;
+
+function mobGoToSlide(n) {
+  mobSlide = Math.max(0, Math.min(n, MOB_TOTAL - 1));
+  var track = document.getElementById('mob-track');
+  if (track) track.style.transform = 'translateX(-' + (mobSlide * 100) + '%)';
+  updateMobNav();
+}
+
+function updateMobNav() {
+  var dots = document.querySelectorAll('#mob-dots .ob-dot');
+  dots.forEach(function(d, i) { d.classList.toggle('active', i === mobSlide); });
+  var back = document.getElementById('mob-back-btn');
+  if (back) back.classList.toggle('visible', mobSlide > 0);
+  var next = document.getElementById('mob-next-btn');
+  if (next) next.textContent = mobSlide === MOB_TOTAL - 1 ? "Let's Go! 🚀" : 'Next →';
+}
+
+function mobNext() {
+  if (mobSlide < MOB_TOTAL - 1) { mobGoToSlide(mobSlide + 1); }
+  else { dismissOnboarding(); }
+}
+
+function mobPrev() {
+  mobGoToSlide(Math.max(0, mobSlide - 1));
+}
+
+/* ── Shared ── */
+function initOnboarding() {
+  if (localStorage.getItem(STORAGE_KEY) || localStorage.getItem('hasOnboarded') === 'true') {
+    localStorage.setItem(STORAGE_KEY, '1');
+    return;
+  }
+  var showId = isMobile() ? 'onboarding-mobile' : 'onboarding-desktop';
+  var el = document.getElementById(showId);
+  if (el) el.classList.add('visible');
+}
+
+function dismissOnboarding() {
+  localStorage.setItem(STORAGE_KEY, '1');
+  ['onboarding-desktop', 'onboarding-mobile'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('visible');
+    el.classList.add('hidden');
+    setTimeout(function() { el.classList.remove('hidden'); }, 370);
+  });
+  // Remove loading splash that was kept visible during onboarding
+  var splash = document.getElementById('loading-splash');
+  if (splash) {
+    splash.style.transition = 'opacity 0.2s ease';
+    splash.style.opacity = '0';
+    setTimeout(function() { if (splash && splash.parentNode) splash.remove(); }, 250);
+  }
+}
+
+/* ── Empty state: show when To Do has no tasks ── */
+function updateTodoEmptyState() {
+  var list = document.getElementById('todo-list');
+  var es   = document.getElementById('todo-empty-state');
+  if (!list || !es) return;
+  // Count actual task cards (not the empty state div itself)
+  var taskCards = list.querySelectorAll('.task-card, [data-id], .task');
+  if (taskCards.length === 0) {
+    es.classList.remove('hidden');
+  } else {
+    es.classList.add('hidden');
+  }
+}
+
+// Observe todo-list for DOM changes to keep empty state in sync
+(function() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var list = document.getElementById('todo-list');
+    if (!list) return;
+    updateTodoEmptyState();
+    var obs = new MutationObserver(updateTodoEmptyState);
+    obs.observe(list, { childList: true, subtree: false });
+  });
+})();
+
+function showOnboarding() {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem('hasOnboarded');
+  ['onboarding-desktop', 'onboarding-mobile'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) { el.classList.remove('hidden'); el.classList.remove('visible'); }
+  });
+  initOnboarding();
+  deskGoToSlide(0);
+  mobGoToSlide(0);
+  var dd = document.getElementById('dropdown');
+  if (dd && dd.classList.contains('show') && typeof toggleMenu === 'function') toggleMenu();
+}
+
+/* ── Mobile swipe ── */
+(function() {
+  var sx = 0;
+  document.addEventListener('DOMContentLoaded', function() {
+    var sa = document.querySelector('#onboarding-mobile .ob-slide-area');
+    if (!sa) return;
+    sa.addEventListener('touchstart', function(e) { sx = e.touches[0].clientX; }, { passive: true });
+    sa.addEventListener('touchend', function(e) {
+      var dx = e.changedTouches[0].clientX - sx;
+      if (Math.abs(dx) > 50) mobGoToSlide(mobSlide + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+  });
+})();
+
+/* ============================================================
+   TASK GROUPS — Storage
+   ============================================================ */
+const TG_KEY = 'tasky_groups_v1';
+
+function tgLoad() {
+  try { return JSON.parse(localStorage.getItem(TG_KEY)) || []; }
+  catch(e) { return []; }
+}
+
+function tgSave(groups) {
+  localStorage.setItem(TG_KEY, JSON.stringify(groups));
+}
+
+/* ============================================================
+   TASK GROUPS — Modal UI
+   ============================================================ */
+let tgEditingId = null;
+let tgColumn    = 'todo';
+
+function openTgModal() {
+  const overlay = document.getElementById('tg-modal-overlay');
+  overlay.classList.remove('hidden');
+  overlay.classList.add('visible');
+  switchTgTab('list');
+  renderTgGroupsList();
+  const dd = document.getElementById('dropdown');
+  if (dd && dd.classList.contains('show') && typeof toggleMenu === 'function') toggleMenu();
+}
+
+function closeTgModal() {
+  const overlay = document.getElementById('tg-modal-overlay');
+  overlay.classList.remove('visible');
+  overlay.classList.add('hidden');
+  setTimeout(() => overlay.classList.remove('hidden'), 270);
+  tgResetCreateForm();
+}
+
+function tgOverlayClick(e) {
+  if (e.target === document.getElementById('tg-modal-overlay')) closeTgModal();
+}
+
+function switchTgTab(tab) {
+  document.querySelectorAll('.tg-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tg-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('tg-tab-'+tab).classList.add('active');
+  document.getElementById('tg-pane-'+tab).classList.add('active');
+  if (tab === 'list') renderTgGroupsList();
+  if (tab === 'create' && tgEditingId === null) tgResetCreateForm();
+}
+
+function renderTgGroupsList() {
+  const groups = tgLoad();
+  const inner  = document.getElementById('tg-groups-list-inner');
+  if (!groups.length) {
+    inner.innerHTML = `
+      <div class="tg-empty-state">
+        <div class="tg-empty-icon">⊞</div>
+        <div class="tg-empty-text">No groups yet.<br>Create one to expand a whole set of tasks with a single keystroke.</div>
+      </div>`;
+    return;
+  }
+  inner.innerHTML = groups.map((g,i) => {
+    const colLabel = g.column === 'working' ? 'Working On' : 'To Do';
+    const colClass = g.column === 'working' ? 'working' : 'todo';
+    const chips = (g.tasks||[]).slice(0,6).map(t => {
+      const pc = t.priority ? `priority-${t.priority}` : '';
+      return `<span class="tg-task-chip ${pc}" title="${escHtml(t.text)}">${escHtml(t.text)}</span>`;
+    }).join('');
+    const more = g.tasks.length > 6
+      ? `<span class="tg-task-chip" style="opacity:.5">+${g.tasks.length-6} more</span>` : '';
+    return `
+      <div class="tg-group-card">
+        <div class="tg-group-card-main">
+          <div class="tg-group-name">${escHtml(g.name)}</div>
+          <div class="tg-group-meta">
+            <span class="tg-group-col-badge ${colClass}">${colLabel}</span>
+            <span class="tg-group-task-count">${g.tasks.length} task${g.tasks.length!==1?'s':''}</span>
+          </div>
+          <div class="tg-group-tasks-preview">${chips}${more}</div>
+        </div>
+        <div class="tg-group-actions">
+          <button class="tg-icon-btn" onclick="tgStartEdit('${g.id}')" title="Edit">✏️ Edit</button>
+          <button class="tg-icon-btn danger" onclick="tgDeleteGroup('${g.id}')" title="Delete">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function tgResetCreateForm() {
+  tgEditingId = null;
+  tgColumn = 'todo';
+  document.getElementById('tg-group-name-input').value = '';
+  document.getElementById('tg-subtasks-list').innerHTML = '';
+  tgSetColumn('todo');
+  tgAddSubtaskRow();
+  document.getElementById('tg-save-btn').textContent = 'Save Group';
+  hideTgError();
+}
+
+function tgSetColumn(col) {
+  tgColumn = col;
+  document.getElementById('tg-btn-todo').className    = col==='todo'    ? 'selected-todo'    : '';
+  document.getElementById('tg-btn-working').className = col==='working' ? 'selected-working' : '';
+}
+
+function tgAddSubtaskRow(text='', priority='medium') {
+  const list = document.getElementById('tg-subtasks-list');
+  const row  = document.createElement('div');
+  row.className = 'tg-subtask-row';
+  row.innerHTML = `
+    <input class="tg-input" type="text" placeholder="Task description…" maxlength="80" value="${escHtml(text)}"
+      onkeydown="tgSubtaskKeydown(event,this)">
+    <select class="tg-priority-select">
+      <option value="high"   ${priority==='high'  ?'selected':''}>🔴 High</option>
+      <option value="medium" ${priority==='medium'?'selected':''}>🟡 Medium</option>
+      <option value="low"    ${priority==='low'   ?'selected':''}>🟢 Low</option>
+    </select>
+    <button class="tg-remove-task-btn" onclick="tgRemoveSubtaskRow(this)" title="Remove">✕</button>`;
+  list.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+function tgSubtaskKeydown(e, input) {
+  if (e.key === 'Enter') { e.preventDefault(); tgAddSubtaskRow(); }
+}
+
+function tgRemoveSubtaskRow(btn) {
+  btn.closest('.tg-subtask-row').remove();
+}
+
+function tgGetSubtasks() {
+  const rows = document.querySelectorAll('#tg-subtasks-list .tg-subtask-row');
+  const tasks = [];
+  rows.forEach(row => {
+    const text = row.querySelector('input').value.trim();
+    const priority = row.querySelector('select').value;
+    if (text) tasks.push({ text, priority });
+  });
+  return tasks;
+}
+
+function tgSaveGroup() {
+  const name  = document.getElementById('tg-group-name-input').value.trim();
+  const tasks = tgGetSubtasks();
+
+  if (!name)         { showTgError('Please enter a group name.'); return; }
+  if (!tasks.length) { showTgError('Add at least one task.');     return; }
+
+  const groups = tgLoad();
+  const duplicate = groups.find(g => g.name.toLowerCase() === name.toLowerCase() && g.id !== tgEditingId);
+  if (duplicate) { showTgError('A group with that name already exists.'); return; }
+
+  if (tgEditingId) {
+    const idx = groups.findIndex(g => g.id === tgEditingId);
+    if (idx !== -1) groups[idx] = { ...groups[idx], name, column: tgColumn, tasks };
+  } else {
+    groups.push({ id: tgNewId(), name, column: tgColumn, tasks });
+  }
+
+  tgSave(groups);
+  tgEditingId = null;
+  switchTgTab('list');
+  showTaskyToast(`Group "${name}" saved ✓`);
+}
+
+function tgNewId() {
+  return 'tg_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+}
+
+function tgStartEdit(id) {
+  const groups = tgLoad();
+  const group  = groups.find(g => g.id === id);
+  if (!group) return;
+
+  tgEditingId = id;
+  switchTgTab('create');
+
+  document.getElementById('tg-group-name-input').value = group.name;
+  tgSetColumn(group.column || 'todo');
+
+  const list = document.getElementById('tg-subtasks-list');
+  list.innerHTML = '';
+  (group.tasks || []).forEach(t => tgAddSubtaskRow(t.text, t.priority));
+  document.getElementById('tg-save-btn').textContent = 'Update Group';
+  hideTgError();
+}
+
+async function tgDeleteGroup(id) {
+  const groups = tgLoad();
+  const group  = groups.find(g => g.id === id);
+  if (!group) return;
+  if (!await showConfirm('Delete Group', `Delete "${group.name}"? This cannot be undone.`)) return;
+  tgSave(groups.filter(g => g.id !== id));
+  renderTgGroupsList();
+  showTaskyToast(`Group "${group.name}" deleted`);
+}
+
+async function tgDeleteAllGroups() {
+  const groups = tgLoad();
+  if (!groups.length) return;
+  if (!await showConfirm('Delete All Groups', `Delete all ${groups.length} group${groups.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+  tgSave([]);
+  renderTgGroupsList();
+  showTaskyToast('All groups deleted');
+}
+
+function tgCancelEdit() {
+  tgEditingId = null;
+  switchTgTab('list');
+}
+
+function showTgError(msg) {
+  const el = document.getElementById('tg-save-error');
+  el.textContent = msg;
+  el.style.display = 'inline';
+}
+function hideTgError() {
+  const el = document.getElementById('tg-save-error');
+  if (el) el.style.display = 'none';
+}
+
+function escHtml(str) {
+  return (str == null ? '' : String(str))
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+var escapeHtml = escHtml;
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const overlay = document.getElementById('tg-modal-overlay');
+    if (overlay && !overlay.classList.contains('hidden')) {
+      closeTgModal();
+      e.stopPropagation();
+    }
+  }
+});
+
+/* ============================================================
+   TASK GROUPS — Suggestion dropdown
+   ============================================================ */
+let tgSuggestions  = [];
+let tgSuggFocusIdx = -1;
+
+function tgGetSuggestions(query) {
+  if (!query || query.length < 1) return [];
+  const q = query.toLowerCase();
+  return tgLoad().filter(g => g.name.toLowerCase().startsWith(q));
+}
+
+function tgUpdateSuggestionBox(query) {
+  tgSuggestions  = tgGetSuggestions(query);
+  tgSuggFocusIdx = -1;
+
+  const box       = document.getElementById('tg-suggestion-box');
+  const list      = document.getElementById('tg-suggestion-list');
+  const groupHint = document.getElementById('floating-group-hint');
+
+  if (!tgSuggestions.length) {
+    box.classList.remove('visible');
+    if (groupHint) groupHint.style.display = 'none';
+    return;
+  }
+
+  list.innerHTML = tgSuggestions.map((g,i) => `
+    <div class="tg-suggestion-item" data-idx="${i}"
+      onmousedown="tgExpandGroup('${g.id}',event)"
+      onmouseover="tgSuggFocus(${i})">
+      <div class="tg-suggestion-glyph">⊞</div>
+      <div class="tg-suggestion-name">${escHtml(g.name)}</div>
+      <div class="tg-suggestion-meta">${g.tasks.length} task${g.tasks.length!==1?'s':''} → ${g.column==='working'?'Working On':'To Do'}</div>
+      <div class="tg-suggestion-badge">Group</div>
+    </div>`).join('');
+
+  positionSuggestionBox();
+  box.classList.add('visible');
+  if (groupHint) groupHint.style.display = 'inline';
+}
+
+function positionSuggestionBox() {
+  const container = document.getElementById('floating-container');
+  const box       = document.getElementById('tg-suggestion-box');
+  if (!container || !box) return;
+  const rect = container.getBoundingClientRect();
+  box.style.bottom = (window.innerHeight - rect.top + 10) + 'px';
+  box.style.top    = 'auto';
+}
+
+function tgHideSuggestions() {
+  document.getElementById('tg-suggestion-box').classList.remove('visible');
+  const hint = document.getElementById('floating-group-hint');
+  if (hint) hint.style.display = 'none';
+  tgSuggestions  = [];
+  tgSuggFocusIdx = -1;
+}
+
+function tgSuggFocus(idx) {
+  tgSuggFocusIdx = idx;
+  document.querySelectorAll('.tg-suggestion-item').forEach((el,i) =>
+    el.classList.toggle('focused', i===idx));
+}
+
+function tgHandleInputKeydown(e) {
+  const box = document.getElementById('tg-suggestion-box');
+  if (!box.classList.contains('visible')) return false;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    e.stopPropagation();
+    tgSuggFocus(Math.min(tgSuggFocusIdx+1, tgSuggestions.length-1));
+    return true;
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    e.stopPropagation();
+    tgSuggFocus(Math.max(tgSuggFocusIdx-1, 0));
+    return true;
+  }
+  if (e.key === 'Enter' && tgSuggFocusIdx >= 0) {
+    e.preventDefault();
+    e.stopPropagation();
+    const g = tgSuggestions[tgSuggFocusIdx];
+    if (g) tgExpandGroup(g.id);
+    return true;
+  }
+  if (e.key === 'Escape') {
+    tgHideSuggestions();
+    return false;
+  }
+  return false;
+}
+
+function tgExpandGroup(id, mouseEvent) {
+  if (mouseEvent) mouseEvent.preventDefault();
+  const groups = tgLoad();
+  const group  = groups.find(g => g.id === id);
+  if (!group) return;
+
+  const existing = new Set();
+  if (typeof window.tasks === 'object' && window.tasks !== null) {
+    Object.values(window.tasks).forEach(col => {
+      if (Array.isArray(col)) col.forEach(t => existing.add(t.text.toLowerCase()));
+    });
+  } else {
+    document.querySelectorAll('.task-item').forEach(el => {
+      const txt = el.querySelector('.task-text');
+      if (txt) existing.add(txt.textContent.toLowerCase());
+    });
+  }
+
+  const column = group.column || 'todo';
+  let added = 0, skipped = 0;
+
+  group.tasks.forEach(t => {
+    if (existing.has(t.text.toLowerCase())) { skipped++; return; }
+    if (typeof addTask === 'function') {
+      addTask(t.text, column, t.priority || 'medium');
+    }
+    added++;
+  });
+
+  tgHideSuggestions();
+  const container = document.getElementById('floating-container');
+  const input     = document.getElementById('floating-input');
+  if (input)     { input.value = ''; input.blur(); }
+  if (container) container.classList.remove('active');
+  if (typeof hideFloatingInput === 'function') hideFloatingInput();
+
+  const colLabel = column === 'working' ? 'Working On' : 'To Do';
+  const msg = skipped
+    ? `⊞ "${group.name}" expanded — ${added} added, ${skipped} skipped (duplicates)`
+    : `⊞ "${group.name}" expanded — ${added} task${added!==1?'s':''} added to ${colLabel}`;
+  showTaskyToast(msg);
+}
+
+function patchFloatingInput() {
+  const input = document.getElementById('floating-input');
+  if (!input) return;
+
+  input.addEventListener('input', () => {
+    tgUpdateSuggestionBox(input.value.trim());
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.target !== input) return;
+    tgHandleInputKeydown(e);
+  }, true);
+
+  input.addEventListener('blur', () => {
+    setTimeout(tgHideSuggestions, 180);
+  });
+
+  window.addEventListener('resize', () => {
+    if (document.getElementById('tg-suggestion-box').classList.contains('visible')) {
+      positionSuggestionBox();
+    }
+  });
+}
+
+function showTaskyToast(msg) {
+  if (typeof showToast === 'function') {
+    showToast(msg, () => {});
+    return;
+  }
+  const c = document.getElementById('toast-container');
+  if (!c) return;
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+/* ─── Notification safe shim ─────────────────────────────────────────── */
+// Fallback used if tasky-collab.js hasn't run yet (should not happen in practice)
+async function _safeEnableNotifs() {
+  if (!('Notification' in window)) {
+    showTaskyToast('⚠️ This browser does not support notifications.');
+    return;
+  }
+  let perm = Notification.permission;
+  if (perm === 'default') {
+    perm = await Notification.requestPermission();
+  }
+  if (perm === 'granted') {
+    showTaskyToast('🔔 Notifications enabled!');
+    // Fire a test notification
+    try {
+      new Notification('Tasky Notifications', {
+        body: "You'll be notified for new tasks and due dates.",
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="%230a0a1a"/><rect x="4" y="5" width="24" height="6" rx="3" fill="%238B5CF6"/><rect x="4" y="13" width="17" height="6" rx="3" fill="%23F59E0B"/><rect x="4" y="21" width="12" height="6" rx="3" fill="%2310B981"/><path d="M7 8 L9.2 10.2 L12.5 6.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>'
+      });
+    } catch(_) {}
+  } else if (perm === 'denied') {
+    showTaskyToast('⚠️ Notifications blocked. Allow them in browser settings → Site Settings.');
+  }
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+// Boot — call once regardless of when the script runs
+function _boot() {
+  initOnboarding();
+  patchFloatingInput();
+  // Load saved avatar after a short delay (auth may not be ready yet)
+  setTimeout(() => { if (typeof _stLoadSavedAvatar === 'function') _stLoadSavedAvatar(); }, 1200);
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _boot);
+} else {
+  _boot();
+}
+</script>
+<script>
+/* ============================================================
+   CUSTOM CONFIRM DIALOG
+   ============================================================ */
+let confirmDialogResolve = null;
+let _confirmActive = false;
+
+function showConfirm(title, body, okLabel = 'Delete') {
+  if (_confirmActive) return Promise.reject(new Error('Confirm already active'));
+  _confirmActive = true;
+  return new Promise(resolve => {
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-body').textContent  = body;
+    document.getElementById('confirm-ok-btn').textContent = okLabel;
+    const overlay = document.getElementById('confirm-overlay');
+    overlay.classList.remove('hidden');
+    overlay.classList.add('visible');
+    confirmDialogResolve = (result) => {
+      _confirmActive = false;
+      overlay.classList.remove('visible');
+      overlay.classList.add('hidden');
+      setTimeout(() => overlay.classList.remove('hidden'), 270);
+      confirmDialogResolve = null;
+      resolve(result);
+    };
+  });
+}
+</script>
+
+<!-- ═══════════════════════════════════════════════
+     SETTINGS PANEL
+     ═══════════════════════════════════════════════ -->
+<div id="settings-backdrop" onclick="closeSettings()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;backdrop-filter:blur(2px);"></div>
+<div id="settings-panel">
+  <div id="settings-header">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:20px;">⚙️</span>
+      <span style="font-size:16px;font-weight:700;color:var(--st-text);">Settings</span>
+    </div>
+    <button id="settings-close-btn" onclick="closeSettings()">✕</button>
+  </div>
+  <div id="settings-body">
+
+    <!-- ── PROFILE ── -->
+    <div class="st-group-label">👤 Profile</div>
+
+      <!-- Avatar upload -->
+      <div class="st-row st-row--stack">
+        <div class="st-row-label">
+          <span class="st-row-icon">🖼️</span>
+          <span>Profile Picture</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;width:100%;padding-top:6px;">
+          <div id="st-avatar-preview" style="
+            width:56px;height:56px;border-radius:50%;
+            background:linear-gradient(140deg,#8B5CF6,#6d28d9);
+            color:#fff;font-size:22px;font-weight:700;
+            display:flex;align-items:center;justify-content:center;
+            overflow:hidden;flex-shrink:0;
+            border:2px solid rgba(139,92,246,0.30);
+            cursor:pointer;" onclick="document.getElementById('st-avatar-input').click()" title="Click to change photo">
+            <span id="st-avatar-initial">?</span>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:11.5px;color:var(--st-text-dim,rgba(200,192,240,0.6));margin-bottom:6px;line-height:1.4;">
+              Shown in voice &amp; video calls. JPG or PNG, max 1 MB.
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="st-btn" onclick="document.getElementById('st-avatar-input').click()" style="flex:1;">Choose Photo</button>
+              <button class="st-btn" id="st-avatar-clear-btn" onclick="stClearAvatar()" style="display:none;">Remove</button>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="st-avatar-input" accept="image/jpeg,image/png,image/webp"
+          style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;"
+          onchange="stHandleAvatarUpload(this)">
+      </div>
+
+    <!-- ── APPEARANCE ── -->
+    <div class="st-group-label">🎨 Appearance</div>
+
+      <!-- Theme toggle -->
+      <div class="st-row">
+        <div class="st-row-label">
+          <span class="st-row-icon" id="st-theme-icon">☀️</span>
+          <span id="st-theme-text">Light Mode</span>
+        </div>
+        <button id="st-theme-btn" class="st-theme-btn" onclick="stToggleTheme()" title="Toggle theme">
+          <span id="st-theme-btn-icon">🌙</span>
+          <span id="st-theme-btn-label">Light</span>
+        </button>
+      </div>
+
+      <!-- Accent colour -->
+      <div class="st-row st-row--wrap">
+        <div class="st-row-label">
+          <span class="st-row-icon">🎨</span>
+          <span>Accent Colour</span>
+        </div>
+        <div class="st-swatch-group">
+          <div class="st-swatch" data-color="#8B5CF6" title="Purple (default)" onclick="stSetAccent(this)"></div>
+          <div class="st-swatch" data-color="#3B82F6" title="Blue" onclick="stSetAccent(this)"></div>
+          <div class="st-swatch" data-color="#10B981" title="Green" onclick="stSetAccent(this)"></div>
+          <div class="st-swatch" data-color="#F59E0B" title="Amber" onclick="stSetAccent(this)"></div>
+          <div class="st-swatch" data-color="#EF4444" title="Red" onclick="stSetAccent(this)"></div>
+          <div class="st-swatch" data-color="#EC4899" title="Pink" onclick="stSetAccent(this)"></div>
+          <div class="st-swatch" id="st-accent-custom-swatch" title="Custom colour"
+            onclick="document.getElementById('st-accent-custom').click()"
+            style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);border-style:dashed;"></div>
+          <input type="color" id="st-accent-custom" oninput="stSetAccentRaw(this.value);document.getElementById('st-accent-custom-swatch').style.background=this.value;"
+            style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;">
+        </div>
+      </div>
+
+      <!-- Background image -->
+      <div class="st-row st-row--stack">
+        <div class="st-row-label">
+          <span class="st-row-icon">🖼️</span>
+          <span>Background Image</span><span style="font-size:10.5px;color:var(--st-text-dim,rgba(180,170,220,0.5));margin-left:auto;">any JPG/PNG</span>
+        </div>
+        <div style="display:flex;gap:8px;width:100%;">
+          <button class="st-btn" onclick="triggerBgUpload()" style="flex:1;">Choose Image</button>
+          <button class="st-btn st-btn-danger" id="st-bg-remove-btn" onclick="removeCustomBg()" style="display:none;">Remove</button>
+        </div>
+        <div id="st-bg-status" style="font-size:12px;color:rgba(255,255,255,0.35);display:none;">✓ Custom background active</div>
+      </div>
+
+      <!-- Card opacity -->
+      <div class="st-row st-row--stack">
+        <div class="st-row-label">
+          <span class="st-row-icon">🪟</span>
+          <span>Card Opacity</span>
+        </div>
+        <div style="width:100%;display:flex;align-items:center;gap:10px;">
+          <input type="range" id="st-opacity-slider" class="st-slider" min="40" max="100" value="100"
+            oninput="setCardOpacity(this.value);document.getElementById('st-opacity-val').textContent=this.value+'%'">
+          <span id="st-opacity-val" style="font-size:12px;color:var(--st-muted);min-width:36px;text-align:right;">100%</span>
+        </div>
+      </div>
+
+    <div class="st-separator"></div>
+    <div class="st-group-label">✏️ Typography</div>
+
+      <!-- Font family -->
+      <div class="st-row st-row--stack">
+        <div class="st-row-label">
+          <span class="st-row-icon">🔤</span>
+          <span>Font Family</span>
+        </div>
+        <div class="st-font-chip-group">
+          <button class="st-font-chip" data-font="system" onclick="stSetFont(this)">System</button>
+          <button class="st-font-chip" data-font="Inter, sans-serif" onclick="stSetFont(this)" style="font-family:'Inter',sans-serif;">Inter</button>
+          <button class="st-font-chip" data-font="'DM Sans', sans-serif" onclick="stSetFont(this)" style="font-family:'DM Sans',sans-serif;">DM Sans</button>
+          <button class="st-font-chip" data-font="'Fira Code', monospace" onclick="stSetFont(this)" style="font-family:'Fira Code',monospace;">Fira Code</button>
+          <button class="st-font-chip" data-font="Georgia, serif" onclick="stSetFont(this)" style="font-family:Georgia,serif;">Georgia</button>
+          <button class="st-font-chip" data-font="'Courier New', monospace" onclick="stSetFont(this)" style="font-family:'Courier New',monospace;">Courier</button>
+        </div>
+      </div>
+
+      <!-- Font size -->
+      <div class="st-row st-row--stack">
+        <div class="st-row-label">
+          <span class="st-row-icon">🔡</span>
+          <span>Font Size — Task Text</span>
+        </div>
+        <div style="width:100%;display:flex;align-items:center;gap:10px;">
+          <input type="range" id="st-fontsize-slider" class="st-slider" min="11" max="20" value="14"
+            oninput="stSetFontSize(this.value)">
+          <span id="st-fontsize-val" style="font-size:12px;color:var(--st-muted);min-width:36px;text-align:right;">14px</span>
+        </div>
+      </div>
+
+      <!-- Task text colour -->
+      <div class="st-row st-row--wrap">
+        <div class="st-row-label">
+          <span class="st-row-icon">🖊️</span>
+          <span>Task Text Colour</span>
+        </div>
+        <div class="st-swatch-group">
+          <div class="st-swatch" data-color="#e2d9ff" title="Lavender (default)" onclick="stSetTextColor(this)"></div>
+          <div class="st-swatch" data-color="#ffffff" title="White" onclick="stSetTextColor(this)"></div>
+          <div class="st-swatch" data-color="#94a3b8" title="Slate" onclick="stSetTextColor(this)"></div>
+          <div class="st-swatch" data-color="#fde68a" title="Yellow" onclick="stSetTextColor(this)"></div>
+          <div class="st-swatch" data-color="#bbf7d0" title="Mint" onclick="stSetTextColor(this)"></div>
+          <div class="st-swatch" id="st-textcolor-custom-swatch" title="Custom colour"
+            onclick="document.getElementById('st-textcolor-custom').click()"
+            style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);border-style:dashed;"></div>
+          <input type="color" id="st-textcolor-custom" value="#e2d9ff" oninput="stSetTextColorRaw(this.value);document.getElementById('st-textcolor-custom-swatch').style.background=this.value;"
+            style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;">
+        </div>
+      </div>
+
+    <div class="st-separator"></div>
+    <div class="st-group-label">🔧 System</div>
+
+      <div class="st-row">
+        <div class="st-row-label">
+          <span class="st-row-icon">🔔</span>
+          <span>Due Date Notifications</span>
+        </div>
+        <button class="st-btn" id="st-notif-btn"
+          onclick="(window.enableDueDateNotifications||function(){_safeEnableNotifs();})()">Enable</button>
+      </div>
+
+      <div class="st-row">
+        <div class="st-row-label">
+          <span class="st-row-icon">🔔</span>
+          <span>Mention Notifications</span>
+        </div>
+        <button class="st-btn" id="st-mention-notif-btn"
+          onclick="window._enableMentionNotifications ? window._enableMentionNotifications() : _safeEnableNotifs()">Enable</button>
+      </div>
+
+      <div class="st-row">
+        <div class="st-row-label">
+          <span class="st-row-icon">📊</span>
+          <span>Export Tasks as CSV</span>
+        </div>
+        <button class="st-btn" onclick="exportToCSV()">Export</button>
+      </div>
+
+      <div class="st-row">
+        <div class="st-row-label">
+          <span class="st-row-icon">📥</span>
+          <span>Import Tasks from CSV</span>
+        </div>
+        <button class="st-btn" onclick="openCsvImport();closeSettings()">Import</button>
+      </div>
+
+      <div class="st-row">
+        <div class="st-row-label">
+          <span class="st-row-icon">🔁</span>
+          <span>Recurring Tasks</span>
+        </div>
+        <button class="st-btn" onclick="openRecurringManager();closeSettings()">Manage</button>
+      </div>
+
+      <div class="st-row" id="st-enc-row">
+        <div class="st-row-label">
+          <span class="st-row-icon" id="st-enc-icon">🔓</span>
+          <div style="display:flex;flex-direction:column;gap:1px;">
+            <span id="st-enc-label">Local Encryption</span>
+            <span id="st-enc-sublabel" style="font-size:11px;color:var(--st-muted);">Off — data stored as plaintext</span>
+          </div>
+        </div>
+        <button class="st-btn" id="st-enc-btn" onclick="openEncryptionModal()">Enable</button>
+      </div>
+
+      <div class="st-row" id="st-turn-row">
+        <div class="st-row-label">
+          <span class="st-row-icon">📡</span>
+          <div style="display:flex;flex-direction:column;gap:1px;">
+            <span>Mobile / Reliable Calls</span>
+            <span id="st-turn-sublabel" style="font-size:11px;color:var(--st-muted);">Pure P2P — auto-switches to TURN if call fails within 8s</span>
+          </div>
+        </div>
+        <label class="st-toggle">
+          <input type="checkbox" id="st-turn-toggle" onchange="toggleTurnMode(this.checked)">
+          <span class="st-toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="st-row">
+        <div class="st-row-label">
+          <span class="st-row-icon">❓</span>
+          <span>How to Use</span>
+        </div>
+        <button class="st-btn" onclick="showShortcuts()">Open</button>
+      </div>
+
+      <div class="st-row">
+        <div class="st-row-label">
+          <span class="st-row-icon">🗑️</span>
+          <span style="color:#f87171;">Reset All Data</span>
+        </div>
+        <button class="st-btn st-btn-danger" onclick="resetAllData()">Reset</button>
+      </div>
+
+  </div><!-- /settings-body -->
+</div><!-- /settings-panel -->
+
+<style>
+/* ── Settings panel ──────────────────────────────────────────── */
+:root {
+  --st-bg:      #13101e;
+  --st-border:  rgba(255,255,255,0.08);
+  --st-text:    #e2d9ff;
+  --st-muted:   rgba(255,255,255,0.4);
+  --st-section: rgba(255,255,255,0.03);
+  --st-text-dim: rgba(180,170,220,0.5);
+  --st-hover:   rgba(255,255,255,0.06);
+}
+body.light-mode {
+  --st-bg:      #f4f3ff;
+  --st-border:  rgba(0,0,0,0.08);
+  --st-text:    #1e1b4b;
+  --st-muted:   rgba(0,0,0,0.4);
+  --st-section: rgba(0,0,0,0.03);
+  --st-hover:   rgba(0,0,0,0.05);
+}
+
+#settings-panel {
+  position: fixed;
+  top: 0; right: 0;
+  width: min(400px, 100vw);
+  height: 100%;
+  background: var(--st-bg);
+  border-left: 1px solid var(--st-border);
+  z-index: 9999;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  box-shadow: -12px 0 48px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+#settings-panel.open { transform: translateX(0); }
+
+#settings-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--st-border);
+}
+#settings-close-btn {
+  background: none; border: none;
+  color: var(--st-muted); font-size: 18px; cursor: pointer;
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s;
+}
+#settings-close-btn:hover { background: var(--st-hover); color: var(--st-text); }
+
+#settings-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 8px 0 32px;
+  display: block;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139,92,246,0.4) transparent;
+}
+#settings-body::-webkit-scrollbar { width: 5px; }
+#settings-body::-webkit-scrollbar-track { background: transparent; }
+#settings-body::-webkit-scrollbar-thumb {
+  background: rgba(139,92,246,0.4);
+  border-radius: 3px;
+}
+#settings-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(139,92,246,0.65);
+}
+
+.st-group-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--st-muted);
+  padding: 8px 20px 3px;
+}
+.st-separator {
+  height: 1px;
+  background: var(--st-border);
+  margin: 1px 0;
+}
+.st-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 20px;
+  border-bottom: 1px solid var(--st-border);
+  gap: 10px;
+  min-height: 36px;
+  background: transparent;
+  transition: background .12s;
+  box-sizing: border-box;
+}
+.st-row:hover { background: var(--st-hover); }
+.st-row--stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-bottom: 8px;
+  min-height: unset;
+}
+/* rows that have multiline right-side content (swatches, font chips) */
+.st-row--wrap {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  min-height: unset;
+}
+.st-row--stack .st-row-label,
+.st-row--wrap .st-row-label {
+  flex-basis: auto;
+}
+.st-row-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13.5px; color: var(--st-text);
+  flex-shrink: 1;
+  min-width: 0;
+  white-space: nowrap;
+  flex-basis: 130px;
+}
+.st-row-icon { font-size: 15px; flex-shrink: 0; }
+
+/* Swatch / chip containers — allow wrapping on narrow panels */
+.st-swatch-group {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  flex: 1; justify-content: flex-end;
+}
+.st-font-chip-group {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  width: 100%;
+}
+
+/* Toggle switch */
+.st-toggle { position:relative; display:inline-block; width:40px; height:22px; flex-shrink:0; }
+.st-toggle input { opacity:0; width:0; height:0; }
+.st-toggle-track {
+  position:absolute; inset:0; border-radius:11px;
+  background:rgba(255,255,255,0.12); cursor:pointer;
+  transition: background .2s;
+}
+.st-toggle-track::after {
+  content:''; position:absolute;
+  top:3px; left:3px; width:16px; height:16px;
+  border-radius:50%; background:#fff;
+  transition: transform .2s;
+}
+.st-toggle input:checked + .st-toggle-track { background: var(--accent,#8B5CF6); }
+.st-toggle input:checked + .st-toggle-track::after { transform: translateX(18px); }
+
+/* Colour swatches */
+.st-swatch {
+  width: 22px; height: 22px; border-radius: 50%;
+  cursor: pointer; border: 2px solid rgba(255,255,255,0.15);
+  transition: transform .15s, border-color .15s;
+  flex-shrink: 0;
+}
+.st-swatch:hover { transform: scale(1.18); border-color: rgba(255,255,255,0.5); }
+.st-swatch.active { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.3); }
+.st-swatch[data-color="#8B5CF6"] { background:#8B5CF6; }
+.st-swatch[data-color="#3B82F6"] { background:#3B82F6; }
+.st-swatch[data-color="#10B981"] { background:#10B981; }
+.st-swatch[data-color="#F59E0B"] { background:#F59E0B; }
+.st-swatch[data-color="#EF4444"] { background:#EF4444; }
+.st-swatch[data-color="#EC4899"] { background:#EC4899; }
+.st-swatch[data-color="#e2d9ff"] { background:#e2d9ff; }
+.st-swatch[data-color="#ffffff"] { background:#ffffff; }
+.st-swatch[data-color="#94a3b8"] { background:#94a3b8; }
+.st-swatch[data-color="#fde68a"] { background:#fde68a; }
+.st-swatch[data-color="#bbf7d0"] { background:#bbf7d0; }
+
+/* Font chips */
+.st-font-chip {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px; padding: 4px 10px;
+  font-size: 12px; color: var(--st-text);
+  cursor: pointer; transition: background .15s, border-color .15s;
+  white-space: nowrap;
+}
+.st-font-chip:hover { background: rgba(255,255,255,0.1); }
+.st-font-chip.active {
+  background: rgba(139,92,246,0.2);
+  border-color: var(--accent,#8B5CF6);
+  color: #c4b5fd;
+}
+
+/* Slider */
+.st-slider {
+  flex: 1; -webkit-appearance: none; appearance: none;
+  height: 4px; border-radius: 4px;
+  background: rgba(255,255,255,0.12);
+  outline: none; cursor: pointer;
+  min-width: 0;
+  width: 100%;
+}
+.st-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--accent,#8B5CF6);
+  cursor: pointer; border: 2px solid #fff;
+}
+
+/* Buttons */
+.st-btn {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px; padding: 6px 14px;
+  font-size: 12.5px; color: var(--st-text);
+  cursor: pointer; transition: background .15s, border-color .15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.st-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.22); }
+.st-btn-danger {
+  background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.25); color: #f87171;
+}
+.st-btn-danger:hover { background: rgba(239,68,68,0.18); border-color: rgba(239,68,68,0.4); }
+
+/* Theme toggle button */
+.st-theme-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 20px; padding: 5px 12px 5px 10px;
+  font-size: 12px; color: var(--st-text);
+  cursor: pointer; transition: background .2s, border-color .2s, box-shadow .2s;
+  white-space: nowrap; font-weight: 600;
+  flex-shrink: 0;
+}
+.st-theme-btn:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: var(--accent,#8B5CF6);
+  box-shadow: 0 0 0 2px var(--accent-glow,rgba(139,92,246,0.2));
+}
+body.light-mode .st-theme-btn {
+  background: rgba(0,0,0,0.05);
+  border-color: rgba(0,0,0,0.12);
+}
+body.light-mode .st-theme-btn:hover {
+  background: rgba(0,0,0,0.09);
+}
+</style>
+
+<script>
+
+// ── Avatar / Profile Picture ────────────────────────────────────────────
+async function stHandleAvatarUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { showTaskyToast('⚠️ Image too large — max 10 MB'); return; }
+    const reader = new FileReader();
+    reader.onload = async e => {
+        const resized = await _stResizeAvatar(e.target.result, 256);
+        _stApplyAvatar(resized);
+        localStorage.setItem('tasky_avatar', resized);
+        const user = window.currentUser;
+        if (user && !user.isAnonymous && window.db) {
+            window.db.collection('users').doc(user.uid)
+                .set({ avatarDataUrl: resized }, { merge: true })
+                .catch(e => console.warn('[Avatar]', e));
+        }
+        if (!window._vcAvatarCache) window._vcAvatarCache = {};
+        if (user) window._vcAvatarCache[user.uid] = resized;
+        showTaskyToast('✅ Profile picture updated');
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+}
+function _stResizeAvatar(dataUrl, maxPx) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const s = Math.min(1, maxPx / Math.max(img.width, img.height));
+            const c = document.createElement('canvas');
+            c.width = Math.round(img.width*s); c.height = Math.round(img.height*s);
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            const MAX_BYTES = 1048576;
+            const qualities = [0.85, 0.75, 0.6, 0.4, 0.2, 0.1];
+            for (let q of qualities) {
+                const url = c.toDataURL('image/jpeg', q);
+                if (url.length * 0.75 < MAX_BYTES) { resolve(url); return; }
+            }
+            // Fallback: shrink further
+            if (maxPx > 128) { _stResizeAvatar(img.src, 128).then(resolve); return; }
+            resolve(c.toDataURL('image/jpeg', 0.1));
+        };
+        img.src = dataUrl;
+    });
+}
+function _stApplyAvatar(dataUrl) {
+    const preview  = document.getElementById('st-avatar-preview');
+    const initial  = document.getElementById('st-avatar-initial');
+    const clearBtn = document.getElementById('st-avatar-clear-btn');
+    if (!preview) return;
+    let img = preview.querySelector('img.st-av-img');
+    if (dataUrl) {
+        if (!img) {
+            img = document.createElement('img'); img.className = 'st-av-img';
+            img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;';
+            preview.style.position = 'relative';
+            preview.appendChild(img);
+        }
+        img.src = dataUrl;
+        if (initial)  initial.style.display  = 'none';
+        if (clearBtn) clearBtn.style.display = 'block';
+    } else {
+        if (img) img.remove();
+        if (initial)  initial.style.display  = '';
+        if (clearBtn) clearBtn.style.display = 'none';
+    }
+    // Update header avatar
+    const ha = document.getElementById('user-avatar');
+    if (ha) {
+        while (ha.firstChild) ha.removeChild(ha.firstChild);
+        if (dataUrl) {
+            var _aimg = document.createElement('img');
+            _aimg.src = dataUrl;
+            _aimg.style.cssText = 'width:18px;height:18px;border-radius:50%;object-fit:cover;';
+            ha.appendChild(_aimg);
+        } else {
+            ha.textContent = window.currentUser?.email ? window.currentUser.email[0].toUpperCase() : '';
+        }
+    }
+    // Update global cache
+    const user = window.currentUser;
+    if (user) { if (!window._vcAvatarCache) window._vcAvatarCache = {}; window._vcAvatarCache[user.uid] = dataUrl || null; }
+    // Refresh collab member avatars & message board composer
+    if (typeof window._collabRefreshAvatar === 'function' && user) window._collabRefreshAvatar(user.uid);
+    if (typeof window._mbRefreshComposerAvatar === 'function') window._mbRefreshComposerAvatar();
+}
+function stClearAvatar() {
+    _stApplyAvatar(null);
+    localStorage.removeItem('tasky_avatar');
+    const user = window.currentUser;
+    if (user && !user.isAnonymous && window.db) {
+        window.db.collection('users').doc(user.uid)
+            .update({ avatarDataUrl: window.firebase?.firestore?.FieldValue?.delete?.() || null })
+            .catch(() => {});
+    }
+    showTaskyToast('🗑️ Profile picture removed');
+}
+function _stLoadSavedAvatar(retries) {
+    retries = retries || 0;
+    const user = window.currentUser;
+    if (!user || user.isAnonymous) { _log('[Avatar] no user, skipping'); return; }
+    _log('[Avatar] loading for', user.uid, 'retry', retries);
+    const initial = document.getElementById('st-avatar-initial');
+    if (initial) initial.textContent = (user.email||'?')[0].toUpperCase();
+    const saved = localStorage.getItem('tasky_avatar');
+    if (saved) _stApplyAvatar(saved);
+    if (!window.db) {
+        if (retries < 5) { setTimeout(function(){ _stLoadSavedAvatar(retries + 1); }, 500 * (retries + 1)); }
+        else { console.warn('[Avatar] db not available after 5 retries'); }
+        return;
+    }
+    window.db.collection('users').doc(user.uid).get().then(snap => {
+        if (!snap.exists) { _log('[Avatar] doc not found'); return; }
+        const url = snap.data()?.avatarDataUrl || snap.data()?.avatarUrl;
+        _log('[Avatar] fetch result:', url ? 'found' : 'none');
+        if (url && url !== saved) { _stApplyAvatar(url); localStorage.setItem('tasky_avatar', url); }
+    }).catch(e => { console.warn('[Avatar] fetch error:', e); });
+}
+
+// ── Settings panel ────────────────────────────────────────────────────────
+function openSettings() {
+    try {
+        var dd = document.getElementById('dropdown');
+        if (dd) dd.classList.remove('show');
+        var backdrop = document.getElementById('settings-backdrop');
+        if (backdrop) backdrop.style.display = 'block';
+        var panel = document.getElementById('settings-panel');
+        if (panel) panel.classList.add('open');
+        if (typeof _stSyncUI === 'function') _stSyncUI();
+        if (typeof _stLoadSavedAvatar === 'function') _stLoadSavedAvatar();
+    } catch(e) { console.warn('[settings] openSettings error:', e); }
+}
+function closeSettings() {
+    document.getElementById('settings-backdrop').style.display = 'none';
+    document.getElementById('settings-panel').classList.remove('open');
+}
+
+// Sync all UI controls to current persisted values on open
+function _stSyncUI() {
+    // Theme toggle
+    const isLight = document.body.classList.contains('light-mode');
+    _stSyncThemeBtn(isLight);
+
+    // Opacity slider
+    const opVal = parseInt(localStorage.getItem('cardOpacity') || '100');
+    document.getElementById('st-opacity-slider').value = opVal;
+    document.getElementById('st-opacity-val').textContent = opVal + '%';
+
+    // Accent swatches
+    const accentNow = localStorage.getItem('st_accent') || '#8B5CF6';
+    document.querySelectorAll('#settings-panel .st-swatch[onclick*="stSetAccent"]').forEach(s => {
+        s.classList.toggle('active', s.dataset.color === accentNow);
+    });
+    document.getElementById('st-accent-custom').value = accentNow;
+    document.getElementById('st-accent-custom-swatch').style.background = accentNow;
+
+    // Font chips
+    const fontNow = localStorage.getItem('st_font') || 'system';
+    document.querySelectorAll('.st-font-chip').forEach(c => {
+        c.classList.toggle('active', c.dataset.font === fontNow);
+    });
+
+    // Font size slider
+    const fsNow = parseInt(localStorage.getItem('st_fontsize') || '14');
+    document.getElementById('st-fontsize-slider').value = fsNow;
+    document.getElementById('st-fontsize-val').textContent = fsNow + 'px';
+
+    // Text colour swatches
+    const tcNow = localStorage.getItem('st_textcolor') || '#e2d9ff';
+    document.querySelectorAll('.st-swatch[onclick*="stSetTextColor"]').forEach(s => {
+        s.classList.toggle('active', s.dataset.color === tcNow);
+    });
+    document.getElementById('st-textcolor-custom').value = tcNow;
+    document.getElementById('st-textcolor-custom-swatch').style.background = tcNow;
+
+    // Background status
+    const hasBg = !!localStorage.getItem('customBg');
+    document.getElementById('st-bg-remove-btn').style.display = hasBg ? '' : 'none';
+    document.getElementById('st-bg-status').style.display = hasBg ? 'block' : 'none';
+
+    // Notifications button
+    const granted = Notification && Notification.permission === 'granted';
+    const nb = document.getElementById('st-notif-btn');
+    if (nb) { nb.textContent = granted ? 'Enabled ✓' : 'Enable'; nb.disabled = granted; }
+
+    // Encryption status
+    _stSyncEncryptionUI();
+}
+
+function _stSyncEncryptionUI() {
+    const hasEnc = !!localStorage.getItem('_encSalt');
+    const icon     = document.getElementById('st-enc-icon');
+    const label    = document.getElementById('st-enc-label');
+    const sublabel = document.getElementById('st-enc-sublabel');
+    const btn      = document.getElementById('st-enc-btn');
+    if (icon)     icon.textContent = hasEnc ? '🔒' : '🔓';
+    if (label)    label.textContent = 'Local Encryption';
+    if (sublabel) sublabel.textContent = hasEnc ? 'Active — data is encrypted' : 'Off — data stored as plaintext';
+    if (btn) {
+        if (hasEnc) {
+            btn.textContent = 'Change / Disable';
+            btn.classList.remove('st-btn-danger');
+        } else {
+            btn.textContent = 'Enable';
+            btn.classList.remove('st-btn-danger');
+        }
+    }
+}
+
+// Theme
+function stToggleTheme() {
+    const toLightMode = !document.body.classList.contains('light-mode');
+    if (toLightMode) document.body.classList.add('light-mode');
+    else document.body.classList.remove('light-mode');
+    localStorage.setItem('theme', toLightMode ? 'light' : 'dark');
+    isLightMode = toLightMode;
+    _stSyncThemeBtn(toLightMode);
+    // Keep legacy theme button in sync if it still exists
+    if (typeof updateThemeButton === 'function') updateThemeButton();
+    if (typeof updateThemeColorMeta === 'function') updateThemeColorMeta();
+}
+function _stSyncThemeBtn(isLight) {
+    const icon = document.getElementById('st-theme-icon');
+    const txt  = document.getElementById('st-theme-text');
+    const btnIcon  = document.getElementById('st-theme-btn-icon');
+    const btnLabel = document.getElementById('st-theme-btn-label');
+    if (icon) icon.textContent = isLight ? '🌙' : '☀️';
+    if (txt)  txt.textContent  = isLight ? 'Dark Mode' : 'Light Mode';
+    if (btnIcon)  btnIcon.textContent  = isLight ? '☀️' : '🌙';
+    if (btnLabel) btnLabel.textContent = isLight ? 'Dark' : 'Light';
+}
+
+// Accent colour
+function _hexDarken(hex, amount) {
+    // amount: 0-1, how much to darken
+    let c = hex.replace('#','');
+    if (c.length === 3) c = c.split('').map(x=>x+x).join('');
+    const num = parseInt(c,16);
+    const r = Math.max(0, (num>>16) - Math.round(255*amount));
+    const g = Math.max(0, ((num>>8)&0xff) - Math.round(255*amount));
+    const b = Math.max(0, (num&0xff) - Math.round(255*amount));
+    return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+function _hexToRgba(hex, alpha) {
+    let c = hex.replace('#','');
+    if (c.length === 3) c = c.split('').map(x=>x+x).join('');
+    const num = parseInt(c,16);
+    return `rgba(${num>>16},${(num>>8)&0xff},${num&0xff},${alpha})`;
+}
+function _applyAccent(color) {
+    document.documentElement.style.setProperty('--accent', color);
+    document.documentElement.style.setProperty('--accent-dark', _hexDarken(color, 0.18));
+    document.documentElement.style.setProperty('--accent-glow', _hexToRgba(color, 0.35));
+    localStorage.setItem('st_accent', color);
+}
+function stSetAccent(el) {
+    const color = el.dataset.color;
+    document.querySelectorAll('#settings-panel .st-swatch[data-color]').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('st-accent-custom').value = color;
+    document.getElementById('st-accent-custom-swatch').style.background = color;
+    _applyAccent(color);
+}
+function stSetAccentRaw(color) {
+    document.querySelectorAll('#settings-panel .st-swatch[data-color]').forEach(s => s.classList.remove('active'));
+    _applyAccent(color);
+}
+
+// Font family
+function _applyFont(font) {
+    const resolved = font === 'system'
+        ? "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        : font;
+    document.documentElement.style.setProperty('--task-font', resolved);
+    // Apply to body so everything inherits
+    document.body.style.fontFamily = resolved;
+    // Also directly target task text elements
+    document.querySelectorAll('.task-text, .task-card, .member-task-text').forEach(el => {
+        el.style.fontFamily = resolved;
+    });
+    localStorage.setItem('st_font', font);
+}
+function stSetFont(el) {
+    document.querySelectorAll('.st-font-chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    _applyFont(el.dataset.font);
+}
+
+// Font size
+function stSetFontSize(val) {
+    const px = parseInt(val);
+    document.documentElement.style.setProperty('--task-fontsize', px + 'px');
+    document.getElementById('st-fontsize-val').textContent = px + 'px';
+    localStorage.setItem('st_fontsize', px);
+}
+
+// Task text colour
+function _applyTextColor(color) {
+    document.documentElement.style.setProperty('--task-textcolor', color);
+    localStorage.setItem('st_textcolor', color);
+}
+function stSetTextColor(el) {
+    document.querySelectorAll('.st-swatch[onclick*="stSetTextColor"]').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('st-textcolor-custom').value = el.dataset.color;
+    _applyTextColor(el.dataset.color);
+}
+function stSetTextColorRaw(color) {
+    document.querySelectorAll('.st-swatch[onclick*="stSetTextColor"]').forEach(s => s.classList.remove('active'));
+    _applyTextColor(color);
+}
+
+// Apply all persisted settings on page load
+(function _stInit() {
+    const accent    = localStorage.getItem('st_accent');
+    const font      = localStorage.getItem('st_font');
+    const fontsize  = localStorage.getItem('st_fontsize');
+    const textcolor = localStorage.getItem('st_textcolor');
+    if (accent)    _applyAccent(accent);
+    if (font)      _applyFont(font);
+    if (fontsize)  document.documentElement.style.setProperty('--task-fontsize', fontsize + 'px');
+    if (textcolor) _applyTextColor(textcolor);
+})();
+
+function showShortcuts() {
+    closeSettings();
+    if (isMobile()) { showOnboarding(); return; }
+    document.getElementById('shortcuts-overlay').classList.add('visible');
+}
+function closeShortcuts() {
+    document.getElementById('shortcuts-overlay').classList.remove('visible');
+}
+
+/* ── Mobile / Reliable Call Mode (TURN fallback) ──
+   When ON (default): enables TURN relay servers so calls work on mobile data,
+   CGNAT, symmetric NAT, and strict firewalls.  TURN is only used by the browser
+   when direct P2P fails — calls that already work via P2P are unaffected.
+   When OFF: pure P2P with STUN only (will NOT work on mobile/CGNAT).
+   Setting takes effect on next call join — won't disrupt an in-progress call. */
+function toggleTurnMode(enabled) {
+    localStorage.setItem('tasky_use_turn', enabled ? '1' : '0');
+    window.VC_USE_TURN = !!enabled;
+    var sub = document.getElementById('st-turn-sublabel');
+    if (sub) {
+        sub.textContent = enabled
+            ? 'TURN forced ON — relay used as fallback (mobile/CGNAT ready)'
+            : 'Pure P2P — auto-switches to TURN if call fails within 8s';
+    }
+    console.log('%c[VC] Mobile/Reliable mode toggled: ' + (enabled ? 'ON (STUN+TURN forced)' : 'OFF (P2P first, auto-switch on failure)'),
+                'color: ' + (enabled ? '#22c55e' : '#94a3b8') + '; font-weight: bold; font-size: 13px;');
+}
+function _loadTurnModePref() {
+    // Default: OFF (pure P2P).  The auto-switch watchdog in tasky-voice.js
+    // will flip VC_USE_TURN to true if a call fails within 8 seconds — so
+    // users don't need to think about TURN unless they want to force it.
+    var stored = localStorage.getItem('tasky_use_turn');
+    var pref = stored === '1';  // default false
+    window.VC_USE_TURN = pref;
+    var toggle = document.getElementById('st-turn-toggle');
+    if (toggle) toggle.checked = pref;
+    var sub = document.getElementById('st-turn-sublabel');
+    if (sub) {
+        sub.textContent = pref
+            ? 'TURN forced ON — relay used as fallback (mobile/CGNAT ready)'
+            : 'Pure P2P — auto-switches to TURN if call fails within 8s';
+    }
+    console.log('%c[VC] Turn mode loaded from storage: ' + (pref ? 'ON (STUN+TURN forced)' : 'OFF (P2P first, auto-switch on failure)'),
+                'color: ' + (pref ? '#22c55e' : '#94a3b8') + '; font-weight: bold;');
+}
+document.addEventListener('DOMContentLoaded', _loadTurnModePref);
+/* Also run immediately in case DOMContentLoaded already fired */
+if (document.readyState !== 'loading') _loadTurnModePref();
+
+/* ── Encryption modals ── */
+function openEncryptionModal() {
+    closeSettings();
+    var hasEnc = !!localStorage.getItem('_encSalt');
+    var overlay = document.getElementById(hasEnc ? 'enc-change-overlay' : 'enc-setup-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('hidden');
+    overlay.classList.add('visible');
+    overlay.querySelectorAll('input').forEach(function(i) { i.value = ''; });
+    var err = overlay.querySelector('.enc-error, #enc-change-error');
+    if (err) err.style.display = 'none';
+    // Focus first input
+    var firstInput = overlay.querySelector('input');
+    if (firstInput) setTimeout(function() { firstInput.focus(); }, 100);
+}
+
+async function submitEncryptionSetup() {
+    var overlay = document.getElementById('enc-setup-overlay');
+    var input = overlay ? overlay.querySelector('.enc-pass-input') : null;
+    var confirmInput = overlay ? overlay.querySelector('.enc-pass-confirm') : null;
+    var errEl = overlay ? overlay.querySelector('.enc-error') : null;
+    if (!input || !confirmInput || !errEl) return;
+
+    var pass = input.value;
+    var confirm = confirmInput.value;
+
+    if (pass.length < 4) { errEl.textContent = 'Passphrase must be at least 4 characters'; errEl.style.display = 'block'; return; }
+    if (pass !== confirm) { errEl.textContent = 'Passphrases do not match'; errEl.style.display = 'block'; return; }
+
+    // Call _setupEncryption from tasky.js
+    if (typeof window._setupEncryption !== 'function') {
+        errEl.textContent = 'Encryption not available yet. Please wait for app to load.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    try {
+        await window._setupEncryption(pass);
+        overlay.classList.remove('visible');
+        overlay.classList.add('hidden');
+        setTimeout(function() { overlay.classList.remove('hidden'); }, 270);
+        _stSyncEncryptionUI();
+        if (typeof showToast === 'function') showToast('🔐 Encryption enabled', function(){});
+    } catch(e) {
+        errEl.textContent = 'Encryption setup failed: ' + e.message;
+        errEl.style.display = 'block';
+    }
+}
+
+function closeEncryptionModal() {
+    var overlay = document.getElementById('enc-change-overlay');
+    if (overlay) {
+        overlay.classList.remove('visible');
+        overlay.classList.add('hidden');
+        setTimeout(function() { overlay.classList.remove('hidden'); }, 270);
+    }
+}
+
+async function submitEncryptionChange() {
+    var currentPass = document.getElementById('enc-change-current').value;
+    var newPass = document.getElementById('enc-change-new').value;
+    var confirmPass = document.getElementById('enc-change-confirm').value;
+    var errEl = document.getElementById('enc-change-error');
+
+    if (!currentPass) { errEl.textContent = 'Enter your current passphrase'; errEl.style.display = 'block'; return; }
+    if (newPass.length < 4) { errEl.textContent = 'New passphrase must be at least 4 characters'; errEl.style.display = 'block'; return; }
+    if (newPass !== confirmPass) { errEl.textContent = 'New passphrases do not match'; errEl.style.display = 'block'; return; }
+
+    var storedSalt = localStorage.getItem('_encSalt');
+    if (!storedSalt) { errEl.textContent = 'No encryption key found'; errEl.style.display = 'block'; return; }
+
+    // Verify current passphrase first
+    var saltBytes = function(str){var bin=atob(str);var b=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b}(storedSalt);
+    var enc = new TextEncoder();
+    var keyMaterial = await crypto.subtle.importKey('raw', enc.encode(currentPass), 'PBKDF2', false, ['deriveKey']);
+    var oldKey = await crypto.subtle.deriveKey(
+        {name:'PBKDF2',salt:saltBytes,iterations:100000,hash:'SHA-256'},
+        keyMaterial,
+        {name:'AES-GCM',length:256},
+        false,
+        ['encrypt','decrypt']
+    );
+    var verify = localStorage.getItem('_enc_verify');
+    if (verify) {
+        try {
+            var raw = function(str){var bin=atob(str.slice(7));var b=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b}(verify);
+            var iv = raw.slice(0,12); var data = raw.slice(12);
+            var dec = await crypto.subtle.decrypt({name:'AES-GCM',iv:iv}, oldKey, data);
+            if (new TextDecoder().decode(dec) !== '__tasky_ok__') throw new Error('verify failed');
+        } catch(e) {
+            errEl.textContent = 'Current passphrase is wrong';
+            errEl.style.display = 'block';
+            return;
+        }
+    }
+
+    // Generate new salt and key
+    var newSalt = crypto.getRandomValues(new Uint8Array(16));
+    localStorage.setItem('_encSalt', function(bytes){var b='';for(var i=0;i<bytes.length;i++)b+=String.fromCharCode(bytes[i]);return btoa(b)}(newSalt));
+    var newKeyMaterial = await crypto.subtle.importKey('raw', enc.encode(newPass), 'PBKDF2', false, ['deriveKey']);
+    var newKey = await crypto.subtle.deriveKey(
+        {name:'PBKDF2',salt:newSalt,iterations:100000,hash:'SHA-256'},
+        newKeyMaterial,
+        {name:'AES-GCM',length:256},
+        false,
+        ['encrypt','decrypt']
+    );
+
+    // Re-encrypt verify token
+    var iv2 = crypto.getRandomValues(new Uint8Array(12));
+    var ct2 = await crypto.subtle.encrypt({name:'AES-GCM',iv:iv2}, newKey, enc.encode('__tasky_ok__'));
+    var comb2 = new Uint8Array(iv2.length + ct2.byteLength);
+    comb2.set(iv2,0); comb2.set(new Uint8Array(ct2), iv2.length);
+    function b64(bytes){var b='';for(var i=0;i<bytes.length;i++)b+=String.fromCharCode(bytes[i]);return btoa(b)}
+    localStorage.setItem('_enc_verify', 'enc_v1:' + b64(comb2));
+
+    // Re-encrypt all data with new key
+    var encData = localStorage.getItem('_enc_data');
+    if (encData) {
+        try {
+            var raw2 = function(str){var bin=atob(str.slice(7));var b=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b}(encData);
+            var iv3 = raw2.slice(0,12); var data3 = raw2.slice(12);
+            var oldPlain = await crypto.subtle.decrypt({name:'AES-GCM',iv:iv3}, oldKey, data3);
+            var iv4 = crypto.getRandomValues(new Uint8Array(12));
+            var newCt = await crypto.subtle.encrypt({name:'AES-GCM',iv:iv4}, newKey, oldPlain);
+            var comb4 = new Uint8Array(iv4.length + newCt.byteLength);
+            comb4.set(iv4,0); comb4.set(new Uint8Array(newCt), iv4.length);
+            localStorage.setItem('_enc_data', 'enc_v1:' + b64(comb4));
+        } catch(e) {
+            console.warn('Re-encryption of data failed:', e);
+        }
+    }
+
+    // Update global state
+    window._encKey = newKey;
+    if (typeof window._updateEncIndicator === 'function') window._updateEncIndicator();
+    closeEncryptionModal();
+    if (typeof showToast === 'function') showToast('🔐 Passphrase changed', function(){});
+}
+
+async function disableEncryption() {
+    if (!await showConfirm('Disable Encryption', 'All task data will be stored as plaintext in your browser. This cannot be undone.', 'Disable')) return;
+    localStorage.removeItem('_encSalt');
+    localStorage.removeItem('_enc_verify');
+    localStorage.removeItem('_enc_data');
+    window._encKey = null;
+    if (typeof window._updateEncIndicator === 'function') window._updateEncIndicator();
+    closeEncryptionModal();
+    if (typeof showToast === 'function') showToast('🔓 Encryption disabled', function(){});
+}
+</script>
+
+<!-- ═══════════════════════════════════════════════
+     HOW TO USE MODAL
+     ═══════════════════════════════════════════════ -->
+<div id="htu-overlay" onclick="if(event.target===this)closeHowToUse()"
+  style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(6,5,10,0.82);
+         backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+         align-items:center;justify-content:center;padding:16px;box-sizing:border-box;">
+<div id="htu-modal">
+
+  <!-- Header -->
+  <div class="htu-header">
+    <div class="htu-title-row">
+      <span class="htu-logo">✅</span>
+      <div>
+        <div class="htu-title">Tasky — How to Use</div>
+        <div class="htu-subtitle">Keyboard-first task board · Three columns · Zero friction</div>
+      </div>
+    </div>
+    <button class="htu-close" onclick="closeHowToUse()">✕</button>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="htu-tabs" id="htu-tabs">
+    <button class="htu-tab active" data-tab="basics"    onclick="htuTab('basics')">🚀 Basics</button>
+    <button class="htu-tab"        data-tab="keyboard"  onclick="htuTab('keyboard')">⌨️ Shortcuts</button>
+    <button class="htu-tab"        data-tab="voice"     onclick="htuTab('voice')">🎙️ Voice</button>
+    <button class="htu-tab desktop-only" data-tab="features"  onclick="htuTab('features')">⚡ Features</button>
+    <button class="htu-tab"        data-tab="collab"    onclick="htuTab('collab')">👥 Collab</button>
+    <button class="htu-tab"        data-tab="tips"      onclick="htuTab('tips')">💡 Pro Tips</button>
+  </div>
+
+  <!-- Tab bodies -->
+  <div class="htu-body" id="htu-body">
+
+    <!-- ── BASICS ─────────────────────────────────────────────────────────── -->
+    <div class="htu-pane active" id="htu-pane-basics">
+      <div class="htu-section-title">The Three Columns</div>
+      <div class="htu-columns-row">
+        <div class="htu-col-card todo">
+          <div class="htu-col-icon">📝</div>
+          <div class="htu-col-name">To Do</div>
+          <div class="htu-col-desc">New tasks land here. Your backlog and upcoming items.</div>
+        </div>
+        <div class="htu-col-card working">
+          <div class="htu-col-icon">⚡</div>
+          <div class="htu-col-name">Working On</div>
+          <div class="htu-col-desc">Active tasks. WIP limit of 3 keeps you focused.</div>
+        </div>
+        <div class="htu-col-card done">
+          <div class="htu-col-icon">✅</div>
+          <div class="htu-col-name">Done</div>
+          <div class="htu-col-desc">Completed tasks. Clear them anytime with one click.</div>
+        </div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Adding Tasks</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num">1</span><div><strong>Press any letter/number key</strong> — the floating input appears at the bottom of the screen.</div></div>
+        <div class="htu-step"><span class="htu-step-num">2</span><div><strong>Type your task</strong> — up to 120 characters. Assign syntax: <code>task to::handle priority::high date::2025-06-10</code></div></div>
+        <div class="htu-step"><span class="htu-step-num">3</span><div><strong>Press Enter</strong> to save<span class="desktop-only">, or <strong>Esc</strong> to cancel</span><span class="mobile-only" style="display:none"> — tap outside to cancel</span>. Task lands in To Do.</div></div>
+        <div class="htu-step"><span class="htu-step-num">4</span><div>On mobile, tap the <strong>＋</strong> button in the bottom bar instead.</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Moving Tasks</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num htu-kc">click</span><div>Click a task to <strong>select</strong> it (highlighted border).</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">← →</span><div>Arrow keys move it left or right between columns.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">drag</span><div>Drag &amp; drop between columns — drop zones light up on hover.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">swipe</span><div>On mobile, swipe a card left (forward) or right (back) 40px to move it.</div></div>
+      </div>
+    </div>
+
+    <!-- ── KEYBOARD ───────────────────────────────────────────────────────── -->
+    <div class="htu-pane" id="htu-pane-keyboard">
+      <div class="htu-section-title">Task Actions <span class="htu-badge">Select a task first</span></div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>←</kbd><kbd>→</kbd></div><div class="htu-kb-desc">Move task to previous / next column</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>1</kbd></div><div class="htu-kb-desc">Set priority → <span class="htu-pri high">● High</span></div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>2</kbd></div><div class="htu-kb-desc">Set priority → <span class="htu-pri med">● Medium</span></div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>3</kbd></div><div class="htu-kb-desc">Set priority → <span class="htu-pri low">● Low</span></div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Del</kbd></div><div class="htu-kb-desc">Delete selected task (with undo toast)</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Esc</kbd></div><div class="htu-kb-desc">Deselect task — or undo last action</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Navigation &amp; Input</div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Any key</kbd></div><div class="htu-kb-desc">Open floating input to add a new task</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Enter</kbd></div><div class="htu-kb-desc">Save task (in floating input)</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Esc</kbd></div><div class="htu-kb-desc">Cancel / close floating input</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Space</kbd> hold</div><div class="htu-kb-desc">Hold to activate voice input (release to save)</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Tab</kbd></div><div class="htu-kb-desc">Switch to next workspace</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Shift</kbd>+<kbd>Tab</kbd></div><div class="htu-kb-desc">Switch to previous workspace</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Quick Jump &amp; Search</div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Alt</kbd>+<kbd>R</kbd></div><div class="htu-kb-desc">🔍 Global search — find any task by text or number</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Alt</kbd>+<kbd>G</kbd></div><div class="htu-kb-desc">Open task selector — type a task number to jump to it</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Alt</kbd>+<kbd>1–9</kbd></div><div class="htu-kb-desc">Jump directly to task #1–#9</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Task Dependencies</div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys">🔗 btn</div><div class="htu-kb-desc">Open dependency manager — set &quot;Blocked by&quot; tasks</div></div>
+        <div class="htu-kb-row"><div class="htu-keys">🔒 badge</div><div class="htu-kb-desc">Red badge/border — task blocked, cannot move to Working On</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Calendar View</div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>←</kbd><kbd>→</kbd></div><div class="htu-kb-desc">Navigate days (or prev/next period)</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>↑</kbd><kbd>↓</kbd></div><div class="htu-kb-desc">Jump 7 days back / forward</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>M</kbd></div><div class="htu-kb-desc">Switch to Month view</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>W</kbd></div><div class="htu-kb-desc">Switch to Week view</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>T</kbd></div><div class="htu-kb-desc">Jump to today</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Esc</kbd></div><div class="htu-kb-desc">Close calendar</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Task Groups Dropdown</div>
+      <div class="htu-kb-grid">
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>↑</kbd><kbd>↓</kbd></div><div class="htu-kb-desc">Navigate group suggestions while typing</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Enter</kbd></div><div class="htu-kb-desc">Expand selected group (adds all its tasks)</div></div>
+        <div class="htu-kb-row"><div class="htu-keys"><kbd>Esc</kbd></div><div class="htu-kb-desc">Dismiss the suggestion dropdown</div></div>
+      </div>
+    </div>
+
+    <!-- ── VOICE ──────────────────────────────────────────────────────────── -->
+    <div class="htu-pane" id="htu-pane-voice">
+      <div class="htu-hero-card voice-hero">
+        <div class="htu-hero-icon">🎙️</div>
+        <div>
+          <div class="htu-hero-title">Hands-Free Task Entry</div>
+          <div class="htu-hero-body">Tasky uses the Web Speech API for real-time voice dictation. Works in Chrome, Edge, and Brave.</div>
+        </div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Desktop</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num htu-kc">hold</span><div><strong>Hold the Space bar</strong> — the voice overlay appears with three pulsing rings.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">speak</span><div>Speak your task clearly. The transcript appears in real-time as you talk.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">release</span><div><strong>Release Space</strong> to confirm and save. Press <kbd>Esc</kbd> before releasing to cancel.</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Mobile</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num htu-kc">tap</span><div>Tap the <strong>🎙️ mic button</strong> in the bottom bar to start listening.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">speak</span><div>Say your task. Tap the mic again or the stop button to confirm.</div></div>
+      </div>
+
+      <div class="htu-callout amber">
+        <strong>🌐 Browser support:</strong> Requires Chrome, Edge, or Brave. Safari and Firefox do not support the Web Speech API. You'll see an error toast if your browser doesn't support it.
+      </div>
+    </div>
+
+    <!-- ── FEATURES ───────────────────────────────────────────────────────── -->
+    <div class="htu-pane" id="htu-pane-features">
+
+      <div class="htu-feature-grid">
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">⊞</div>
+          <div class="htu-feature-name">Task Groups</div>
+          <div class="htu-feature-desc">Save a named set of tasks as a reusable template. Start typing a group name in the input — a suggestion appears. Press Enter to expand all tasks instantly. Find it under <strong>Tasky ▼ → Task Groups</strong>.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">📅</div>
+          <div class="htu-feature-name">Calendar View</div>
+          <div class="htu-feature-desc">See all tasks with due dates in a monthly or weekly calendar. Drag chips to reschedule. Color-coded by status. Click the <strong>📅</strong> button in the To Do header or set a due date on any task.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🗂️</div>
+          <div class="htu-feature-name">Workspaces</div>
+          <div class="htu-feature-desc">Separate projects with independent boards. Switch via the pill bar at the top <span class="desktop-only">— <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> cycles through them</span><span class="mobile-only" style="display:none">— swipe the pill bar to switch</span>. Each workspace can have its own collaboration code.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🔄</div>
+          <div class="htu-feature-name">Recurring Tasks</div>
+          <div class="htu-feature-desc">Set tasks to repeat daily, weekly, or monthly. When moved to Done, they automatically reappear in To Do on schedule. Manage via <strong>Settings → Recurring Tasks</strong>.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🔴</div>
+          <div class="htu-feature-name">Priority System</div>
+          <div class="htu-feature-desc">Three levels: <strong class="htu-pri high">High</strong> (red), <strong class="htu-pri med">Medium</strong> (amber), <strong class="htu-pri low">Low</strong> (green). Set with <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> on a selected task, or tap the badge on mobile.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">📊</div>
+          <div class="htu-feature-name">CSV Import / Export</div>
+          <div class="htu-feature-desc">Import tasks from any spreadsheet. Columns: Task, Status, Priority, Due Date. Export your board as CSV anytime. Both under <strong>Settings</strong>.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🔐</div>
+          <div class="htu-feature-name">Local Encryption</div>
+          <div class="htu-feature-desc">Set a passphrase to encrypt all task data stored in your browser with AES-256-GCM. Zero-knowledge — not even the server can read it. Found in <strong>Settings → Local Encryption</strong>.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🖼️</div>
+          <div class="htu-feature-name">Custom Background</div>
+          <div class="htu-feature-desc">Upload any image as a board background. Adjust card opacity with a slider so tasks stay readable. Found in <strong>Settings → Background Image</strong>.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">⚡</div>
+          <div class="htu-feature-name">WIP Limit</div>
+          <div class="htu-feature-desc">Working On column has a hard limit of 3 tasks. This forces you to finish before starting more — a core Kanban principle. You'll get a toast warning if you try to exceed it.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🔔</div>
+          <div class="htu-feature-name">Due Date Notifications</div>
+          <div class="htu-feature-desc">Enable browser notifications for tasks nearing their due date. Enable in <strong>Settings → Due Date Notifications</strong>. Requires Chrome/Edge/Brave and permission grant.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">☁️</div>
+          <div class="htu-feature-name">Cloud Sync</div>
+          <div class="htu-feature-desc">Sign in with Google to sync tasks across all your devices via Firebase Firestore. Works fully offline — changes queue locally and sync when reconnected.</div>
+        </div>
+
+        <div class="htu-feature-card">
+          <div class="htu-feature-icon">🔢</div>
+          <div class="htu-feature-name">Task Numbers</div>
+          <div class="htu-feature-desc">Every task gets a permanent number (#1, #2…). Deleted numbers get reused. <span class="desktop-only">Jump to any task with <kbd>Alt+G</kbd> then type the number, or <kbd>Alt+1–9</kbd> for instant access to the first nine.</span><span class="mobile-only" style="display:none">Task numbers are shown on every card for easy reference.</span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── COLLAB ──────────────────────────────────────────────────────────── -->
+    <div class="htu-pane" id="htu-pane-collab">
+      <div class="htu-hero-card collab-hero">
+        <div class="htu-hero-icon">👥</div>
+        <div>
+          <div class="htu-hero-title">Real-Time Team Collaboration</div>
+          <div class="htu-hero-body">Share a board with teammates using a 6-character code. All changes sync live via Firebase. Requires a Google sign-in.</div>
+        </div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Setting Up</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num">1</span><div><strong>Sign in with Google</strong> via Tasky ▼ → ☁️ Sign in.</div></div>
+        <div class="htu-step"><span class="htu-step-num">2</span><div><strong>Create a Collaboration</strong> via Tasky ▼ → 👥 Create Collaboration. You get a 6-character code.</div></div>
+        <div class="htu-step"><span class="htu-step-num">3</span><div><strong>Share the code</strong> with teammates. They join via Tasky ▼ → 🔗 Join Collaboration.</div></div>
+        <div class="htu-step"><span class="htu-step-num">4</span><div>All members see each other's tasks in real-time on a shared board.</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Assigning Tasks</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num htu-kc">syntax</span><div>In the floating input, use: <code>task text to::handle priority::high date::2025-06-15</code></div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">hint</span><div>After typing <code>to::</code>, the assign hint appears in blue below the input.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">result</span><div>The assigned task shows the assignee handle and a notification badge in the team panel.</div></div>
+      </div>
+
+      <div class="htu-section-title" style="margin-top:20px;">Team Panel</div>
+      <div class="htu-step-list">
+        <div class="htu-step"><span class="htu-step-num htu-kc">icon</span><div>A 👥 team panel appears when in a collaboration, showing all members and their task counts.</div></div>
+        <div class="htu-step"><span class="htu-step-num htu-kc">click</span><div>Click a member card to inspect their tasks in a read-only panel.</div></div>
+      </div>
+
+      <div class="htu-callout purple">
+        <strong>📅 Calendar + Collab:</strong> In the Calendar view, tasks assigned to teammates show their avatar initials on chips, color-coded by status.
+      </div>
+    </div>
+
+    <!-- ── TIPS ───────────────────────────────────────────────────────────── -->
+    <div class="htu-pane" id="htu-pane-tips">
+      <div class="htu-tips-list">
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">01</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">Use Task Groups as daily templates</div>
+            <div class="htu-tip-text">Create a group called "Morning Routine" with 5 tasks. Every morning, type "Mor" in the input — the suggestion pops up — press Enter. All 5 tasks are added in one keystroke.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">02</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">WIP limit is a feature, not a bug</div>
+            <div class="htu-tip-text">The 3-task limit on "Working On" is intentional. If you hit it, finish or move something back before starting more. Fewer active tasks = faster completion.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">03</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">Voice input for long tasks</div>
+            <div class="htu-tip-text"><span class="desktop-only">Hold Space and dictate a full sentence. Tasky transcribes it as the task text. Release to save instantly.</span><span class="mobile-only" style="display:none">Tap the mic button in the bottom bar and speak your task. Tap again to save.</span> Great for capturing ideas quickly.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">04</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">One board per project with Workspaces</div>
+            <div class="htu-tip-text">Use separate workspaces for Work, Personal, and Side Projects. <span class="desktop-only">Tab through them without lifting your hands from the keyboard.</span><span class="mobile-only" style="display:none">Swipe the pill bar at the top to switch between them.</span> Each workspace is fully independent.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card desktop-only">
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">06</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">Priority filter dots</div>
+            <div class="htu-tip-text">The colored dots next to column titles are filters. Click the red dot in To Do to show only High-priority tasks. Click again to clear. Great for end-of-day focus sessions.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">07</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">Offline-first by design</div>
+            <div class="htu-tip-text">All data lives in localStorage. The app works with zero internet. If you have cloud sync enabled, changes queue locally and push to Firestore when you reconnect — you never lose work.</div>
+          </div>
+        </div>
+
+        <div class="htu-tip-card">
+          <div class="htu-tip-num">08</div>
+          <div class="htu-tip-body">
+            <div class="htu-tip-title">Install as a PWA</div>
+            <div class="htu-tip-text">Tasky is a Progressive Web App. In Chrome/Edge, click the install icon in the address bar to add it to your home screen or desktop. It launches fullscreen with no browser chrome.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /htu-body -->
+
+  <!-- Footer -->
+  <div class="htu-footer">
+    <span class="htu-footer-text">Press <kbd>Esc</kbd> to close</span>
+    <div class="htu-footer-tabs">
+      <button class="htu-foot-nav" onclick="htuTabPrev()">← Prev</button>
+      <button class="htu-foot-nav" onclick="htuTabNext()">Next →</button>
+    </div>
+  </div>
+
+</div><!-- /htu-modal -->
+</div><!-- /htu-overlay -->
+
+<!-- Kept for backward compat with Settings panel "How to Use" button -->
+<div class="shortcuts-overlay" id="shortcuts-overlay" style="display:none!important;"></div>
+
+<!-- ── Encryption: Setup overlay ── -->
+<div class="tg-overlay hidden" id="enc-setup-overlay" onclick="if(event.target===this){this.classList.remove('visible');this.classList.add('hidden');setTimeout(function(){this.classList.remove('hidden')}.bind(this),270);}">
+  <div class="tg-modal" style="width:min(400px,92vw);">
+    <div class="tg-header">
+      <div class="tg-header-title">🔐 Set Encryption Passphrase</div>
+      <button class="tg-close-btn" onclick="var o=document.getElementById('enc-setup-overlay');o.classList.remove('visible');o.classList.add('hidden');setTimeout(function(){o.classList.remove('hidden')},270);">✕</button>
+    </div>
+    <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;">
+      <p style="color:var(--st-muted,rgba(255,255,255,0.6));font-size:13px;line-height:1.5;margin:0;">
+        This passphrase encrypts all task data in your browser.
+        <strong style="color:#f87171;">If you forget it, your data cannot be recovered.</strong>
+      </p>
+      <input type="password" class="enc-pass-input" placeholder="Passphrase (min 4 characters)"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <input type="password" class="enc-pass-confirm" placeholder="Confirm passphrase"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <div class="enc-error" style="display:none;color:#f87171;font-size:12px;"></div>
+      <button class="enc-submit-btn" onclick="submitEncryptionSetup()"
+        style="background:#8B5CF6;border:none;border-radius:10px;padding:12px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;width:100%;">Set Passphrase</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Encryption: Unlock overlay ── -->
+<div class="tg-overlay hidden" id="enc-unlock-overlay">
+  <div class="tg-modal" style="width:min(400px,92vw);">
+    <div class="tg-header">
+      <div class="tg-header-title">🔐 Enter Passphrase</div>
+    </div>
+    <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;">
+      <p style="color:var(--st-muted,rgba(255,255,255,0.6));font-size:13px;line-height:1.5;margin:0;">
+        Enter your passphrase to decrypt your task data.
+      </p>
+      <input type="password" class="enc-pass-input" placeholder="Passphrase"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <div class="enc-error" style="display:none;color:#f87171;font-size:12px;"></div>
+      <button class="enc-submit-btn"
+        style="background:#8B5CF6;border:none;border-radius:10px;padding:12px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;width:100%;">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Encryption: Change passphrase overlay ── -->
+<div class="tg-overlay hidden" id="enc-change-overlay" onclick="if(event.target===this)closeEncryptionModal()">
+  <div class="tg-modal" style="width:min(420px,92vw);">
+    <div class="tg-header">
+      <div class="tg-header-title">🔐 Change Encryption Passphrase</div>
+      <button class="tg-close-btn" onclick="closeEncryptionModal()">✕</button>
+    </div>
+    <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;">
+      <input type="password" id="enc-change-current" placeholder="Current passphrase"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <input type="password" id="enc-change-new" placeholder="New passphrase (min 4 chars)"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <input type="password" id="enc-change-confirm" placeholder="Confirm new passphrase"
+        style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;outline:none;width:100%;box-sizing:border-box;">
+      <div id="enc-change-error" style="display:none;color:#f87171;font-size:12px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="submitEncryptionChange()"
+          style="flex:1;background:#8B5CF6;border:none;border-radius:10px;padding:12px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Change Passphrase</button>
+        <button onclick="disableEncryption()"
+          style="flex:0;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px 16px;color:#f87171;font-size:13px;font-weight:500;cursor:pointer;">Disable</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<style>
+/* ═══════════════════════════════════════════════════════════
+   HOW TO USE MODAL
+   ═══════════════════════════════════════════════════════════ */
+#htu-overlay.visible { display:flex!important; animation:ob-fade-in .28s cubic-bezier(.4,0,.2,1); }
+
+#htu-modal {
+  width:min(860px,98vw);
+  max-height:92vh;
+  background:linear-gradient(150deg,#14112a 0%,#0e0c1c 100%);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:22px;
+  box-shadow:0 32px 80px rgba(0,0,0,0.75),0 0 0 1px rgba(139,92,246,0.12);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+body.light-mode #htu-modal {
+  background:linear-gradient(150deg,#f8f6ff 0%,#ede8ff 100%);
+  border-color:rgba(0,0,0,0.08);
+  box-shadow:0 32px 80px rgba(0,0,0,0.14),0 0 0 1px rgba(139,92,246,0.1);
+}
+
+/* Header */
+.htu-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:20px 24px 16px; flex-shrink:0;
+  border-bottom:1px solid rgba(255,255,255,0.07);
+  gap:12px;
+}
+body.light-mode .htu-header { border-bottom-color:rgba(0,0,0,0.08); }
+.htu-title-row { display:flex; align-items:center; gap:12px; }
+.htu-logo { font-size:24px; }
+.htu-title { font-size:18px; font-weight:800; color:#e2d9ff; letter-spacing:-.01em; }
+body.light-mode .htu-title { color:#1e1b4b; }
+.htu-subtitle { font-size:12px; color:rgba(255,255,255,0.35); margin-top:2px; }
+body.light-mode .htu-subtitle { color:rgba(0,0,0,0.35); }
+.htu-close {
+  width:32px; height:32px; border-radius:9px;
+  background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.5); font-size:15px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .15s,color .15s,border-color .15s; flex-shrink:0;
+}
+body.light-mode .htu-close { background:rgba(0,0,0,0.05); border-color:rgba(0,0,0,0.1); color:rgba(0,0,0,0.4); }
+.htu-close:hover { background:rgba(239,68,68,0.15); color:#f87171; border-color:rgba(239,68,68,0.3); }
+
+/* Tabs */
+.htu-tabs {
+  display:flex; gap:2px; padding:12px 20px 0; flex-shrink:0;
+  overflow-x:auto; scrollbar-width:none;
+  border-bottom:1px solid rgba(255,255,255,0.07);
+}
+body.light-mode .htu-tabs { border-bottom-color:rgba(0,0,0,0.08); }
+.htu-tabs::-webkit-scrollbar { display:none; }
+.htu-tab {
+  padding:8px 16px; border-radius:10px 10px 0 0;
+  font-size:12.5px; font-weight:600; white-space:nowrap;
+  cursor:pointer; border:none; background:transparent;
+  color:rgba(255,255,255,0.38);
+  border-bottom:2px solid transparent; margin-bottom:-1px;
+  transition:color .18s,background .18s;
+}
+body.light-mode .htu-tab { color:rgba(0,0,0,0.35); }
+.htu-tab:hover { color:rgba(255,255,255,0.7); background:rgba(255,255,255,0.04); }
+body.light-mode .htu-tab:hover { color:rgba(0,0,0,0.65); background:rgba(0,0,0,0.04); }
+.htu-tab.active { color:#c4b5fd; border-bottom-color:#8B5CF6; }
+body.light-mode .htu-tab.active { color:#7c3aed; border-bottom-color:#7c3aed; }
+
+/* Body */
+.htu-body { flex:1; overflow:hidden; }
+.htu-pane { display:none; height:100%; overflow-y:auto; padding:22px 24px 28px; scrollbar-width:thin; scrollbar-color:rgba(139,92,246,0.4) transparent; }
+.htu-pane::-webkit-scrollbar { width:5px; }
+.htu-pane::-webkit-scrollbar-thumb { background:rgba(139,92,246,0.4); border-radius:3px; }
+.htu-pane.active { display:block; animation:ob-fade-in .2s ease; }
+
+/* Section titles */
+.htu-section-title {
+  font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+  color:rgba(255,255,255,0.3); margin-bottom:12px;
+  display:flex; align-items:center; gap:8px;
+}
+body.light-mode .htu-section-title { color:rgba(0,0,0,0.3); }
+.htu-badge {
+  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+  background:rgba(139,92,246,0.15); border:1px solid rgba(139,92,246,0.3);
+  border-radius:5px; padding:2px 7px; color:#a78bfa; normal:normal;
+}
+body.light-mode .htu-badge { color:#7c3aed; }
+
+/* Column intro cards */
+.htu-columns-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.htu-col-card {
+  border-radius:14px; padding:16px; border:1px solid transparent;
+  display:flex; flex-direction:column; gap:6px;
+}
+.htu-col-card.todo    { background:rgba(139,92,246,0.1); border-color:rgba(139,92,246,0.2); }
+.htu-col-card.working { background:rgba(245,158,11,0.1); border-color:rgba(245,158,11,0.2); }
+.htu-col-card.done    { background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.2); }
+body.light-mode .htu-col-card.todo    { background:rgba(139,92,246,0.07); }
+body.light-mode .htu-col-card.working { background:rgba(245,158,11,0.07); }
+body.light-mode .htu-col-card.done    { background:rgba(16,185,129,0.07); }
+.htu-col-icon { font-size:22px; }
+.htu-col-name { font-size:14px; font-weight:700; color:#e2d9ff; }
+body.light-mode .htu-col-name { color:#1e1b4b; }
+.htu-col-desc { font-size:12px; color:rgba(255,255,255,0.45); line-height:1.5; }
+body.light-mode .htu-col-desc { color:rgba(0,0,0,0.45); }
+
+/* Step list */
+.htu-step-list { display:flex; flex-direction:column; gap:8px; }
+.htu-step {
+  display:flex; align-items:flex-start; gap:12px;
+  font-size:13.5px; color:rgba(255,255,255,0.7); line-height:1.55;
+}
+body.light-mode .htu-step { color:rgba(0,0,0,0.65); }
+.htu-step-num {
+  flex-shrink:0; width:24px; height:24px; border-radius:50%;
+  background:rgba(139,92,246,0.2); border:1px solid rgba(139,92,246,0.35);
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:800; color:#a78bfa; margin-top:1px;
+}
+body.light-mode .htu-step-num { color:#7c3aed; }
+.htu-step-num.htu-kc {
+  width:auto; padding:0 8px; border-radius:6px; font-family:monospace;
+  font-size:10px; letter-spacing:.04em; text-transform:uppercase;
+}
+.htu-step strong { color:#e2d9ff; }
+body.light-mode .htu-step strong { color:#1e1b4b; }
+.htu-step code {
+  background:rgba(139,92,246,0.15); border:1px solid rgba(139,92,246,0.25);
+  border-radius:5px; padding:1px 6px; font-size:11px; color:#c4b5fd; font-family:monospace;
+}
+body.light-mode .htu-step code { color:#6d28d9; background:rgba(139,92,246,0.08); }
+
+/* Keyboard grid */
+.htu-kb-grid { display:flex; flex-direction:column; gap:6px; }
+.htu-kb-row {
+  display:flex; align-items:center; gap:14px;
+  padding:8px 12px; border-radius:10px;
+  background:rgba(255,255,255,0.025);
+  border:1px solid rgba(255,255,255,0.05);
+  transition:background .12s;
+}
+body.light-mode .htu-kb-row { background:rgba(255,255,255,0.6); border-color:rgba(0,0,0,0.06); }
+.htu-kb-row:hover { background:rgba(139,92,246,0.07); border-color:rgba(139,92,246,0.15); }
+.htu-keys { display:flex; align-items:center; gap:3px; min-width:100px; flex-shrink:0; }
+.htu-keys kbd {
+  display:inline-flex; align-items:center; justify-content:center;
+  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.16);
+  border-radius:6px; padding:3px 8px; font-size:11.5px; font-weight:700;
+  color:#c4b5fd; font-family:inherit; line-height:1.4; white-space:nowrap;
+  box-shadow:0 2px 0 rgba(0,0,0,0.35);
+}
+body.light-mode .htu-keys kbd {
+  background:rgba(0,0,0,0.06); border-color:rgba(0,0,0,0.15); color:#6d28d9;
+  box-shadow:0 2px 0 rgba(0,0,0,0.1);
+}
+.htu-kb-desc { font-size:13px; color:rgba(255,255,255,0.6); }
+body.light-mode .htu-kb-desc { color:rgba(0,0,0,0.6); }
+
+/* Priority labels */
+.htu-pri { font-weight:700; }
+.htu-pri.high { color:#f87171; }
+.htu-pri.med  { color:#fbbf24; }
+.htu-pri.low  { color:#34d399; }
+
+/* Hero cards */
+.htu-hero-card {
+  display:flex; align-items:flex-start; gap:14px;
+  border-radius:14px; padding:18px;
+  border:1px solid transparent;
+}
+.htu-hero-card.voice-hero  { background:rgba(139,92,246,0.1); border-color:rgba(139,92,246,0.22); }
+.htu-hero-card.collab-hero { background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.22); }
+.htu-hero-icon { font-size:32px; flex-shrink:0; }
+.htu-hero-title { font-size:15px; font-weight:800; color:#e2d9ff; margin-bottom:4px; }
+body.light-mode .htu-hero-title { color:#1e1b4b; }
+.htu-hero-body { font-size:13px; color:rgba(255,255,255,0.55); line-height:1.6; }
+body.light-mode .htu-hero-body { color:rgba(0,0,0,0.5); }
+
+/* Callout boxes */
+.htu-callout {
+  border-radius:12px; padding:14px 16px;
+  font-size:13px; line-height:1.6; margin-top:20px;
+  border:1px solid transparent;
+}
+.htu-callout.amber  { background:rgba(245,158,11,0.1); border-color:rgba(245,158,11,0.25); color:#fde68a; }
+.htu-callout.purple { background:rgba(139,92,246,0.1); border-color:rgba(139,92,246,0.25); color:#ddd6fe; }
+body.light-mode .htu-callout.amber  { color:#92400e; }
+body.light-mode .htu-callout.purple { color:#4c1d95; }
+
+/* Feature grid */
+.htu-feature-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px; }
+.htu-feature-card {
+  background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px; padding:16px;
+  transition:background .15s, border-color .15s, transform .15s;
+}
+body.light-mode .htu-feature-card { background:rgba(255,255,255,0.65); border-color:rgba(0,0,0,0.07); }
+.htu-feature-card:hover {
+  background:rgba(139,92,246,0.07); border-color:rgba(139,92,246,0.2);
+  transform:translateY(-1px);
+}
+.htu-feature-icon { font-size:22px; margin-bottom:8px; }
+.htu-feature-name { font-size:14px; font-weight:700; color:#e2d9ff; margin-bottom:5px; }
+body.light-mode .htu-feature-name { color:#1e1b4b; }
+.htu-feature-desc { font-size:12.5px; color:rgba(255,255,255,0.45); line-height:1.6; }
+body.light-mode .htu-feature-desc { color:rgba(0,0,0,0.5); }
+.htu-feature-desc strong { color:#c4b5fd; }
+body.light-mode .htu-feature-desc strong { color:#6d28d9; }
+.htu-feature-desc kbd {
+  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.14);
+  border-radius:4px; padding:1px 5px; font-size:10.5px; color:#c4b5fd; font-family:monospace;
+}
+body.light-mode .htu-feature-desc kbd { background:rgba(0,0,0,0.06); border-color:rgba(0,0,0,0.12); color:#6d28d9; }
+
+/* Tips list */
+.htu-tips-list { display:flex; flex-direction:column; gap:10px; }
+.htu-tip-card {
+  display:flex; align-items:flex-start; gap:16px;
+  background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);
+  border-radius:14px; padding:16px 18px;
+  transition:background .15s, border-color .15s;
+}
+body.light-mode .htu-tip-card { background:rgba(255,255,255,0.65); border-color:rgba(0,0,0,0.07); }
+.htu-tip-card:hover { background:rgba(139,92,246,0.06); border-color:rgba(139,92,246,0.18); }
+.htu-tip-num {
+  font-size:22px; font-weight:900; color:rgba(139,92,246,0.35);
+  flex-shrink:0; line-height:1; font-variant-numeric:tabular-nums;
+  font-family:monospace; letter-spacing:-.02em;
+}
+body.light-mode .htu-tip-num { color:rgba(139,92,246,0.25); }
+.htu-tip-title { font-size:13.5px; font-weight:700; color:#e2d9ff; margin-bottom:4px; }
+body.light-mode .htu-tip-title { color:#1e1b4b; }
+.htu-tip-text { font-size:13px; color:rgba(255,255,255,0.5); line-height:1.6; }
+body.light-mode .htu-tip-text { color:rgba(0,0,0,0.5); }
+
+/* Footer */
+.htu-footer {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 22px 14px; flex-shrink:0;
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+body.light-mode .htu-footer { border-top-color:rgba(0,0,0,0.07); }
+.htu-footer-text { font-size:11.5px; color:rgba(255,255,255,0.22); }
+body.light-mode .htu-footer-text { color:rgba(0,0,0,0.22); }
+.htu-footer-text kbd {
+  background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15);
+  border-radius:4px; padding:1px 6px; font-size:10px; color:rgba(255,255,255,0.4); font-family:monospace;
+}
+body.light-mode .htu-footer-text kbd { background:rgba(0,0,0,0.05); border-color:rgba(0,0,0,0.12); color:rgba(0,0,0,0.3); }
+.htu-footer-tabs { display:flex; gap:6px; }
+.htu-foot-nav {
+  background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+  border-radius:8px; padding:5px 14px; font-size:12px; font-weight:600;
+  color:rgba(255,255,255,0.45); cursor:pointer;
+  transition:background .15s, color .15s;
+}
+body.light-mode .htu-foot-nav { background:rgba(0,0,0,0.04); border-color:rgba(0,0,0,0.1); color:rgba(0,0,0,0.4); }
+.htu-foot-nav:hover { background:rgba(139,92,246,0.15); color:#c4b5fd; border-color:rgba(139,92,246,0.3); }
+
+@media (min-width:701px) {
+  .mobile-only { display: none !important; }
+}
+@media (max-width:700px) {
+  #htu-overlay { padding:0; align-items:flex-end; }
+  #htu-modal { border-radius:22px 22px 0 0; max-height:92vh; width:100%; }
+  .htu-columns-row { grid-template-columns:1fr; }
+  .htu-feature-grid { grid-template-columns:1fr; }
+  .htu-header { padding:16px 16px 12px; }
+  .htu-pane { padding:16px 16px 20px; }
+  .htu-tab[data-tab="keyboard"] { display: none; }
+  .desktop-only { display: none; }
+}
+</style>
+
+<script>
+/* ─── How To Use Modal ──────────────────────────────────────────────────── */
+    const _HTU_TABS = ['basics','keyboard','voice','features','collab','tips'];
+let _htuTabIdx = 0;
+
+function openHowToUse(startTab) {
+  const overlay = document.getElementById('htu-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+  htuTab(startTab || 'basics');
+  const dd = document.getElementById('dropdown');
+  if (dd && dd.classList.contains('show') && typeof toggleMenu === 'function') toggleMenu();
+  document.addEventListener('keydown', _htuKeydown, true);
+}
+window.openHowToUse = openHowToUse;
+
+function closeHowToUse() {
+  const overlay = document.getElementById('htu-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  setTimeout(() => { overlay.style.display = 'none'; }, 280);
+  document.removeEventListener('keydown', _htuKeydown, true);
+}
+window.closeHowToUse = closeHowToUse;
+
+function htuTab(name) {
+  if (name === 'keyboard' && isMobile()) name = 'basics';
+  if (name === 'features' && isMobile()) name = 'collab';
+  const idx = _HTU_TABS.indexOf(name);
+  if (idx !== -1) _htuTabIdx = idx;
+  document.querySelectorAll('.htu-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.htu-pane').forEach(p => p.classList.toggle('active', p.id === 'htu-pane-' + name));
+}
+window.htuTab = htuTab;
+
+function htuTabNext() { htuTab(_HTU_TABS[Math.min(_htuTabIdx + 1, _HTU_TABS.length - 1)]); }
+function htuTabPrev() { htuTab(_HTU_TABS[Math.max(_htuTabIdx - 1, 0)]); }
+window.htuTabNext = htuTabNext;
+window.htuTabPrev = htuTabPrev;
+
+function _htuKeydown(e) {
+  const overlay = document.getElementById('htu-overlay');
+  if (!overlay || overlay.style.display === 'none') return;
+  if (e.key === 'Escape') { closeHowToUse(); e.stopPropagation(); e.preventDefault(); }
+  if (e.key === 'ArrowRight' && e.altKey) { htuTabNext(); e.preventDefault(); }
+  if (e.key === 'ArrowLeft'  && e.altKey) { htuTabPrev(); e.preventDefault(); }
+}
+
+// Patch showShortcuts() to open the new modal instead
+function showShortcuts() { openHowToUse('keyboard'); }
+function closeShortcuts() { closeHowToUse(); }
+
+// ── PWA: Service Worker ──
+if ('serviceWorker' in navigator) {
+  // Purge any stale caches and unregister old SW so fixes are picked up instantly
+  caches.keys().then(function(keys) { keys.forEach(function(k) { caches.delete(k); }); });
+  navigator.serviceWorker.getRegistrations().then(function(regs) {
+    regs.forEach(function(r) { r.unregister(); });
+    navigator.serviceWorker.register('sw.js').catch(function(err) {
+      console.warn('SW registration failed:', err);
+    });
+  });
+}
+
+// ── PWA: Before Install Prompt ──
+var _deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  _deferredPrompt = e;
+});
+window._getDeferredPrompt = function() { var p = _deferredPrompt; _deferredPrompt = null; return p; };
+</script>
+
+<style>
+/* ── Light mode: Confirm dialog & inline-style modals ── */
+body.light-mode #confirm-title { color: #1e1b4b !important; }
+body.light-mode #confirm-body { color: rgba(0,0,0,0.6) !important; }
+body.light-mode #confirm-cancel-btn {
+  background: rgba(0,0,0,0.04) !important;
+  border-color: rgba(0,0,0,0.12) !important;
+  color: rgba(0,0,0,0.7) !important;
+}
+body.light-mode #bg-status-label { color: rgba(0,0,0,0.35) !important; }
+</style>
+
+</body>
+</html>

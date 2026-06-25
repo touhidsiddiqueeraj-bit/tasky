@@ -1,0 +1,482 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   TASKY — VIDEO CALL STYLES  (minimalist professional)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+    .vv-grid, #vv-panel-btn, .vv-grid-controls { display: none !important; }
+}
+
+:root {
+    --vv-bg:          #0a0914;
+    --vv-surface:     #111020;
+    --vv-surface2:    #18162a;
+    --vv-border:      rgba(255,255,255,0.065);
+    --vv-border-hi:   rgba(139,92,246,0.38);
+    --vv-accent:      #8B5CF6;
+    --vv-accent2:     #6d28d9;
+    --vv-green:       #22c55e;
+    --vv-red:         #ef4444;
+    --vv-amber:       #f59e0b;
+    --vv-text:        #e8e3f8;
+    --vv-text-dim:    rgba(200,192,240,0.55);
+    --vv-text-faint:  rgba(200,192,240,0.28);
+    --vv-radius:      12px;
+    --vv-radius-sm:   8px;
+    --vv-shadow:      0 16px 52px rgba(0,0,0,0.58), 0 0 0 1px rgba(139,92,246,0.07);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FLOATING VIDEO GRID PANEL
+   ═══════════════════════════════════════════════════════════════════════════ */
+.vv-grid {
+    position:        fixed;
+    top:             0;
+    left:            0;
+    right:           0;
+    bottom:          0;
+    width:           100%;
+    height:          100%;
+    max-height:      100vh;
+    background:      var(--vv-surface);
+    border:          1px solid var(--vv-border);
+    border-radius:   0;
+    box-shadow:      var(--vv-shadow);
+    display:         flex;
+    flex-direction:  column;
+    overflow:        hidden;
+    z-index:         9999;
+    animation:       vv-panel-in 0.24s cubic-bezier(0.34, 1.42, 0.64, 1) both;
+    resize:          none;
+    min-width:       300px;
+    min-height:      200px;
+}
+@keyframes vv-panel-in {
+    from { opacity: 0; transform: translateY(-14px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0)      scale(1);   }
+}
+
+/* ─── Floating bottom toolbar ────────────────────────────────────── */
+#vv-grid-toolbar {
+    position: absolute;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 14px;
+    z-index: 10;
+    max-width: calc(100vw - 32px);
+    flex-wrap: wrap;
+}
+#vv-grid-toolbar::before {
+    content: '';
+    position: absolute;
+    top: -4px; left: -4px; right: -4px; bottom: -4px;
+    border-radius: 18px;
+    border: 2px solid rgba(139, 92, 246, 0.35);
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.15), 0 0 80px rgba(139, 92, 246, 0.08), inset 0 0 30px rgba(139, 92, 246, 0.08);
+    pointer-events: none;
+    animation: vv-toolbar-glow 4s ease-in-out infinite;
+}
+#vv-grid-toolbar::after {
+    content: '';
+    position: absolute;
+    top: 4px; left: 4px; right: 4px; bottom: 4px;
+    border-radius: 10px;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    box-shadow: inset 0 0 20px rgba(139, 92, 246, 0.08);
+    pointer-events: none;
+    animation: vv-toolbar-glow 4s ease-in-out infinite 0.3s;
+}
+@keyframes vv-toolbar-glow {
+    0%, 100% { opacity: 0.5; }
+    50%      { opacity: 1; }
+}
+
+/* ─── Toolbar buttons ─────────────────────────────────────────────────────── */
+.vv-ctrl {
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    padding:         5px 10px;
+    border-radius:   var(--vv-radius-sm);
+    border:          1px solid var(--vv-border);
+    background:      rgba(255,255,255,0.034);
+    color:           var(--vv-text-dim);
+    font-size:       13px;
+    font-weight:     600;
+    cursor:          pointer;
+    white-space:     nowrap;
+    transition:      background 0.13s, border-color 0.13s, color 0.13s, transform 0.1s;
+    line-height:     1;
+    letter-spacing:  0.01em;
+}
+.vv-ctrl:hover {
+    background:    rgba(139,92,246,0.12);
+    border-color:  var(--vv-border-hi);
+    color:         var(--vv-text);
+    transform:     translateY(-1px);
+}
+.vv-ctrl:active { transform: scale(0.95); }
+.vv-ctrl--active {
+    background:   rgba(239,68,68,0.14) !important;
+    border-color: rgba(239,68,68,0.40) !important;
+    color:        #fca5a5 !important;
+}
+.vv-ctrl--close {
+    font-size:   11px;
+    padding:     5px 8px;
+    color:       var(--vv-text-faint);
+}
+.vv-ctrl--close:hover { color: var(--vv-red) !important; background: rgba(239,68,68,0.09) !important; border-color: rgba(239,68,68,0.28) !important; }
+
+.vv-controls-sep {
+    width: 1px;
+    height: 22px;
+    background: var(--vv-border);
+    margin: 0 3px;
+    flex-shrink: 0;
+}
+.vv-ctrl--leave {
+    color: #fca5a5 !important;
+    background: rgba(239,68,68,0.12) !important;
+    border-color: rgba(239,68,68,0.30) !important;
+}
+.vv-ctrl--leave:hover {
+    background: rgba(239,68,68,0.20) !important;
+    border-color: rgba(239,68,68,0.50) !important;
+    color: #fca5a5 !important;
+}
+
+/* Toolbar hint tooltips */
+.vv-ctrl[title]:hover::after,
+.vv-ctrl[data-hint]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: calc(100% + 5px);
+    left: 50%; transform: translateX(-50%);
+    background: rgba(8,6,16,0.96);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--vv-text);
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 5px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 99999;
+}
+.vv-ctrl { position: relative; }
+
+/* ─── Recording badge ────────────────────────────────────────────────────── */
+.vv-rec-badge {
+    display:     flex;
+    align-items: center;
+    gap:         5px;
+    padding:     3px 9px 3px 7px;
+    border-radius: 20px;
+    background:  rgba(239,68,68,0.12);
+    border:      1px solid rgba(239,68,68,0.28);
+    font-size:   11px;
+    font-weight: 700;
+    color:       #fca5a5;
+    font-variant-numeric: tabular-nums;
+}
+.vv-rec-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--vv-red);
+    animation: vv-blink 1.1s ease-in-out infinite;
+    flex-shrink: 0;
+}
+@keyframes vv-blink {
+    0%,100% { opacity: 1; }
+    50%     { opacity: 0.15; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TILE GRID
+   ═══════════════════════════════════════════════════════════════════════════ */
+.vv-tiles {
+    flex:          1;
+    display:       grid;
+    gap:           4px;
+    padding:       8px 8px 80px;
+    overflow:      hidden;
+    align-content: start;
+    min-height:    0;
+}
+.vv-tiles--1 { grid-template-columns: 1fr; }
+.vv-tiles--2 { grid-template-columns: repeat(2, 1fr); }
+.vv-tiles--4 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); }
+.vv-tiles--9 { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+
+.vv-tiles--speaker {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows:    auto auto;
+}
+.vv-tiles--speaker .vv-tile--featured {
+    grid-column: 1 / -1;
+    aspect-ratio: 16 / 9;
+    max-height:  56%;
+}
+.vv-tiles--speaker .vv-tile:not(.vv-tile--featured) { aspect-ratio: 16 / 9; }
+
+/* ─── Individual tile ─────────────────────────────────────────────────────── */
+.vv-tile {
+    position:      relative;
+    background:    var(--vv-bg);
+    border-radius: var(--vv-radius-sm);
+    overflow:      hidden;
+    border:        1px solid var(--vv-border);
+    aspect-ratio:  16 / 9;
+    display:       flex;
+    align-items:   center;
+    justify-content: center;
+    transition:    border-color 0.2s, box-shadow 0.2s;
+    min-height:    80px;
+}
+.vv-tile--speaking {
+    border-color: rgba(34,197,94,0.45);
+    box-shadow:   0 0 0 2px rgba(34,197,94,0.12);
+    animation:    vv-speak-pulse 0.9s ease-in-out infinite alternate;
+}
+@keyframes vv-speak-pulse {
+    from { box-shadow: 0 0 0 1px rgba(34,197,94,0.12); }
+    to   { box-shadow: 0 0 0 4px rgba(34,197,94,0.04); }
+}
+.vv-tile--featured {
+    border-color: rgba(139,92,246,0.38);
+    box-shadow:   0 0 0 2px rgba(139,92,246,0.10);
+}
+
+/* ─── Video element ───────────────────────────────────────────────────────── */
+.vv-tile-video {
+    position:   absolute;
+    inset:      0;
+    width:      100%;
+    height:     100%;
+    object-fit: cover;
+    background: #000;
+    display:    block;
+}
+
+/* ─── Avatar overlay — shown when camera is off ────────────────────────────
+   KEY CHANGE: uses a solid surface bg so the last video frame is never
+   visible. The overlay is always rendered; only opacity is toggled.
+   ──────────────────────────────────────────────────────────────────────── */
+.vv-tile-overlay {
+    position:       absolute;
+    inset:          0;
+    display:        flex;
+    flex-direction: column;
+    align-items:    center;
+    justify-content:center;
+    gap:            8px;
+    /* Solid fill — covers any residual video frame completely */
+    background:     var(--vv-bg);
+    /* Fade IN smoothly (showing avatar) — hide instantly (no frozen-frame gap) */
+    transition:     opacity 0.15s ease;
+    z-index:        2;
+    opacity:        1;
+}
+/* When hiding: zero duration so the solid overlay always snaps away after video is already live */
+.vv-tile-overlay--hidden {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0s;  /* instant hide — video is already playing by this point */
+}
+
+.vv-tile-avatar {
+    width:       52px; height: 52px;
+    border-radius: 50%;
+    background:  linear-gradient(140deg, var(--vv-accent) 0%, var(--vv-accent2) 100%);
+    color:       #fff;
+    font-size:   22px; font-weight: 800;
+    display:     flex; align-items: center; justify-content: center;
+    box-shadow:  0 0 0 2px rgba(139,92,246,0.20), 0 4px 14px rgba(109,40,217,0.32);
+    overflow:    hidden;
+}
+.vv-tile-avatar img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.vv-tile-name {
+    font-size:   11px; font-weight: 600;
+    color:       var(--vv-text-dim);
+    text-align:  center;
+    max-width:   88%;
+    overflow:    hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Camera-off label under the avatar */
+.vv-tile-cam-off {
+    font-size:   10px;
+    color:       var(--vv-text-faint);
+    letter-spacing: 0.04em;
+}
+
+/* ─── Bottom name bar ─────────────────────────────────────────────────────── */
+.vv-tile-bar {
+    position:    absolute;
+    bottom:      0; left: 0; right: 0;
+    padding:     4px 8px 5px;
+    background:  linear-gradient(transparent, rgba(5,3,14,0.72));
+    display:     flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index:     3;
+    pointer-events: none;
+}
+.vv-tile-handle {
+    font-size:   10px; font-weight: 600;
+    color:       rgba(255,255,255,0.75);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width:   70%;
+    letter-spacing: 0.01em;
+}
+.vv-tile-icons { display: flex; gap: 3px; font-size: 11px; }
+
+/* ─── Pin / spotlight button ─────────────────────────────────────────────── */
+.vv-pin-btn {
+    position:   absolute;
+    top:        6px; right: 6px;
+    background: rgba(0,0,0,0.38);
+    border:     1px solid rgba(255,255,255,0.10);
+    border-radius: 5px;
+    color:      rgba(255,255,255,0.48);
+    font-size:  12px; line-height: 1;
+    padding:    3px 5px;
+    cursor:     pointer;
+    z-index:    4;
+    opacity:    0;
+    transition: opacity 0.14s, background 0.14s, color 0.14s;
+}
+.vv-tile:hover .vv-pin-btn { opacity: 1; }
+.vv-pin-btn:hover { background: rgba(139,92,246,0.45); color: #fff; border-color: var(--vv-accent); }
+
+/* ─── Hint banner shown in empty grid ───────────────────────────────────── */
+.vv-grid-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 6px 8px;
+    padding: 9px 12px;
+    border-radius: var(--vv-radius-sm);
+    background: rgba(139,92,246,0.05);
+    border: 1px solid rgba(139,92,246,0.12);
+    font-size: 11.5px;
+    color: var(--vv-text-dim);
+    line-height: 1.5;
+}
+.vv-grid-hint-icon { font-size: 14px; flex-shrink: 0; }
+.vv-grid-hint strong { color: var(--vv-text); font-weight: 600; }
+
+/* ─── Video button in vc-panel ───────────────────────────────────────────── */
+#vv-panel-btn { flex: 1; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE
+   ═══════════════════════════════════════════════════════════════════════════ */
+body.light-mode {
+    --vv-bg:         #f5f3ff;
+    --vv-surface:    #ffffff;
+    --vv-surface2:   #ede9fe;
+    --vv-border:     rgba(0,0,0,0.06);
+    --vv-border-hi:  rgba(109,40,217,0.35);
+    --vv-text:       #1e1b4b;
+    --vv-text-dim:   rgba(79,60,153,0.62);
+    --vv-text-faint: rgba(79,60,153,0.32);
+}
+body.light-mode .vv-grid          { box-shadow: 0 10px 40px rgba(109,40,217,0.10), 0 0 0 1px rgba(109,40,217,0.06); }
+body.light-mode .vv-tile          { background: #ede9fe; border-color: rgba(109,40,217,0.10); }
+body.light-mode .vv-tile-overlay  { background: #ede9fe; }
+body.light-mode .vv-tile-bar      { background: linear-gradient(transparent, rgba(109,40,217,0.15)); }
+body.light-mode .vv-tile-handle   { color: #4c1d95; }
+body.light-mode #vv-grid-toolbar { background: rgba(255, 255, 255, 0.6); }
+body.light-mode #vv-grid-toolbar::before {
+    border-color: rgba(139, 92, 246, 0.25);
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.08), 0 0 60px rgba(139, 92, 246, 0.04), inset 0 0 20px rgba(139, 92, 246, 0.04);
+}
+body.light-mode #vv-grid-toolbar::after {
+    border-color: rgba(139, 92, 246, 0.18);
+    box-shadow: inset 0 0 15px rgba(139, 92, 246, 0.05);
+}
+body.light-mode .vv-ctrl          { background: rgba(0,0,0,0.034); border-color: rgba(0,0,0,0.08); color: #4c1d95; }
+body.light-mode .vv-ctrl:hover    { background: rgba(109,40,217,0.08); }
+body.light-mode .vv-pin-btn       { background: rgba(255,255,255,0.6); color: #6d28d9; border-color: rgba(109,40,217,0.18); }
+body.light-mode .vv-grid-hint     { background: rgba(109,40,217,0.04); border-color: rgba(109,40,217,0.08); }
+body.light-mode .vv-ctrl[title]:hover::after { background: #1e1b4b; }
+
+/* Light-mode additions — previously dark-only elements */
+body.light-mode .vv-rec-badge {
+    background: rgba(239,68,68,0.10);
+    border-color: rgba(239,68,68,0.28);
+    color: #dc2626;
+}
+body.light-mode .vv-tile-cam-off { color: rgba(79,60,153,0.45); }
+body.light-mode .vv-tile-name    { color: rgba(79,60,153,0.65); }
+body.light-mode .vv-ctrl--close  { color: rgba(79,60,153,0.4); }
+body.light-mode .vv-ctrl--close:hover { color: #dc2626 !important; }
+body.light-mode .vv-ctrl--active {
+    background: rgba(239,68,68,0.10) !important;
+    border-color: rgba(239,68,68,0.30) !important;
+    color: #dc2626 !important;
+}
+body.light-mode .vv-ctrl--leave {
+    background: rgba(239,68,68,0.10) !important;
+    border-color: rgba(239,68,68,0.28) !important;
+    color: #dc2626 !important;
+}
+body.light-mode .vv-ctrl--leave:hover {
+    background: rgba(239,68,68,0.18) !important;
+    border-color: rgba(239,68,68,0.45) !important;
+    color: #dc2626 !important;
+}
+body.light-mode .vv-grid-hint strong { color: #1e1b4b; }
+/* Recording dot stays red — works in both modes */
+/* vv-tile-handle in light mode is already overridden at line 401 */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+    .vv-grid { top: 0; left: 0; right: 0; bottom: 0; width: 100%; height: 100%; max-height: 100vh; resize: none; border-radius: 0; }
+    .vv-tiles--9 { grid-template-columns: repeat(2, 1fr); }
+    #vv-grid-toolbar { gap: 2px; padding: 6px 12px; }
+    .vv-ctrl { padding: 4px 7px; font-size: 12px; }
+}
+@media (max-width: 400px) {
+    .vv-tiles--4, .vv-tiles--9 { grid-template-columns: 1fr 1fr; }
+    .vv-tiles--speaker { grid-template-columns: 1fr 1fr; }
+}
+
+/* Scrollbar */
+.vv-tiles {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139,92,246,0.18) transparent;
+}
+.vv-tiles::-webkit-scrollbar       { width: 3px; height: 3px; }
+.vv-tiles::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.18); border-radius: 3px; }
+
+/* Fullscreen */
+.vv-tile:fullscreen, .vv-tile:-webkit-full-screen { border-radius: 0; aspect-ratio: unset; width: 100vw; height: 100vh; }
+.vv-tile:fullscreen .vv-tile-video, .vv-tile:-webkit-full-screen .vv-tile-video { object-fit: contain; }
+
+/* Resize handle hint */
+.vv-grid::after {
+    content: '';
+    position: absolute;
+    bottom: 4px; right: 5px;
+    width: 10px; height: 10px;
+    border-bottom: 1.5px solid rgba(139,92,246,0.20);
+    border-right:  1.5px solid rgba(139,92,246,0.20);
+    border-radius: 0 0 2px 0;
+    pointer-events: none;
+}
