@@ -9,7 +9,10 @@ service cloud.firestore {
 
     // ── Groups ───────────────────────────────────────────────────────────────
     match /groups/{code} {
-      allow read: if request.auth != null;
+      // Public read: required for the ?view=CODE read-only live-board link to
+      // work for visitors who aren't signed in (anonymous auth may also be
+      // disabled/unavailable, e.g. private/incognito browsing on some devices).
+      allow read: if true;
       allow create: if request.auth != null
         && request.resource.data.supervisorUid == request.auth.uid;
       allow update: if request.auth != null && (
@@ -27,10 +30,10 @@ service cloud.firestore {
           request.auth.uid == memberId
           || get(/databases/$(database)/documents/groups/$(code)).data.supervisorUid == request.auth.uid
         );
-        allow read: if request.auth != null && (
-          get(/databases/$(database)/documents/groups/$(code)).data.supervisorUid == request.auth.uid
-          || request.auth.uid == memberId
-        );
+        // Public read: same reason as the group doc above — the read-only
+        // board needs to load every member's task snapshot for any visitor,
+        // not just the supervisor or that specific member.
+        allow read: if true;
       }
 
       // ── Message board ──────────────────────────────────────────────────────
