@@ -68,15 +68,16 @@ service cloud.firestore {
       }
 
       // ── Visitor Comments (read-only board) ─────────────────────────────────
-      // Reads/writes require (anonymous) auth so drive-by scrapers and bots
-      // can't enumerate or spam boards. The app signs visitors in anonymously.
-      // hasOnly (not just hasAll) blocks smuggled fields like taskText/authorUid;
-      // taskNumber is range-checked so it can't be used as an ID oracle.
+      // Public read/write by design: the ?view=CODE board must work for
+      // visitors with no account and no anonymous auth (per public-read
+      // policy on groups/tasks above). Abuse is contained by strict shape
+      // validation instead: hasOnly (not just hasAll) blocks smuggled fields
+      // like authorUid; taskNumber is range-checked; all strings are
+      // type- and size-checked. Spam remains inherently possible on a public
+      // wall — mitigate with App Check / rate limits, not auth gates.
       match /visitor-comments/{commentId} {
-        allow read: if request.auth != null
-          && exists(/databases/$(database)/documents/groups/$(code));
-        allow create: if request.auth != null
-          && exists(/databases/$(database)/documents/groups/$(code))
+        allow read: if exists(/databases/$(database)/documents/groups/$(code));
+        allow create: if exists(/databases/$(database)/documents/groups/$(code))
           && request.resource.data.keys().hasOnly(['text', 'authorName', 'taskNumber', 'taskText', 'authorEmail', 'createdAt'])
           && request.resource.data.text is string
           && request.resource.data.text.size() >= 1
@@ -91,10 +92,8 @@ service cloud.firestore {
           && (!('authorEmail' in request.resource.data) || (request.resource.data.authorEmail is string && request.resource.data.authorEmail.size() <= 320));
         allow update, delete: if false;
         match /replies/{replyId} {
-          allow read: if request.auth != null
-            && exists(/databases/$(database)/documents/groups/$(code));
-          allow create: if request.auth != null
-            && exists(/databases/$(database)/documents/groups/$(code))
+          allow read: if exists(/databases/$(database)/documents/groups/$(code));
+          allow create: if exists(/databases/$(database)/documents/groups/$(code))
             && request.resource.data.keys().hasOnly(['text', 'authorName', 'createdAt'])
             && request.resource.data.text is string
             && request.resource.data.text.size() >= 1
