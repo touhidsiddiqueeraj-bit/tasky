@@ -115,12 +115,6 @@ What that produced:
   **network-first for code** (updates propagate; cache version is bumped on
   security fixes) and cache-first for images; offline support.
 
-Known limits, stated plainly: public comment walls are inherently
-spam-prone (validation constrains shape, not volume — add App Check / rate
-limits for hostile deployments); the Firebase web `apiKey` in source is
-public by design — restrict it in GCP console (API restrictions + auth
-domains). Clearing site data erases tasks — export to CSV first.
-
 ---
 
 ## File Structure
