@@ -5,12 +5,26 @@ calendar, whiteboard, and more. Zero build step — open `index.html` and go.
 No servers, no npm, no subscriptions.
 
 <p align="center">
-  <img width="1901" alt="Tasky screenshot" src="https://github.com/user-attachments/assets/84c3815a-8058-4074-8154-3dfbd444add9">
+  <img width="1400" alt="Tasky board — three columns with tasks across To Do, Working On and Done" src="screenshots/board.png">
+</p>
+
+## Screenshots
+
+| Board | Global search (`Alt+R`) |
+|---|---|
+| <img width="690" alt="Tasky three-column task board" src="screenshots/board.png"> | <img width="690" alt="Global search overlay with highlighted matches" src="screenshots/search.png"> |
+
+| Calendar | Settings |
+|---|---|
+| <img width="690" alt="Month calendar with task chips on due dates" src="screenshots/calendar.png"> | <img width="690" alt="Settings panel with appearance and system options" src="screenshots/settings.png"> |
+
+<p align="center">
+  <img width="700" alt="Command palette (Ctrl+K) with actions and task results" src="screenshots/palette.png">
 </p>
 
 ## Features
 
-### Core
+### Core — keyboard-first task board
 - **Three columns** — To Do / Working On / Done
 - **Keyboard-first** — any letter/number opens the input; full shortcut table below
 - **Drag & drop** — reorder and move tasks between columns (mouse + touch)
@@ -25,8 +39,8 @@ No servers, no npm, no subscriptions.
 ### Collaboration
 - **Task Groups** — create reusable templates; type the group name to expand onto the board
 - **Team Collaboration** — supervisor creates a group; members join with a 6-character code; assign tasks, comment feed, live activity
-- **Message board** — team chat with reply threads, emoji reactions, file attachments (up to 10 MB)
-- **Read-only share board** — share a live read-only board via `?view=CODE` link
+- **Message board** — team chat with reply threads and file attachments (up to 10 MB)
+- **Read-only share board** — share a live read-only board via `?view=CODE` link; visitors can leave feedback comments with no account
 - **Whiteboard** — shared canvas with pen/rect/circle/line/eraser tools; Firestore-synced with live user cursors
 
 ### Voice & Video Calls
@@ -63,10 +77,49 @@ No servers, no npm, no subscriptions.
 - **6 accent colours + custom picker** — purple, blue, green, amber, red, pink, or any hex
 - **Typography** — 6 font families (System, Inter, DM Sans, Fira Code, Georgia, Courier); font size 11–20px; custom task text colour
 
-### Security & PWA
-- **Local encryption** — AES-256-GCM + PBKDF2 (100k iterations, SHA-256); optional, toggled from Settings
-- **PWA** — installable as a standalone app; service worker with **network-first** strategy for code assets (so updates are picked up immediately) and cache-first for images; SVG icons; offline support
-- **Cloud sync (optional)** — sign in with Google to sync across devices via Firestore; offline queue
+---
+
+## Security
+
+Tasky is local-first and has been through two rounds of adversarial testing
+(automated hostile agents firing live XSS payloads through every render path).
+What that produced:
+
+- **Output encoding everywhere** — every value rendered into HTML (task
+  text/numbers/ids/priorities/dates, handles, group names, comments, search
+  results, attachment names, timer/activity labels) is HTML-escaped at its
+  sink. The Markdown renderer escapes *before* formatting and only linkifies
+  `https?://` URLs, so `javascript:` / `data:` links never form.
+- **Allowlists, not blocklists** — avatar images accept raster `data:` URLs
+  only (no SVG/XML); attachments accept a fixed MIME list; invite codes,
+  priorities, columns, timer types and recurring rules are enum-checked;
+  Firestore document IDs that reach the DOM are escaped and looked up with
+  throw-safe DOM methods.
+- **CSV export neutralizes spreadsheet formulas** — cells starting with
+  `= + - @` are `'`-prefixed so exports can't become DDE/command chains in
+  Excel.
+- **Content-Security-Policy** — a meta CSP blocks plugins, foreign frames
+  and non-allowlisted script hosts. Note: the app genuinely needs inline
+  scripts/styles, so `unsafe-inline` remains and the CSP is a backstop, not
+  the primary defense — the escaping above is.
+- **Firestore rules** (`firestore.rules.txt`, deploy via Firebase Console):
+  visitor comments and notifications enforce field allowlists, types, sizes
+  and ranges; notification `fromHandle` is pinned to the sender's own user
+  document; public reads exist *only* where the product requires them
+  (group/task snapshots and visitor comments for `?view=` boards).
+- **Local-first privacy** — tasks live in `localStorage`; nothing leaves the
+  device unless you sign in with Google for Firestore sync. Optional
+  **AES-256-GCM + PBKDF2 (100k iterations, SHA-256)** encryption at rest,
+  toggled in Settings. No backdoor — lose the passphrase, lose the data.
+- **PWA** — installable as a standalone app; service worker is
+  **network-first for code** (updates propagate; cache version is bumped on
+  security fixes) and cache-first for images; offline support.
+
+Known limits, stated plainly: public comment walls are inherently
+spam-prone (validation constrains shape, not volume — add App Check / rate
+limits for hostile deployments); the Firebase web `apiKey` in source is
+public by design — restrict it in GCP console (API restrictions + auth
+domains). Clearing site data erases tasks — export to CSV first.
 
 ---
 
@@ -76,9 +129,10 @@ No servers, no npm, no subscriptions.
 tasky/
 ├── index.html              — App shell, inline boot logic, Firebase CDN, PWA meta, onboarding
 ├── manifest.json           — PWA manifest (standalone display, SVG icons)
-├── sw.js                   — Service worker (cache-first, offline fallback)
+├── sw.js                   — Service worker (network-first for code, cache-first for images)
+├── firestore.rules.txt     — Firestore security rules (deploy via Firebase Console)
 ├── tasky.css               — All styles, animations, themes, responsive layout
-├── tasky.js                — Core: state, rendering, keyboard, drag & drop, Firebase, encryption
+├── tasky.js                — Core: state, rendering, keyboard, drag & drop, Firebase, encryption, CSV
 ├── tasky-subtask.js        — Subtasks: one-level checklist per task
 ├── tasky-timer.js          — Task timers: stopwatch and Pomodoro modes
 ├── tasky-timer.css         — Timer UI styles
@@ -96,7 +150,9 @@ tasky/
 ├── tasky-video.js          — Video calls: camera, screen share, recording, PiP, grid/speaker view
 ├── tasky-video.css         — Video call UI styles (dark + light mode)
 ├── tasky-deps-search.js    — Global search (Alt+R), task dependencies, Markdown renderer
+├── tasky-photos.js         — Photo attach / edit flow for the message board
 ├── ice-test.html           — Standalone WebRTC / STUN diagnostics page (open in any browser)
+├── screenshots/            — Screenshots used in this README
 ├── ARCHITECTURE.md
 ├── README.md
 └── LICENSE
@@ -143,7 +199,7 @@ You can also open `index.html` directly via `file://` — all features except cl
 
 Calls default to **pure peer-to-peer** (STUN only) — fastest, no relay cost, works on WiFi and broadband across different networks. If no peer reaches a connected state within 8 seconds (typical for mobile data / CGNAT / symmetric NAT), both peers automatically coordinate a switch to TURN relay.
 
-The default TURN servers are free public services (OpenRelay) which are often rate-limited or unreachable from mobile networks. For production deployments, provision your own [coturn](https://coturn.github.io/coturn/) server and override before `tasky-voice.js` loads:
+The default TURN servers are free public services (OpenRelay) which are often rate-limited or unreachable from mobile networks. For production deployments, provision your own [coturn](https://github.com/coturn/coturn) server and override before `tasky-voice.js` loads:
 
 ```html
 <script>
