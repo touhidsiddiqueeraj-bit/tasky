@@ -1628,15 +1628,23 @@ var _catch = function(e) { console.warn('[tasky] unhandled error:', e); };
 
         function showConfirm(title, message, confirmLabel) {
             return new Promise(function(resolve) {
+                // NOTE: this copy wins at runtime over the fallback in index.html
+                // (deferred scripts run after inline parsing). Escape all three
+                // params — callers pass user-controlled task text / group names.
+                var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s) {
+                    return (s == null ? '' : String(s)).replace(/&/g,'&amp;')
+                        .replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+                };
                 var overlay = document.createElement('div');
                 overlay.className = 'onboarding-overlay visible';
                 overlay.style.cssText = 'display:flex;z-index:11000;';
                 overlay.innerHTML = '<div class="ob-card" style="max-width:420px;text-align:center;padding:32px;">'
-                    + '<div style="font-size:17px;font-weight:600;margin-bottom:12px;">' + title + '</div>'
-                    + '<div style="font-size:13.5px;color:rgba(255,255,255,0.6);margin-bottom:24px;line-height:1.5;">' + message + '</div>'
+                    + '<div style="font-size:17px;font-weight:600;margin-bottom:12px;">' + esc(title) + '</div>'
+                    + '<div style="font-size:13.5px;color:rgba(255,255,255,0.6);margin-bottom:24px;line-height:1.5;white-space:pre-line;">' + esc(message) + '</div>'
                     + '<div style="display:flex;gap:10px;justify-content:center;">'
                     + '<button id="sc-cancel" style="background:rgba(255,255,255,0.08);border:none;border-radius:10px;padding:10px 24px;color:#fff;font-size:14px;cursor:pointer;">Cancel</button>'
-                    + '<button id="sc-confirm" style="background:#ef4444;border:none;border-radius:10px;padding:10px 24px;color:#fff;font-size:14px;cursor:pointer;">' + (confirmLabel || 'Confirm') + '</button>'
+                    + '<button id="sc-confirm" style="background:#ef4444;border:none;border-radius:10px;padding:10px 24px;color:#fff;font-size:14px;cursor:pointer;">' + esc(confirmLabel || 'Confirm') + '</button>'
                     + '</div></div>';
                 document.body.appendChild(overlay);
                 overlay.querySelector('#sc-cancel').onclick = function() { overlay.remove(); resolve(false); };
@@ -1775,40 +1783,45 @@ var _catch = function(e) { console.warn('[tasky] unhandled error:', e); };
         }
 
         function createTaskCard(task, column) {
+            // Task objects arrive from shared Firestore docs / CSV import — never
+            // trust their shape here. Coerce everything interpolated below.
+            var safePri = (task.priority === 'high' || task.priority === 'medium' || task.priority === 'low') ? task.priority : 'medium';
+            var safeNum = (task.number === 0 || task.number) ? escapeHtml(task.number) : '';
+            var safeId  = escapeHtml(task.id);
+            var safeDue = (typeof task.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate)) ? task.dueDate : '';
             const card = document.createElement('div');
-            card.className = `task-card priority-${task.priority}`;
+            card.className = `task-card priority-${safePri}`;
             card.draggable = true;
             card.id = `task-${task.id}`;
             card.dataset.taskId = task.id;
             card.dataset.column = column;
-
-            const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && column !== 'done';
-            const dateDisplay = task.dueDate
-                ? new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            const isOverdue = safeDue && new Date(safeDue) < new Date() && column !== 'done';
+            const dateDisplay = safeDue
+                ? new Date(safeDue).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                 : '';
-            const priorityLabel = task.priority.charAt(0).toUpperCase() + task.priority.slice(1);
+            const priorityLabel = safePri.charAt(0).toUpperCase() + safePri.slice(1);
 
             card.innerHTML = `
                 <div class="drag-handle">⋮⋮</div>
                 <div class="task-header">
-                    <span class="task-number">#${task.number}</span>
+                    <span class="task-number">#${safeNum}</span>
                     <span class="task-text" title="Double-click to edit">${escapeHtml(task.text)}</span>
                     <input class="task-edit-input" type="text" value="${escapeHtml(task.text)}"
                         maxlength="200" style="display:none;" aria-label="Edit task text">
                 </div>
                 <div class="task-meta">
                     <div class="task-left">
-                            <span class="priority-badge ${task.priority}" data-action="priority" title="Click to cycle priority (or press 1/2/3 when selected)">
-                            ${task.priority === 'high' ? '🔴' : task.priority === 'medium' ? '🟡' : '🟢'} ${priorityLabel}
+                            <span class="priority-badge ${safePri}" data-action="priority" title="Click to cycle priority (or press 1/2/3 when selected)">
+                            ${safePri === 'high' ? '🔴' : safePri === 'medium' ? '🟡' : '🟢'} ${priorityLabel}
                         </span>
-                        ${task.dueDate ? `<span class="due-date ${isOverdue ? 'overdue' : ''}">📅 ${dateDisplay}</span>` : ''}
+                        ${safeDue ? `<span class="due-date ${isOverdue ? 'overdue' : ''}">📅 ${dateDisplay}</span>` : ''}
                     </div>
                     <div class="task-hover-controls">
                         <button class="edit-btn" data-action="edit" title="Edit task text (double-click)">✏️</button>
                         <button class="date-btn" data-action="date" title="Set due date">
-                            📅 ${task.dueDate ? 'Change' : 'Date'}
+                            📅 ${safeDue ? 'Change' : 'Date'}
                         </button>
-                        <input type="date" id="date-picker-${task.id}" data-action="date-input" value="${task.dueDate || ''}"
+                        <input type="date" id="date-picker-${safeId}" data-action="date-input" value="${safeDue}"
                                style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;">
                         ${column === 'todo'    ? `<button class="move-btn" data-action="move-todo" title="Move to Working On (→)">→</button>` : ''}
                         ${column === 'working' ? `<button class="move-btn back-btn" data-action="move-working-back" title="Move back to To Do (←)">←</button><button class="move-btn fwd-btn" data-action="move-working-fwd" title="Move to Done (→)">→</button>` : ''}
@@ -1924,6 +1937,7 @@ var _catch = function(e) { console.warn('[tasky] unhandled error:', e); };
                             case 'move-working-back': moveTaskWithUndo(c, 'todo', tid); break;
                             case 'move-working-fwd':  moveTaskWithUndo(c, 'done', tid); break;
                             case 'move-done':      moveTaskWithUndo(c, 'working', tid); break;
+                            case 'sendto':         openSendToPicker(tid, c); break;
                             // 'edit' is handled by per-card listeners
                         }
                         return;
@@ -2311,9 +2325,17 @@ if (!window._cardModifiers) window._cardModifiers = [];
 
             rows.sort((a, b) => a.Number - b.Number);
             const headers = ['Number', 'Task', 'Status', 'Priority', 'Due Date', 'Created'];
+            // Neutralize spreadsheet formula injection: a cell starting with
+            // = + - @ (or tab/CR, incl. after quote-escaping) can execute as a
+            // formula / DDE chain when the CSV is opened in Excel. Prefix "'".
+            function csvCell(v) {
+                var s = String(v);
+                if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+                return '"' + s.replace(/"/g, '""') + '"';
+            }
             const csv = [
                 headers.join(','),
-                ...rows.map(r => headers.map(h => `"${String(r[h]).replace(/"/g, '""')}"`).join(','))
+                ...rows.map(r => headers.map(h => csvCell(r[h])).join(','))
             ].join('\n');
 
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

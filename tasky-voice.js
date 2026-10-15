@@ -122,13 +122,18 @@ function _vcEsc(s)       { return escHtml(s); }
 // Returns an <img> or initial letter for a participant tile.
 // Looks up window._vcAvatarCache[uid] which is populated from Firestore
 // users/{uid}.avatarDataUrl or avatarUrl fields.
+function _vcAvatarSafeUrl(url) {
+    // Raster base64 data-URLs only — SVG/XML can carry scripts; other schemes banned.
+    return typeof url === 'string' && url.length <= 400000
+        && /^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(url);
+}
 function _vcAvatarHtml(uid, handle, extraClass) {
     const cls   = extraClass || '';
-    const init  = (handle || 'U')[0].toUpperCase();
+    const init  = _vcEsc((handle || 'U')[0].toUpperCase());
     const cache = window._vcAvatarCache || {};
     const url   = cache[uid];
-    if (url) {
-        return `<img src="${url.replace(/"/g,'&quot;')}" alt="${init}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">`;
+    if (_vcAvatarSafeUrl(url)) {
+        return `<img src="${url}" alt="${init}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">`;
     }
     // Cache miss — fire one-shot Firestore read as fallback
     if (uid && !(window._vcAvatarFetching || {})[uid]) {
@@ -319,9 +324,9 @@ function _vcShowIncomingModal(callerHandle) {
                     if (!window._vcAvatarCache) window._vcAvatarCache = {};
                     window._vcAvatarCache[_callerUid] = _url;
                     const _avEl = document.querySelector('#vc-incoming-modal .vc-incoming-avatar');
-                    if (_avEl) {
-                        const _init = (callerHandle || 'U')[0].toUpperCase();
-                        _avEl.innerHTML = '<img src="' + _url.replace(/"/g,'&quot;') + '" alt="' + _init + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">';
+                    if (_avEl && _vcAvatarSafeUrl(_url)) {
+                        const _init = _vcEsc((callerHandle || 'U')[0].toUpperCase());
+                        _avEl.innerHTML = '<img src="' + _url + '" alt="' + _init + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;">';
                     }
                 }
             }).catch(() => {});

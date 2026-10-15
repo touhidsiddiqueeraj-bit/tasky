@@ -1,4 +1,4 @@
-var CACHE = 'tasky-v11-coordinated-turn';
+var CACHE = 'tasky-v12-xss-fixes';
 
 var STATIC_ASSETS = [
   './',

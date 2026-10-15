@@ -55,10 +55,12 @@ function _stRenderContainer(container, task, column) {
         row.draggable = true;
         row.dataset.stSubId = s.id;
         row.dataset.stTaskId = task.id;
+        // s.id / task.id ride in from assigned-task payloads — escape all copies.
+        var escId = escapeHtml(s.id), escTask = escapeHtml(task.id), escCol = escapeHtml(column);
         row.innerHTML = '<span class="subtask-drag-handle">⋮⋮</span>'
-            + '<input type="checkbox" class="st-cb" data-st-id="' + s.id + '" data-st-task="' + task.id + '" data-st-col="' + column + '"' + (s.done ? ' checked' : '') + '>'
-            + '<span class="subtask-text" data-st-text="' + s.id + '">' + escapeHtml(s.text) + '</span>'
-            + '<button class="subtask-del" data-st-del="' + s.id + '" data-st-task="' + task.id + '" data-st-col="' + column + '">✕</button>';
+            + '<input type="checkbox" class="st-cb" data-st-id="' + escId + '" data-st-task="' + escTask + '" data-st-col="' + escCol + '"' + (s.done ? ' checked' : '') + '>'
+            + '<span class="subtask-text" data-st-text="' + escId + '">' + escapeHtml(s.text) + '</span>'
+            + '<button class="subtask-del" data-st-del="' + escId + '" data-st-task="' + escTask + '" data-st-col="' + escCol + '">✕</button>';
 
         row.addEventListener('dragstart', _stOnDragStart);
         row.addEventListener('dragend', _stOnDragEnd);

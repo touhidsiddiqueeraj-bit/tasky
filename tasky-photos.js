@@ -217,7 +217,7 @@ function _photoOpenEditor(dataUrl, fileName, onDone, onSend) {
                 <span class="tp-title">Edit Photo</span>
             </div>
             <div class="tp-body" id="tp-body">
-                <img id="tp-img" src="${dataUrl}" alt="${fileName}">
+                <img id="tp-img" src="${String(dataUrl).replace(/"/g,'&quot;')}" alt="${String(fileName || 'photo').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}">
                 <canvas class="tp-hl-canvas" id="tp-hl-canvas"></canvas>
             </div>
             <div class="tp-bottombar">

@@ -18,15 +18,43 @@ function _syncCollabState() {
     window.currentHandle  = currentHandle;
     window.isSupervisor   = isSupervisor;
 }
+// ─── Output-encoding + URL-allowlist helpers (XSS hardening) ────────────────
+// escHtml is defined in index.html; fall back to a local copy if collab loads first.
+function _cxEsc(s) {
+    if (typeof escHtml === 'function') return escHtml(s);
+    return (s == null ? '' : String(s))
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+// Only raster data-URLs are safe for <img src>. SVG/XML can carry scripts and
+// event handlers; non-image schemes (javascript:, data:text/html, …) must never
+// reach src/href. Returns true only for small raster base64 data URLs.
+function _isSafeAvatarUrl(url) {
+    if (typeof url !== 'string') return false;
+    if (url.length > 400000) return false; // ~300KB — caps Firestore bloat/DoS
+    return /^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(url);
+}
+// Attachment links: allow raster/AV/pdf data URLs, never html/xml/xhtml/script.
+function _isSafeAttachUrl(url) {
+    if (typeof url !== 'string') return false;
+    if (url.length > 15000000) return false; // ~11MB cap
+    var m = /^data:([a-z]+\/[a-z0-9.+-]+);base64,/i.exec(url);
+    if (!m) return false;
+    var mime = m[1].toLowerCase();
+    return ['image/png','image/jpeg','image/gif','image/webp','audio/mpeg','audio/wav','audio/ogg','audio/mp4','video/mp4','video/webm','application/pdf','text/plain'].indexOf(mime) !== -1;
+}
+// Group/invite codes from genGroupCode(): 6 chars, A-Z sans I/O + 2-9.
+function _isValidGroupCode(code) {
+    return typeof code === 'string' && /^[A-Z0-9]{4,20}$/.test(code.trim().toUpperCase());
+}
 function _collabAvatarHtml(uid, handle, className) {
     var url = window._vcAvatarCache && window._vcAvatarCache[uid];
-    if (url) {
-        if (typeof url !== 'string' || !url.startsWith('data:image/')) {
-            url = null;
-        }
-    }
-    if (url) return '<div class="member-avatar' + (className ? ' ' + className : '') + '" data-uid="' + uid + '"><img src="' + url + '" alt="@' + handle + '"></div>';
-    return '<div class="member-avatar' + (className ? ' ' + className : '') + '" data-uid="' + uid + '" data-handle="' + handle + '">' + handle[0].toUpperCase() + '</div>';
+    if (!_isSafeAvatarUrl(url)) url = null;
+    var safeUid = _cxEsc(uid), safeHandle = _cxEsc(handle);
+    var safeCls = _cxEsc(className || '');
+    if (url) return '<div class="member-avatar' + (safeCls ? ' ' + safeCls : '') + '" data-uid="' + safeUid + '"><img src="' + url + '" alt="@' + safeHandle + '"></div>';
+    var initial = _cxEsc((handle || '?')[0].toUpperCase());
+    return '<div class="member-avatar' + (safeCls ? ' ' + safeCls : '') + '" data-uid="' + safeUid + '" data-handle="' + safeHandle + '">' + initial + '</div>';
 }
 function _collabRefreshMemberAvatars() {
     if (!currentGroup || !window._vcAvatarCache) return;
@@ -49,19 +77,19 @@ function _collabApplyAvatarImages() {
         var uid = el.dataset.uid;
         var url = window._vcAvatarCache && window._vcAvatarCache[uid];
         if (url && !el.querySelector('img')) {
-            if (typeof url !== 'string' || !url.startsWith('data:image/')) return;
-            el.innerHTML = '<img src="' + url + '" alt="@' + (el.dataset.handle || '') + '">';
+            if (!_isSafeAvatarUrl(url)) return;
+            el.innerHTML = '<img src="' + url + '" alt="@' + _cxEsc(el.dataset.handle || '') + '">';
         }
     });
 }
 function _collabRefreshAvatar(uid) {
     var url = window._vcAvatarCache && window._vcAvatarCache[uid];
-    document.querySelectorAll('.member-avatar[data-uid="' + uid.replace(/[^a-z0-9]/gi,'') + '"],.ro-member-avatar[data-uid="' + uid.replace(/[^a-z0-9]/gi,'') + '"]').forEach(function(el) {
-        if (url && typeof url === 'string' && url.startsWith('data:image/')) {
-            el.innerHTML = '<img src="' + url.replace(/"/g,'') + '" alt="">';
+    document.querySelectorAll('.member-avatar[data-uid="' + String(uid).replace(/[^a-z0-9]/gi,'') + '"],.ro-member-avatar[data-uid="' + String(uid).replace(/[^a-z0-9]/gi,'') + '"]').forEach(function(el) {
+        if (_isSafeAvatarUrl(url)) {
+            el.innerHTML = '<img src="' + url + '" alt="">';
         } else {
             var h = el.dataset.handle || '';
-            el.innerHTML = h ? h[0].toUpperCase() : '?';
+            el.innerHTML = _cxEsc(h ? h[0].toUpperCase() : '?');
         }
     });
 }
@@ -399,7 +427,7 @@ function _openVisitorCommentsModal() {
                 + '<div class="vc-comment-head">'
                 + '<span class="vc-comment-author">' + escHtml(c.authorName) + '</span>'
                 + (time ? '<span class="vc-comment-time">' + time + '</span>' : '')
-                + '<span class="vc-comment-task"># ' + c.taskNumber + '</span>'
+                + '<span class="vc-comment-task"># ' + _cxEsc(c.taskNumber) + '</span>'
                 + '</div>'
                 + '<div class="vc-comment-text">' + escHtml(c.text) + '</div>'
                 + '<div style="margin-top:6px;"></div>' // reply placeholder
@@ -487,7 +515,7 @@ function startTasksListener(code) {
                     card.innerHTML = `
                         ${_collabAvatarHtml(m.uid, m.handle, isSup ? 'supervisor' : '')}
                         <div class="member-info">
-                            <div class="member-name">@${m.handle} ${isSup ? '<span class="sup-tag">SUP</span>' : ''}</div>
+                            <div class="member-name">@${_cxEsc(m.handle)} ${isSup ? '<span class="sup-tag">SUP</span>' : ''}</div>
                             <div class="member-stats">
                                 <span class="stat-pill todo">${todoCount} todo</span>
                                 <span class="stat-pill working">${workingCount} working</span>
@@ -495,7 +523,7 @@ function startTasksListener(code) {
                             </div>
                         </div>
                         <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
-                            <button class="member-assign-btn" title="Assign task to @${m.handle}">+ Assign</button>
+                            <button class="member-assign-btn" title="Assign task to @${_cxEsc(m.handle)}">+ Assign</button>
                             <button class="member-inspect-btn" title="View tasks">View →</button>
                         </div>
                     `;
@@ -688,6 +716,87 @@ async function pushAssignmentNotification(task) {
             read: false
         });
     } catch(_) {}
+}
+
+// ─── Send to: supervisor sends existing task to a team member ──────────
+function openSendToPicker(taskId, column) {
+    var existing = document.getElementById('sendto-picker');
+    if (existing) existing.remove();
+    if (!window.currentGroup || !window.isSupervisor) return;
+    var members = window.currentGroup.members || [];
+    if (members.length === 0) return;
+    var card = document.getElementById('task-' + taskId);
+    if (!card) return;
+    var picker = document.createElement('div');
+    picker.id = 'sendto-picker';
+    picker.className = 'sendto-picker';
+    var list = document.createElement('div');
+    list.className = 'sendto-picker-list';
+    members.forEach(function(m) {
+        if (m.uid === window.currentGroup.supervisorUid) return;
+        var item = document.createElement('button');
+        item.className = 'sendto-picker-item';
+        item.type = 'button';
+        item.innerHTML = '<span class="sendto-avatar">' + m.handle[0].toUpperCase() + '</span><span class="sendto-handle">@' + escHtml(m.handle) + '</span>';
+        item.addEventListener('click', function(e) {
+            e.stopPropagation();
+            picker.remove();
+            handleSendToTask(taskId, column, m.handle);
+        });
+        list.appendChild(item);
+    });
+    if (list.children.length === 0) return;
+    picker.appendChild(list);
+    document.body.appendChild(picker);
+    var rect = card.getBoundingClientRect();
+    picker.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 210)) + 'px';
+    var top = rect.top - picker.offsetHeight - 6;
+    if (top < 4) top = rect.bottom + 6;
+    picker.style.top = top + 'px';
+    requestAnimationFrame(function() {
+        document.addEventListener('click', function _closeSendto(e) {
+            if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', _closeSendto); }
+        });
+    });
+}
+
+async function handleSendToTask(taskId, column, memberHandle) {
+    if (!window.currentGroup || !window.isSupervisor) return;
+    var colTasks = tasks[column];
+    if (!colTasks) return;
+    var task = colTasks.find(function(t) { return t.id === taskId; });
+    if (!task) return;
+    var member = window.currentGroup.members.find(function(m) { return m.handle === memberHandle; });
+    if (!member) return;
+    task.assignedTo = memberHandle;
+    task.assignedBy = window.currentHandle || null;
+    task.groupCode = window.currentGroup.code;
+    try {
+        var memberDocRef = db.collection('groups').doc(window.currentGroup.code).collection('tasks').doc(member.uid);
+        var snap = await memberDocRef.get();
+        var memberTasks = { todo: [], working: [], done: [] };
+        if (snap.exists && snap.data().tasks) memberTasks = snap.data().tasks;
+        var usedNums = new Set(
+            ['todo','working','done'].flatMap(function(c) { return (memberTasks[c] || []).map(function(t) { return t.number; }); })
+        );
+        var n = 1;
+        while (usedNums.has(n)) n++;
+        var sentTask = JSON.parse(JSON.stringify(task));
+        sentTask.number = n;
+        memberTasks.todo = [...(memberTasks.todo || []), sentTask];
+        await memberDocRef.set({
+            tasks: memberTasks,
+            handle: member.handle,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        pushAssignmentNotification(task);
+        saveAll();
+        renderAllColumns();
+        renderTeamPanel();
+        _collabToast('📤 Sent to @' + memberHandle);
+    } catch(e) {
+        _collabToast('⚠️ Failed to send: ' + e.message);
+    }
 }
 
 // ─── Notification listener (for non-supervisors) ──────────────────────────
@@ -918,7 +1027,7 @@ function renderCollabBadge() {
         badge.style.display = 'flex';
         badge.innerHTML = `
             <span class="collab-badge-dot ${isSupervisor ? 'supervisor' : 'member'}"></span>
-            <span>${currentGroup.name}</span>
+            <span>${_cxEsc(currentGroup.name)}</span>
         `;
         // For members (no team panel), inject Board button + notification bell
         // right inside the badge itself so it stays visible
@@ -1003,7 +1112,7 @@ function renderTeamPanel() {
         card.innerHTML = `
             ${_collabAvatarHtml(m.uid, m.handle, isSup ? 'supervisor' : '')}
             <div class="member-info">
-                <div class="member-name">@${m.handle} ${isSup ? '<span class="sup-tag">SUP</span>' : ''}</div>
+                <div class="member-name">@${_cxEsc(m.handle)} ${isSup ? '<span class="sup-tag">SUP</span>' : ''}</div>
                 <div class="member-stats">
                     <span class="stat-pill todo">${todoCount} todo</span>
                     <span class="stat-pill working">${workingCount} working</span>
@@ -1011,7 +1120,7 @@ function renderTeamPanel() {
                 </div>
             </div>
             <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
-                <button class="member-assign-btn" title="Assign task to @${m.handle}">+ Assign</button>
+                <button class="member-assign-btn" title="Assign task to @${_cxEsc(m.handle)}">+ Assign</button>
                 <button class="member-inspect-btn" title="View tasks">View →</button>
             </div>
         `;
@@ -1174,8 +1283,8 @@ function renderMemberDetail(list) {
     header.innerHTML = `
         <button class="member-back-btn" id="member-back-btn">← Back</button>
         <div class="member-detail-name">
-            <div class="member-avatar small" data-uid="${member.uid}" data-handle="${member.handle}">${_mbAvatarInner(member.uid,member.handle)}</div>
-            @${member.handle}
+            <div class="member-avatar small" data-uid="${_cxEsc(member.uid)}" data-handle="${_cxEsc(member.handle)}">${_mbAvatarInner(member.uid,member.handle)}</div>
+            @${_cxEsc(member.handle)}
         </div>
     `;
     header.querySelector('#member-back-btn').addEventListener('click', () => {
@@ -1206,13 +1315,13 @@ function renderMemberDetail(list) {
                     <div class="member-task-body" style="flex:1;min-width:0;">
                         <span class="member-task-text">${escHtml(t.text)}</span>
                         ${t.dueDate ? `<span class="member-task-date ${isOverdue ? 'overdue' : ''}">📅 ${new Date(t.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>` : ''}
-                        ${t.assignedBy ? `<span class="member-task-assigned">from @${t.assignedBy}</span>` : ''}
+                        ${t.assignedBy ? `<span class="member-task-assigned">from @${_cxEsc(t.assignedBy)}</span>` : ''}
                     </div>
-                    <button class="member-task-comment-btn" data-taskid="${t.id}"
+                    <button class="member-task-comment-btn" data-taskid="${_cxEsc(t.id)}"
                         style="flex-shrink:0;background:none;border:1px solid rgba(255,255,255,0.12);border-radius:8px;
                         color:rgba(255,255,255,0.45);font-size:13px;padding:4px 8px;cursor:pointer;white-space:nowrap;">💬</button>
                 </div>
-                <div class="ic-strip" id="inline-comments-${t.id}" style="display:none;margin-top:6px;margin-left:22px;"></div>
+                <div class="ic-strip" id="inline-comments-${_cxEsc(t.id)}" style="display:none;margin-top:6px;margin-left:22px;"></div>
             `;
             item.querySelector('.member-task-comment-btn').addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1258,7 +1367,7 @@ async function renderCollabSummary() {
     await fetchAllMemberTasks();
 
     bar.innerHTML = `
-        <div class="summary-bar-title">📊 Team Summary — ${currentGroup.name}</div>
+        <div class="summary-bar-title">📊 Team Summary — ${_cxEsc(currentGroup.name)}</div>
         <div class="summary-bar-rows" id="summary-bar-rows"></div>
     `;
 
@@ -1276,7 +1385,7 @@ async function renderCollabSummary() {
         row.innerHTML = `
             <div class="summary-member">
                 ${_collabAvatarHtml(m.uid, m.handle, 'tiny' + (m.uid === currentGroup.supervisorUid ? ' supervisor' : ''))}
-                <span>@${m.handle}</span>
+                <span>@${_cxEsc(m.handle)}</span>
             </div>
             <div class="summary-counts">
                 <span class="stat-pill todo">${todo.length}</span>
@@ -1555,7 +1664,7 @@ function _populateAssignGroupList(modal) {
                 return `<div class="tg-subtask-row" style="pointer-events:none;">
                     <span style="font-size:12px;">${priIcon}</span>
                     <input class="tg-input" style="flex:1;padding:5px 8px;font-size:12px;border:none;background:transparent;" value="${escHtml(t.text)}" readonly>
-                    <span style="font-size:11px;color:rgba(255,255,255,0.35);flex-shrink:0;">${t.priority}</span>
+                    <span style="font-size:11px;color:rgba(255,255,255,0.35);flex-shrink:0;">${escHtml(t.priority)}</span>
                 </div>`;
             }).join('');
             previewEl.style.display = '';
@@ -2012,8 +2121,15 @@ function openShareableBoard() {
     const joinCode = params.get('join');
     if (!joinCode) return;
 
+    // Validate before persisting — rejects path-traversal / Firestore path injection
+    if (typeof _isValidGroupCode === 'function' && !_isValidGroupCode(joinCode)) {
+        console.warn('[tasky] Invalid invite code ignored');
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+    }
+
     // Persist the code through auth flow (user may need to sign in first)
-    sessionStorage.setItem('tasky_pending_invite', joinCode);
+    sessionStorage.setItem('tasky_pending_invite', joinCode.toUpperCase().trim());
 
     // Clean the URL so refreshing doesn't re-trigger this
     const cleanUrl = window.location.pathname;
@@ -2268,7 +2384,7 @@ match /groups/{code}/tasks/{uid} { allow read: if true; }</code>
             <div class="ro-members">
                 ${members.map(m => `
                     <div class="ro-member-chip">
-                        <div class="ro-member-avatar" data-uid="${m.uid}" data-handle="${m.handle}">${_mbAvatarInner(m.uid,m.handle)}</div>
+                        <div class="ro-member-avatar" data-uid="${_cxEsc(m.uid)}" data-handle="${_cxEsc(m.handle)}">${_mbAvatarInner(m.uid,m.handle)}</div>
                         @${escHtml(m.handle)}
                         ${m.uid === group.supervisorUid ? ' 👑' : ''}
                     </div>
@@ -2277,7 +2393,11 @@ match /groups/{code}/tasks/{uid} { allow read: if true; }</code>
     }
 
     function _roRefreshCommentUI(num) {
-        var toggle = document.querySelector('.ro-comment-toggle[data-task-number="' + num + '"]');
+        // CSS.escape: a crafted taskNumber with quotes would otherwise throw
+        // a SyntaxError and break comment refresh for the whole board.
+        var sel = '.ro-comment-toggle[data-task-number="' + String(num).replace(/\\/g,'\\\\').replace(/"/g,'\\"') + '"]';
+        var toggle = null;
+        try { toggle = document.querySelector(sel); } catch(_) { toggle = null; }
         if (toggle) {
             var cc = (_roCommentCache[num] || []).length;
             var badge = toggle.querySelector('.ro-cc-num');
@@ -2285,7 +2405,8 @@ match /groups/{code}/tasks/{uid} { allow read: if true; }</code>
         }
         var section = document.getElementById('ro-cs-' + num);
         if (section && section.style.display !== 'none') {
-            var btn = document.querySelector('.ro-comment-toggle[data-task-number="' + num + '"]');
+            var btn = toggle;
+            try { btn = btn || document.querySelector(sel); } catch(_) {}
             var txt = btn ? btn.dataset.taskText : '';
             _roToggleComments(num, txt);
         }
@@ -2354,18 +2475,20 @@ match /groups/{code}/tasks/{uid} { allow read: if true; }</code>
                     + (rt ? '<span class="ic-ts">' + rt + '</span>' : '')
                     + '</div>';
             });
-            html += '<div style="margin:2px 0 4px 0;"><button class="ro-reply-link" data-comment-id="' + c.id + '">↩ Reply</button></div>'
-                + '<div class="ro-cf-reply-row" id="ro-reply-row-' + c.id + '" style="display:none;">'
-                + '<input type="text" name="vc-reply" id="ro-reply-input-' + c.id + '" placeholder="Write a reply…" class="tcp-input" style="font-size:12px;padding:6px 9px;">'
-                + '<button class="ro-cf-reply-send" data-comment-id="' + c.id + '" style="background:linear-gradient(135deg,#8B5CF6,#6d28d9);border:none;border-radius:8px;padding:6px 10px;font-size:12px;color:#fff;cursor:pointer;">↑</button>'
+            // c.id is a Firestore doc ID — anyone with comment access mints it.
+            var safeCid = _cxEsc(c.id);
+            html += '<div style="margin:2px 0 4px 0;"><button class="ro-reply-link" data-comment-id="' + safeCid + '">↩ Reply</button></div>'
+                + '<div class="ro-cf-reply-row" id="ro-reply-row-' + safeCid + '" style="display:none;">'
+                + '<input type="text" name="vc-reply" id="ro-reply-input-' + safeCid + '" placeholder="Write a reply…" class="tcp-input" style="font-size:12px;padding:6px 9px;">'
+                + '<button class="ro-cf-reply-send" data-comment-id="' + safeCid + '" style="background:linear-gradient(135deg,#8B5CF6,#6d28d9);border:none;border-radius:8px;padding:6px 10px;font-size:12px;color:#fff;cursor:pointer;">↑</button>'
                 + '</div>';
         });
         html += '</div>';
-        html += '<div class="ro-comment-form" data-task-number="' + taskNumber + '" data-task-text="' + taskText + '" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;">'
+        html += '<div class="ro-comment-form" data-task-number="' + _cxEsc(taskNumber) + '" data-task-text="' + _cxEsc(taskText) + '" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;">'
             + '<input class="tcp-input ro-cf-name" name="vc-name" id="vc-name-' + taskNumber + '" placeholder="Your name *" required style="font-size:12px;padding:7px 10px;margin-bottom:4px;">'
             + '<input class="tcp-input ro-cf-email" name="vc-email" id="vc-email-' + taskNumber + '" placeholder="Your email (optional)" style="font-size:12px;padding:7px 10px;margin-bottom:4px;">'
             + '<textarea class="tcp-input ro-cf-text" name="vc-text" id="vc-text-' + taskNumber + '" placeholder="Write a comment…" rows="2" style="font-size:12px;padding:7px 10px;margin-bottom:4px;resize:vertical;min-height:40px;"></textarea>'
-            + '<button class="tcp-send ro-cf-submit" data-task-number="' + taskNumber + '" data-task-text="' + taskText + '" style="font-size:12px;padding:7px 14px;border-radius:8px;">Post Comment</button>'
+            + '<button class="tcp-send ro-cf-submit" data-task-number="' + _cxEsc(taskNumber) + '" data-task-text="' + _cxEsc(taskText) + '" style="font-size:12px;padding:7px 14px;border-radius:8px;">Post Comment</button>'
             + '</div>';
         list.innerHTML = html;
     }
@@ -2438,23 +2561,27 @@ match /groups/{code}/tasks/{uid} { allow read: if true; }</code>
         function taskHTML(t) {
             const isOverdue = t.dueDate && new Date(t.dueDate) < now;
             const dueLabel = t.dueDate ? new Date(t.dueDate).toLocaleDateString('en-US', { month:'short', day:'numeric' }) : '';
+            // t.number / t.priority come from other members' Firestore docs —
+            // coerce to safe shapes: numeric id, allowlisted priority.
+            var safeNum = (t.number === 0 || t.number) ? _cxEsc(t.number) : '';
+            var safePri = (t.priority === 'high' || t.priority === 'medium' || t.priority === 'low') ? t.priority : '';
             var cc = (_roCommentCache[t.number] || []).length;
             return `
                 <div class="ro-task-wrapper">
                     <div class="ro-task">
                         <div class="ro-task-text">${escHtml(t.text)}</div>
                         <div class="ro-task-meta">
-                            ${t.priority ? `<span class="ro-priority ${t.priority}">${t.priority}</span>` : ''}
+                            ${safePri ? `<span class="ro-priority ${safePri}">${safePri}</span>` : ''}
                             ${dueLabel ? `<span class="ro-due ${isOverdue ? 'overdue' : ''}">📅 ${dueLabel}${isOverdue ? ' · Overdue' : ''}</span>` : ''}
                             ${t.assignedTo ? `<span class="ro-assignee">→ @${escHtml(t.assignedTo)}</span>` : ''}
-                            ${t.number ? `<span class="ro-task-num">#${t.number}</span>` : ''}
+                            ${safeNum ? `<span class="ro-task-num">#${safeNum}</span>` : ''}
                         </div>
                     </div>
-                    <button class="ro-comment-toggle" data-task-number="${t.number}" data-task-text="${escHtml(t.text)}">
+                    <button class="ro-comment-toggle" data-task-number="${safeNum}" data-task-text="${escHtml(t.text)}">
                         💬 <span class="ro-cc-num">${cc || 'Comment'}</span>
                     </button>
-                    <div class="ro-comment-section" id="ro-cs-${t.number}" style="display:none;">
-                        <div class="ro-comments-list" id="ro-cl-${t.number}"></div>
+                    <div class="ro-comment-section" id="ro-cs-${safeNum}" style="display:none;">
+                        <div class="ro-comments-list" id="ro-cl-${safeNum}"></div>
                     </div>
                 </div>`;
         }
@@ -2580,7 +2707,7 @@ async function handleJoinGroup() {
     const code  = input.value.trim().toUpperCase();
 
     errEl.style.display = 'none';
-    if (code.length < 4) { errEl.textContent = 'Enter a valid collaboration code.'; errEl.style.display = 'block'; return; }
+    if (!_isValidGroupCode(code)) { errEl.textContent = 'Enter a valid collaboration code.'; errEl.style.display = 'block'; return; }
 
     const btn = document.getElementById('collab-join-btn');
     btn.textContent = 'Joining…'; btn.disabled = true;
@@ -2624,6 +2751,21 @@ window._cardModifiers.push(function(card, task, column) {
         }
         const meta = card.querySelector('.task-meta');
         if (meta) meta.appendChild(badge);
+    }
+});
+
+// Send-to button on task cards (supervisor only)
+window._cardModifiers.push(function(card, task, column) {
+    if (window.currentGroup && window.isSupervisor) {
+        var controls = card.querySelector('.task-hover-controls');
+        if (controls) {
+            var btn = document.createElement('button');
+            btn.className = 'sendto-btn';
+            btn.dataset.action = 'sendto';
+            btn.title = 'Send to team member';
+            btn.textContent = '📤';
+            controls.appendChild(btn);
+        }
     }
 });
 
@@ -3214,7 +3356,9 @@ function _renderCommentFeed(taskId, entries) {
     sorted.forEach(entry => {
         const isOwn = entry.authorUid && currentUser && entry.authorUid === currentUser.uid;
         const item = document.createElement('div');
-        item.className = `tcp-entry tcp-${entry.type}${isOwn ? ' tcp-own' : ''}`;
+        // entry.type / entry.id come from shared Firestore docs — escape both.
+        var safeType = (entry.type === 'comment' || entry.type === 'activity') ? entry.type : 'comment';
+        item.className = `tcp-entry tcp-${safeType}${isOwn ? ' tcp-own' : ''}`;
 
         const authorLine = entry.type === 'comment'
             ? `<span class="tcp-author">@${escHtml(entry.authorHandle || 'unknown')}</span>`
@@ -3226,7 +3370,7 @@ function _renderCommentFeed(taskId, entries) {
               ${authorLine}
               <span class="tcp-entry-text">${entry.type === 'activity' ? '⚡ ' : ''}${escHtml(entry.text)}</span>
             </div>
-            ${isOwn && entry.type === 'comment' ? `<button class="tcp-del-btn" data-cid="${entry.id}" title="Delete">✕</button>` : ''}
+            ${isOwn && entry.type === 'comment' ? `<button class="tcp-del-btn" data-cid="${_cxEsc(entry.id)}" title="Delete">✕</button>` : ''}
           </div>
           <span class="tcp-ts">${fmtCommentTs(entry.ts)}</span>`;
 
@@ -3617,9 +3761,9 @@ function closeMsgBoard() {
 // ─── Message board avatar helper ───────────────────────────────────────────
 function _mbAvatarInner(uid, handle) {
     var url = uid && window._vcAvatarCache && window._vcAvatarCache[uid];
-    if (url && typeof url === 'string' && url.startsWith('data:image/'))
-        return '<img src="' + url.replace(/"/g,'') + '" alt="@' + (handle || '') + '">';
-    return (handle || '?')[0].toUpperCase();
+    if (_isSafeAvatarUrl(url))
+        return '<img src="' + url + '" alt="@' + _cxEsc(handle || '') + '">';
+    return _cxEsc((handle || '?')[0].toUpperCase());
 }
 function _mbRefreshComposerAvatar() {
     var el = document.querySelector('.mb-composer .mb-avatar-sm');
@@ -3854,7 +3998,7 @@ function _mbShowNotifToast(id, data) {
     const isSup = data.isSupervisor;
 
     toast.innerHTML = `
-        <div class="mb-notif-avatar${isSup ? ' sup' : ''}">${initial}</div>
+        <div class="mb-notif-avatar${isSup ? ' sup' : ''}">${_cxEsc(initial)}</div>
         <div class="mb-notif-body">
             <div class="mb-notif-author">@${escHtml(data.authorHandle || '?')} · ${escHtml(data.groupName || '')}</div>
             <div class="mb-notif-text">${escHtml(data.text || '')}</div>
@@ -4025,8 +4169,8 @@ function _mbRenderFeed() {
             const a=msg.attachment;
             if(typeof a.dataUrl !== 'string') a.dataUrl = '';
             if(typeof a.type !== 'string') a.type = '';
-            var isImage = a.type.startsWith('image/') && a.dataUrl.startsWith('data:image/');
-            var isSafeDataUrl = a.dataUrl.startsWith('data:') && !a.dataUrl.startsWith('data:text/html') && !a.dataUrl.startsWith('data:application/x-javascript');
+            var isImage = /^image\/(png|jpeg|gif|webp)$/.test(a.type) && /^data:image\/(png|jpeg|gif|webp);base64,/i.test(a.dataUrl);
+            var isSafeDataUrl = _isSafeAttachUrl(a.dataUrl);
             var _attachDataUrl = escHtml(a.dataUrl);
             var _attachName = escHtml(a.name);
             attachHtml=isImage && isSafeDataUrl
@@ -4040,6 +4184,10 @@ function _mbRenderFeed() {
         const isSup=isSupervisor;
         const canDel=isMine||isSup;
 
+        // msg.id is a Firestore doc ID — any member can mint one with hostile
+        // characters. Escape all id attributes; look elements up by
+        // getElementById (never throws) instead of querySelector below.
+        var safeMsgId = _cxEsc(msg.id);
         card.innerHTML=`
             <div class="mb-msg-meta">
                 <span class="mb-avatar-sm ${msg.authorUid===(currentGroup&&currentGroup.supervisorUid)?'mb-avatar--sup':''}">${_mbAvatarInner(msg.authorUid,msg.authorHandle)}</span>
@@ -4050,16 +4198,16 @@ function _mbRenderFeed() {
             ${msg.text?`<div class="rt-body mb-msg-text">${window._taskyRenderMarkdown(msg.text)}</div>`:''}
             ${attachHtml}
             <div class="mb-msg-footer">
-                <div class="mb-reaction-row" id="mb-reactions-${msg.id}" style="display:none;">
+                <div class="mb-reaction-row" id="mb-reactions-${safeMsgId}" style="display:none;">
                 </div>
                 <button class="mb-reply-toggle">💬 ${replyCount?replyCount+' repl'+(replyCount===1?'y':'ies'):'Reply'}</button>
             </div>
-            <div class="mb-thread" id="mb-thread-${msg.id}" style="display:${_mbReplyOpenId===msg.id?'block':'none'};">
-                <div class="mb-replies" id="mb-replies-${msg.id}"></div>
+            <div class="mb-thread" id="mb-thread-${safeMsgId}" style="display:${_mbReplyOpenId===msg.id?'block':'none'};">
+                <div class="mb-replies" id="mb-replies-${safeMsgId}"></div>
                 <div class="mb-reply-composer">
                     <div class="mb-avatar-xs">${_mbAvatarInner(currentUser?currentUser.uid:null,me)}</div>
-                    <input type="text" id="mb-reply-input-${msg.id}" class="mb-reply-input" placeholder="Reply…" maxlength="500">
-                    <button class="mb-reply-send" id="mb-reply-send-${msg.id}">↑</button>
+                    <input type="text" id="mb-reply-input-${safeMsgId}" class="mb-reply-input" placeholder="Reply…" maxlength="500">
+                    <button class="mb-reply-send" id="mb-reply-send-${safeMsgId}">↑</button>
                 </div>
             </div>`;
 
@@ -4083,8 +4231,10 @@ function _mbRenderFeed() {
 
         if(_mbReplyOpenId===msg.id){
             _mbRenderReplies(msg);
-            const ri=card.querySelector('#mb-reply-input-'+msg.id);
-            const rs=card.querySelector('#mb-reply-send-'+msg.id);
+            // getElementById: exact match, never throws on hostile ids
+            // (querySelector would throw a SyntaxError on quotes).
+            const ri=document.getElementById('mb-reply-input-'+msg.id);
+            const rs=document.getElementById('mb-reply-send-'+msg.id);
             if(ri) {
                 ri.addEventListener('input', function() {
                     if (typeof _getGroupMembers !== 'function' || typeof _showMentionDD !== 'function') return;

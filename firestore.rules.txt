@@ -65,25 +65,41 @@ service cloud.firestore {
       }
 
       // ── Visitor Comments (read-only board) ─────────────────────────────────
-      // Public read/create allowed so clients can leave feedback without signing in.
-      // Rate-limit: each comment doc includes a timestamp and the group doc exists check.
+      // Reads/writes require (anonymous) auth so drive-by scrapers and bots
+      // can't enumerate or spam boards. The app signs visitors in anonymously.
+      // hasOnly (not just hasAll) blocks smuggled fields like taskText/authorUid;
+      // taskNumber is range-checked so it can't be used as an ID oracle.
       match /visitor-comments/{commentId} {
-        allow read: if true;
-        allow create: if true
-          && request.resource.data.keys().hasAll(['text', 'authorName', 'taskNumber', 'createdAt'])
+        allow read: if request.auth != null
+          && exists(/databases/$(database)/documents/groups/$(code));
+        allow create: if request.auth != null
+          && exists(/databases/$(database)/documents/groups/$(code))
+          && request.resource.data.keys().hasOnly(['text', 'authorName', 'taskNumber', 'taskText', 'authorEmail', 'createdAt'])
           && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
           && request.resource.data.text.size() <= 2000
           && request.resource.data.authorName is string
+          && request.resource.data.authorName.size() >= 1
           && request.resource.data.authorName.size() <= 100
-          && request.resource.data.taskNumber is number;
+          && request.resource.data.taskNumber is number
+          && request.resource.data.taskNumber >= 0
+          && request.resource.data.taskNumber <= 1000000
+          && (!('taskText' in request.resource.data) || (request.resource.data.taskText is string && request.resource.data.taskText.size() <= 500))
+          && (!('authorEmail' in request.resource.data) || (request.resource.data.authorEmail is string && request.resource.data.authorEmail.size() <= 320));
+        allow update, delete: if false;
         match /replies/{replyId} {
-          allow read: if true;
-          allow create: if true
-            && request.resource.data.keys().hasAll(['text', 'authorName', 'createdAt'])
+          allow read: if request.auth != null
+            && exists(/databases/$(database)/documents/groups/$(code));
+          allow create: if request.auth != null
+            && exists(/databases/$(database)/documents/groups/$(code))
+            && request.resource.data.keys().hasOnly(['text', 'authorName', 'createdAt'])
             && request.resource.data.text is string
+            && request.resource.data.text.size() >= 1
             && request.resource.data.text.size() <= 2000
             && request.resource.data.authorName is string
+            && request.resource.data.authorName.size() >= 1
             && request.resource.data.authorName.size() <= 100;
+          allow update: if false;
           allow delete: if request.auth != null
             && get(/databases/$(database)/documents/groups/$(code)).data.supervisorUid == request.auth.uid;
         }
@@ -91,8 +107,24 @@ service cloud.firestore {
     }
 
     // ── Notifications ─────────────────────────────────────────────────────────
+    // hasOnly blocks smuggled fields; fromHandle is pinned to the sender's own
+    // users-doc handle when that doc exists (users can only write their own
+    // doc), so attackers can't forge toasts from other people. No-doc senders
+    // (handle never set) are still allowed — handle is required client-side
+    // before any notification is sent.
     match /notifications/{notifId} {
-      allow create: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['toUid', 'fromHandle', 'groupCode', 'taskText', 'taskId', 'commentText', 'priority', 'dueDate', 'type', 'createdAt', 'read'])
+        && request.resource.data.toUid is string
+        && request.resource.data.fromHandle is string
+        && request.resource.data.fromHandle.size() >= 1
+        && request.resource.data.fromHandle.size() <= 100
+        && request.resource.data.read == false
+        && (!('taskText' in request.resource.data) || (request.resource.data.taskText is string && request.resource.data.taskText.size() <= 500))
+        && (!('commentText' in request.resource.data) || (request.resource.data.commentText is string && request.resource.data.commentText.size() <= 2000))
+        && (!exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            || !('handle' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data)
+            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.handle == request.resource.data.fromHandle);
       allow read, update: if request.auth != null
         && resource.data.toUid == request.auth.uid;
       allow delete: if false;

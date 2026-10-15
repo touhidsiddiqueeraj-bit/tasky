@@ -51,11 +51,16 @@ function _vvGroup()     { return window.currentGroup || null; }
 function _vvEsc(s)      { return escHtml(s); }
 
 // ─── Avatar helper for video tiles ───────────────────────────────────────
+function _vvAvatarSafeUrl(url) {
+    // Raster base64 data-URLs only — SVG/XML can carry scripts; other schemes banned.
+    return typeof url === 'string' && url.length <= 400000
+        && /^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(url);
+}
 function _vvAvatarContent(uid, handle) {
     const cache = window._vcAvatarCache || {};
     const url   = cache[uid];
-    const init  = (handle || uid || 'U')[0].toUpperCase();
-    if (url) return `<img src="${url.replace(/"/g,'&quot;')}" alt="${init}" style="width:100%;height:100%;object-fit:cover;display:block;">`;
+    const init  = _vvEsc((handle || uid || 'U')[0].toUpperCase());
+    if (_vvAvatarSafeUrl(url)) return `<img src="${url}" alt="${init}" style="width:100%;height:100%;object-fit:cover;display:block;">`;
     // Cache miss — fire one-shot Firestore read as fallback
     if (uid && !(window._vcAvatarFetching || {})[uid]) {
         if (!window._vcAvatarFetching) window._vcAvatarFetching = {};

@@ -126,10 +126,15 @@ function _actRender() {
         return;
     }
     var html = '';
+    // e.type persists in localStorage and arrives from Firestore sync — allowlist it.
+    function safeActType(t) {
+        return (t === 'move' || t === 'delete' || t === 'create' || t === 'priority' || t === 'comment' || t === 'assign' || t === 'timer' || t === 'unknown') ? t : 'unknown';
+    }
     filtered.forEach(function(e) {
-        var icon = _actIcon(e.type);
+        var st = safeActType(e.type);
+        var icon = _actIcon(st);
         var text = _actFormat(e);
-        html += '<div class="act-item"><div class="act-icon act-icon--' + e.type + '">' + icon + '</div><div class="act-detail"><div class="act-text">' + escapeHtml(text) + '</div><div class="act-time">' + _actTimeAgo(e.timestamp) + ' · ' + escapeHtml(e.handle) + '</div></div></div>';
+        html += '<div class="act-item"><div class="act-icon act-icon--' + st + '">' + icon + '</div><div class="act-detail"><div class="act-text">' + escapeHtml(text) + '</div><div class="act-time">' + _actTimeAgo(e.timestamp) + ' · ' + escapeHtml(e.handle) + '</div></div></div>';
     });
     body.innerHTML = html;
 
@@ -137,7 +142,7 @@ function _actRender() {
     var filterBar = document.getElementById('act-filter-bar');
     if (filterBar) {
         var types = {};
-        _activityFeed.forEach(function(e) { types[e.type] = true; });
+        _activityFeed.forEach(function(e) { types[safeActType(e.type)] = true; });
         var html = '<button class="act-filter' + (!_actFilter ? ' active' : '') + '" data-act-filter="">All</button>';
         Object.keys(types).forEach(function(t) {
             html += '<button class="act-filter' + (_actFilter === t ? ' active' : '') + '" data-act-filter="' + t + '">' + t + '</button>';

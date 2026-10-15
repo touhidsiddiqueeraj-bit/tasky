@@ -10,6 +10,27 @@
 (function taskyExtensions() {
 'use strict';
 
+/* ─── Output-encoding helpers (XSS hardening) ─────────────────────────── */
+function _dsEsc(s) {
+    if (typeof escHtml === 'function') return escHtml(s);
+    return (s == null ? '' : String(s)).replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+// Escape-then-highlight: mark the query match without ever injecting raw text.
+function _dsHighlight(text, query) {
+    var safe = _dsEsc(text);
+    if (!query) return safe;
+    var q = String(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    try {
+        return safe.replace(new RegExp('(' + q + ')', 'gi'), '<mark>$1</mark>');
+    } catch(_) { return safe; }
+}
+// t.column flows into class names — allowlist, never raw.
+function _dsCol(col) {
+    return (col === 'todo' || col === 'working' || col === 'done') ? col : 'todo';
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    STYLE INJECTION
    ───────────────────────────────────────────────────────────────────────── */
@@ -497,7 +518,7 @@ function _patchCommentPanel() {
                   ${authorLine}
                   ${textHtml}
                 </div>
-                ${isOwn && entry.type === 'comment' ? `<button class="tcp-del-btn" data-cid="${entry.id}" title="Delete">✕</button>` : ''}
+                ${isOwn && entry.type === 'comment' ? `<button class="tcp-del-btn" data-cid="${_dsEsc(entry.id)}" title="Delete">✕</button>` : ''}
               </div>
               <span class="tcp-ts">${fmtTs(entry.ts)}</span>`;
 
@@ -734,10 +755,10 @@ function _renderDepCurrentList() {
         const row = document.createElement('div');
         row.className = 'dep-current-item';
         row.innerHTML = `
-          <span class="dep-current-item-num">#${found.task.number}</span>
-          <span class="dep-current-item-text">${found.task.text}</span>
+          <span class="dep-current-item-num">#${_dsEsc(found.task.number)}</span>
+          <span class="dep-current-item-text">${_dsEsc(found.task.text)}</span>
           <span class="dep-current-item-status ${isDone ? 'done' : 'pending'}">${isDone ? '✓ Done' : '⏳ Pending'}</span>
-          <button class="dep-remove-btn" data-id="${bId}" title="Remove blocker">✕</button>`;
+          <button class="dep-remove-btn" data-id="${_dsEsc(bId)}" title="Remove blocker">✕</button>`;
         row.querySelector('.dep-remove-btn').addEventListener('click', e => {
             _depSelectedBlockers.delete(bId);
             _renderDepCurrentList();
@@ -771,9 +792,9 @@ function _renderDepTaskList() {
         row.className = 'dep-task-row' + (isSelected ? ' selected' : '');
         row.innerHTML = `
           <div class="dep-check">${isSelected ? '✓' : ''}</div>
-          <span class="dep-task-row-num">#${t.number}</span>
-          <span class="dep-task-row-text">${t.text}</span>
-          <span class="dep-task-row-col ${t.column}">${t.column === 'todo' ? 'To Do' : t.column === 'working' ? 'Working' : 'Done'}</span>`;
+          <span class="dep-task-row-num">#${_dsEsc(t.number)}</span>
+          <span class="dep-task-row-text">${_dsEsc(t.text)}</span>
+          <span class="dep-task-row-col ${_dsCol(t.column)}">${t.column === 'todo' ? 'To Do' : t.column === 'working' ? 'Working' : 'Done'}</span>`;
         row.addEventListener('click', () => {
             if (_depSelectedBlockers.has(t.id)) _depSelectedBlockers.delete(t.id);
             else _depSelectedBlockers.add(t.id);
@@ -797,7 +818,7 @@ function _renderDepReverseView() {
     if (blockedByMe.length === 0) { section.style.display = 'none'; return; }
     section.style.display = 'block';
     el.innerHTML = blockedByMe.map(t =>
-        `<span>Task <strong>#${t.number}</strong> "${t.text.slice(0,40)}" is waiting on this.</span>`
+        `<span>Task <strong>#${_dsEsc(t.number)}</strong> "${_dsEsc(String(t.text).slice(0,40))}" is waiting on this.</span>`
     ).join('<br>');
 }
 
@@ -933,7 +954,7 @@ function _gsRender() {
     _gsFocusIdx = -1;
 
     if (filtered.length === 0) {
-        results.innerHTML = `<div class="gs-empty">${query ? 'No tasks match "' + query + '"' : 'Start typing to search…'}</div>`;
+        results.innerHTML = `<div class="gs-empty">${query ? 'No tasks match "' + _dsEsc(query) + '"' : 'Start typing to search…'}</div>`;
         return;
     }
 
@@ -953,14 +974,14 @@ function _gsRender() {
         groups[col].forEach((t, idx) => {
             const priIcon = t.priority === 'high' ? '🔴' : t.priority === 'medium' ? '🟡' : '🟢';
             const isBlocked = _isBlocked(t);
-            const textDisplay = query
-                ? t.text.replace(new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi'), '<mark>$1</mark>')
-                : t.text;
-            html += `<div class="gs-item" data-task-id="${t.id}" data-column="${t.column}">
-              <span class="gs-item-num">#${t.number}</span>
-              <span class="gs-item-pri" title="${t.priority}">${priIcon}${isBlocked ? '🔒' : ''}</span>
+            const safeCol = _dsCol(t.column);
+            const safePri = (t.priority === 'high' || t.priority === 'medium' || t.priority === 'low') ? t.priority : '';
+            const textDisplay = _dsHighlight(t.text, query);
+            html += `<div class="gs-item" data-task-id="${_dsEsc(t.id)}" data-column="${safeCol}">
+              <span class="gs-item-num">#${_dsEsc(t.number)}</span>
+              <span class="gs-item-pri" title="${_dsEsc(safePri)}">${priIcon}${isBlocked ? '🔒' : ''}</span>
               <span class="gs-item-text">${textDisplay}</span>
-              <span class="gs-item-col ${t.column}">${colLabels[col].split(' ').slice(1).join(' ')}</span>
+              <span class="gs-item-col ${safeCol}">${colLabels[col].split(' ').slice(1).join(' ')}</span>
             </div>`;
         });
     });

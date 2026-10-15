@@ -733,20 +733,26 @@ function _renderRecurManager() {
     all.forEach(({ t, col }) => {
         const row = document.createElement('div');
         row.className = 'recur-manager-row';
+        // t.* arrive from shared task objects — coerce all display values.
+        // onclick args must be number-safe: a quoted id would break into JS.
+        var safeCol = (col === 'todo' || col === 'working' || col === 'done') ? col : 'todo';
+        var safeId  = Number.isInteger(t.id) ? t.id : parseInt(t.id);
+        if (!Number.isInteger(safeId)) safeId = 0;
+        var safeRec = (t.recurring === 'daily' || t.recurring === 'weekly' || t.recurring === 'monthly') ? t.recurring : '';
         row.innerHTML = `
-            <span style="font-size:18px;flex-shrink:0;">${icons[t.recurring] || '🔁'}</span>
+            <span style="font-size:18px;flex-shrink:0;">${icons[safeRec] || '🔁'}</span>
             <div class="recur-manager-info">
-                <div class="recur-manager-text">#${t.number} ${_escHtmlCal(t.text)}</div>
+                <div class="recur-manager-text">#${_escHtmlCal(t.number)} ${_escHtmlCal(t.text)}</div>
                 <div class="recur-manager-meta">
-                    <span>${t.recurring}</span>
+                    <span>${safeRec}</span>
                     <span>·</span>
-                    <span>${colLabels[col]}</span>
-                    ${t.dueDate ? `<span>· due ${t.dueDate}</span>` : '<span style="color:#f87171;">· no due date</span>'}
+                    <span>${colLabels[safeCol]}</span>
+                    ${t.dueDate ? `<span>· due ${_escHtmlCal(t.dueDate)}</span>` : '<span style="color:#f87171;">· no due date</span>'}
                 </div>
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0;">
-                <button class="tg-icon-btn" onclick="openRecurModal('${col}',${t.id});closeRecurringManager();" title="Edit">✏️</button>
-                <button class="tg-icon-btn danger" onclick="_removeRecur('${col}',${t.id})" title="Remove recurrence">✕</button>
+                <button class="tg-icon-btn" onclick="openRecurModal('${safeCol}',${safeId});closeRecurringManager();" title="Edit">✏️</button>
+                <button class="tg-icon-btn danger" onclick="_removeRecur('${safeCol}',${safeId})" title="Remove recurrence">✕</button>
             </div>`;
         list.appendChild(row);
     });

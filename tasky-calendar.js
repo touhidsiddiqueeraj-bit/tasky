@@ -78,8 +78,8 @@ function _chipHtml(task, col, compact) {
   const avatar = task.assignedTo ? _avatarHtml(task.assignedTo) : '';
   const prio   = task.priority === 'high' ? '🔴' : task.priority === 'low' ? '🟢' : '';
   return `<div class="cal-chip ${col}" draggable="true"
-      data-tid="${task.id}" data-col="${col}"
-      title="${_esc(task.text)}${task.assignedTo?' → @'+task.assignedTo:''}"
+      data-tid="${_esc(task.id)}" data-col="${col}"
+      title="${_esc(task.text)}${task.assignedTo?' → @'+_esc(task.assignedTo):''}"
     >${avatar}<span class="cal-chip-text">${_esc(label)}</span>${prio?`<span class="cal-chip-prio">${prio}</span>`:''}</div>`;
 }
 

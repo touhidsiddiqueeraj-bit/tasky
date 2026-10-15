@@ -125,11 +125,18 @@ function _tmrRenderContainer(container, task, column) {
         var total = logs.reduce(function(s, l) { return s + (l.duration || 0); }, 0);
         var logCount = {};
         logs.forEach(function(l) {
-            var t = l.type || 'session';
+            // l.type persists inside task objects (incl. assigned ones) — allowlist it.
+            var t = (l.type === 'pomodoro' || l.type === 'pomodoro-manual' || l.type === 'break' || l.type === 'stopwatch' || l.type === 'session') ? l.type : 'session';
             logCount[t] = (logCount[t] || 0) + 1;
             var row = document.createElement('div');
             row.className = 'tmr-log-row';
-            row.innerHTML = '<span>' + t + '</span><span>' + _tmrFormat(l.duration || 0) + '</span>';
+            row.textContent = '';
+            var typeSpan = document.createElement('span');
+            typeSpan.textContent = t;
+            var durSpan = document.createElement('span');
+            durSpan.textContent = _tmrFormat(l.duration || 0);
+            row.appendChild(typeSpan);
+            row.appendChild(durSpan);
             logContainer.appendChild(row);
         });
         container.appendChild(logContainer);
